@@ -19,6 +19,11 @@ export default [
       'no-console': 'warn',
     },
   },
+  {
+    // Los scripts de terminal sí deben escribir en la consola.
+    files: ['prisma/seed.js'],
+    rules: { 'no-console': 'off' },
+  },
   // Desactiva las reglas de estilo que maneja Prettier.
   prettier,
 ];

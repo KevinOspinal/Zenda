@@ -231,7 +231,9 @@ model Producto {
   tenantId      String       @map("tenant_id") @db.Uuid
   categoriaId   String       @map("categoria_id") @db.Uuid
   nombre        String
-  // Precio de venta en pesos colombianos.
+  // Ingredientes o detalle que se muestra en el menú, por ejemplo "Pollo apanado y tocineta".
+  descripcion   String?
+  // Precio de venta en pesos colombianos, con el impuesto incluido.
   precio        Decimal      @db.Decimal(14, 2)
   tipoImpuesto  TipoImpuesto @map("tipo_impuesto")
   // Si es false, el producto se vende sin descontar inventario.
