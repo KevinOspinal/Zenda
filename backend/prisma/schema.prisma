@@ -348,6 +348,8 @@ model Pedido {
   @@unique([tenantId, uuidOffline])
   @@index([tenantId, abiertoEn])
   @@index([tenantId, estado])
+  // Los reportes filtran las ventas por la fecha de cobro.
+  @@index([tenantId, cerradoEn])
   @@map("pedidos")
 }
 

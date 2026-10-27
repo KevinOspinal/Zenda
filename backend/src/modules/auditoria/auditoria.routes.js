@@ -6,6 +6,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { ACCIONES } from '../../lib/auditoria.js';
+import { inicioDelDia, rangoDeDias } from '../../lib/fechas.js';
 import { conNegocio } from '../../lib/negocio.js';
 import { autenticar, obtenerSesion, permitirRoles } from '../../middlewares/auth.js';
 import { validar } from '../../middlewares/validar.js';
@@ -29,12 +30,10 @@ rutasAuditoria.get('/', validar({ query: esquemaFiltrosAuditoria }), async (_req
     tx.auditoria.findMany({
       where: {
         accion,
+        // Días en hora de Colombia; "hasta" incluye todo ese día.
         fecha: {
-          gte: desde ? new Date(`${desde}T00:00:00-05:00`) : undefined,
-          // Hasta el final del día indicado, en hora de Colombia (UTC−5).
-          lt: hasta
-            ? new Date(new Date(`${hasta}T00:00:00-05:00`).getTime() + 86_400_000)
-            : undefined,
+          gte: desde ? inicioDelDia(desde) : undefined,
+          lt: hasta ? rangoDeDias(hasta, hasta).fin : undefined,
         },
       },
       orderBy: { fecha: 'desc' },

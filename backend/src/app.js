@@ -12,6 +12,7 @@ import { rutasInventario } from './modules/inventario/inventario.routes.js';
 import { rutasCategorias, rutasMenu, rutasProductos } from './modules/menu/menu.routes.js';
 import { rutasMesas } from './modules/mesas/mesas.routes.js';
 import { rutasPedidos } from './modules/pedidos/pedidos.routes.js';
+import { rutasReportes } from './modules/reportes/reportes.routes.js';
 
 /**
  * Crea la app Express sin abrir el puerto, para poder probarla con Supertest.
@@ -44,6 +45,7 @@ export function createApp() {
   app.use('/pedidos', rutasPedidos);
   app.use('/inventario', rutasInventario);
   app.use('/auditoria', rutasAuditoria);
+  app.use('/reportes', rutasReportes);
 
   // Estos dos van al final: atrapan rutas inexistentes y cualquier error de las rutas anteriores.
   app.use(notFound);
