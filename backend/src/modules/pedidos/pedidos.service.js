@@ -219,6 +219,98 @@ export function enviarACocina(sesion, pedidoId) {
   });
 }
 
+/**
+ * Divide la cuenta: pasa ítems (completos o parte de sus unidades) a un pedido nuevo en la
+ * misma mesa. Cada cuenta se cobra por separado, y así cada persona puede tener su factura.
+ *
+ * Los ítems conservan su precio, impuesto, notas y estado de cocina. Los totales de ambos
+ * pedidos se recalculan. La mesa sigue ocupada hasta que se cobren todas sus cuentas.
+ *
+ * @param {DatosSesion} sesion
+ * @param {string} pedidoId
+ * @param {{ items: { itemId: string, cantidad: string }[] }} datos
+ * @returns {Promise<{ original: object, nuevo: object }>}
+ * @throws {AppError} 409 si el pedido ya se cobró o anuló; 404 si un ítem no es del pedido;
+ *   422 si se piden más unidades de las que hay o si se intenta pasar toda la cuenta.
+ */
+export function dividirPedido(sesion, pedidoId, { items }) {
+  return conNegocio(sesion.tenantId, async (tx) => {
+    // 1. El pedido debe estar abierto.
+    const original = await buscarPedidoAbierto(tx, pedidoId);
+    const itemsDelPedido = await tx.itemPedido.findMany({ where: { pedidoId } });
+
+    // 2. Validar cada ítem y las unidades que se mueven.
+    const movimientos = items.map(({ itemId, cantidad }) => {
+      const item = itemsDelPedido.find((i) => i.id === itemId);
+      if (!item) {
+        throw new AppError(404, 'ITEM_NO_ENCONTRADO', 'El ítem no existe en este pedido');
+      }
+      if (aDecimal(cantidad).greaterThan(item.cantidad)) {
+        throw new AppError(
+          422,
+          'DIVISION_INVALIDA',
+          `El ítem tiene ${item.cantidad} unidad(es); no se pueden pasar ${cantidad}`,
+        );
+      }
+      return { item, cantidad: aDecimal(cantidad) };
+    });
+
+    // 3. La cuenta original no puede quedar vacía: eso no es dividir, es cambiar de cuenta.
+    const quedaAlgo = itemsDelPedido.some((item) => {
+      const movimiento = movimientos.find((m) => m.item.id === item.id);
+      return !movimiento || movimiento.cantidad.lessThan(item.cantidad);
+    });
+    if (!quedaAlgo) {
+      throw new AppError(
+        422,
+        'DIVISION_INVALIDA',
+        'La cuenta original debe conservar al menos un producto',
+      );
+    }
+
+    // 4. Crear la cuenta nueva en la misma mesa, turno y estado.
+    const nuevo = await tx.pedido.create({
+      data: {
+        tenantId: sesion.tenantId,
+        turnoId: original.turnoId,
+        meseroId: original.meseroId,
+        mesaId: original.mesaId,
+        estado: original.estado,
+      },
+    });
+
+    // 5. Mover los ítems: completos se reasignan; parciales se reparten en dos.
+    for (const { item, cantidad } of movimientos) {
+      if (cantidad.equals(item.cantidad)) {
+        await tx.itemPedido.update({ where: { id: item.id }, data: { pedidoId: nuevo.id } });
+      } else {
+        await tx.itemPedido.update({
+          where: { id: item.id },
+          data: { cantidad: aDecimal(item.cantidad).minus(cantidad) },
+        });
+        await tx.itemPedido.create({
+          data: {
+            tenantId: sesion.tenantId,
+            pedidoId: nuevo.id,
+            productoId: item.productoId,
+            cantidad,
+            precioUnitario: item.precioUnitario,
+            tasaImpuesto: item.tasaImpuesto,
+            estadoCocina: item.estadoCocina,
+            notas: item.notas,
+          },
+        });
+      }
+    }
+
+    // 6. Recalcular los totales de ambas cuentas.
+    await recalcularTotales(tx, pedidoId);
+    await recalcularTotales(tx, nuevo.id);
+
+    return { original: await cargarPedido(tx, pedidoId), nuevo: await cargarPedido(tx, nuevo.id) };
+  });
+}
+
 // ───────────────────────────── Cobrar y anular ─────────────────────────────
 
 /**

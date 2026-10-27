@@ -84,3 +84,24 @@ export const esquemaCobrar = z.object({
 export const esquemaAnular = z.object({
   motivo: textoObligatorio(300),
 });
+
+/**
+ * POST /pedidos/:id/dividir
+ * Ítems (y cuántas unidades de cada uno) que pasan a una cuenta nueva.
+ */
+export const esquemaDividir = z.object({
+  items: z
+    .array(
+      z.object({
+        itemId: esquemaId,
+        // Unidades que se pasan a la cuenta nueva: todas las del ítem o solo una parte.
+        cantidad: esquemaCantidad,
+      }),
+    )
+    .min(1, 'indique al menos un ítem')
+    .max(100)
+    .refine(
+      (items) => new Set(items.map((item) => item.itemId)).size === items.length,
+      'cada ítem puede aparecer una sola vez',
+    ),
+});

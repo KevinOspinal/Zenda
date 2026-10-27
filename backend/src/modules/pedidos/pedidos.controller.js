@@ -87,6 +87,18 @@ export async function enviarACocina(_req, res) {
 }
 
 /**
+ * POST /pedidos/:id/dividir → 201 con la cuenta original y la nueva.
+ * @type {import('express').RequestHandler}
+ */
+export async function dividir(_req, res) {
+  const { params, body } = res.locals.entrada;
+  const { original, nuevo } = await servicio.dividirPedido(obtenerSesion(res), params.id, body);
+  eventos.avisarPedidoActualizado(original);
+  eventos.avisarPedidoCreado(nuevo);
+  res.status(201).json({ original, nuevo });
+}
+
+/**
  * POST /pedidos/:id/cobrar
  * @type {import('express').RequestHandler}
  */

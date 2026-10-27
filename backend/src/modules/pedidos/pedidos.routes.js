@@ -12,6 +12,7 @@ import {
   esquemaAnular,
   esquemaCobrar,
   esquemaCrearPedido,
+  esquemaDividir,
   esquemaEstadoCocina,
   esquemaFiltrosPedidos,
   esquemaItem,
@@ -47,6 +48,13 @@ rutasPedidos.post(
   '/:id/enviar-cocina',
   validar({ params: esquemaParamsId }),
   controlador.enviarACocina,
+);
+
+// Dividir la cuenta: todos los roles (no mueve dinero; normalmente lo hace el mesero en la mesa).
+rutasPedidos.post(
+  '/:id/dividir',
+  validar({ params: esquemaParamsId, body: esquemaDividir }),
+  controlador.dividir,
 );
 
 rutasPedidos.post(

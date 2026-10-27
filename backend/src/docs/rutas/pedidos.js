@@ -5,6 +5,7 @@ import {
   esquemaAnular,
   esquemaCobrar,
   esquemaCrearPedido,
+  esquemaDividir,
   esquemaEstadoCocina,
   esquemaFiltrosPedidos,
   esquemaItem,
@@ -252,6 +253,80 @@ cantidades y notas.`,
         200: respuesta('Pedido enviado a cocina.', { ...PEDIDO, estado: 'enviado_a_cocina' }),
       },
       errores: ['400', '404', '409'],
+    }),
+  },
+
+  '/pedidos/{id}/dividir': {
+    post: operacion({
+      etiqueta: 'Pedidos',
+      resumen: 'Dividir la cuenta',
+      roles: TODOS,
+      descripcion: `
+Para cuando en una mesa cada persona paga lo suyo: pasa productos a una **cuenta nueva
+en la misma mesa**. Cada cuenta se cobra por separado, así **cada persona puede tener su
+propia factura**.
+
+**Cómo funciona**
+- Indica qué ítems pasan y **cuántas unidades** de cada uno. Ejemplo: de un ítem con
+  2 hamburguesas puedes pasar 1; la otra se queda en la cuenta original.
+- Los productos conservan su **precio, impuesto, notas y estado de cocina**.
+- Los totales de ambas cuentas se recalculan; sumados, dan lo mismo que antes.
+- La mesa sigue **ocupada** hasta que se cobren todas sus cuentas.
+- Se puede dividir varias veces (por ejemplo, en tres cuentas).
+
+**Errores**
+- Pasar más unidades de las que tiene el ítem, o pasar **todo** (la cuenta original debe
+  conservar algo): 422 \`DIVISION_INVALIDA\`.
+- Un ítem que no es de este pedido: 404. Pedido ya cobrado o anulado: 409.
+
+📡 Avisa en tiempo real: \`pedido:actualizado\` (la original) y \`pedido:creado\` (la nueva).`,
+      parametros: idPedido,
+      cuerpo: cuerpo(esquemaDividir, {
+        ejemplo: {
+          items: [
+            { itemId: ID.itemHamburguesa, cantidad: 1 },
+            { itemId: ID.itemGaseosa, cantidad: 1 },
+          ],
+        },
+        descripciones: {
+          items: 'Ítems que pasan a la cuenta nueva. Cada ítem puede aparecer una sola vez.',
+          'items.itemId': 'Id del ítem (está en la lista `items` del pedido).',
+          'items.cantidad':
+            'Unidades que pasan a la cuenta nueva: todas las del ítem o solo una parte.',
+        },
+      }),
+      respuestas: {
+        201: respuesta(
+          'Cuenta dividida. La original queda con 1 hamburguesa ($12.000) y la nueva con 1 hamburguesa y 1 gaseosa ($16.000).',
+          {
+            original: {
+              ...PEDIDO,
+              subtotal: '11111.11',
+              impuestos: '888.89',
+              total: '12000',
+              items: [{ ...PEDIDO.items[0], cantidad: '1' }],
+            },
+            nuevo: {
+              ...PEDIDO,
+              id: 'c4d5e6f7-a8b9-4c0d-9e1f-2a3b4c5d6e7f',
+              uuidOffline: 'e1f2a3b4-c5d6-4e7f-8a9b-0c1d2e3f4a5b',
+              subtotal: '14814.81',
+              impuestos: '1185.19',
+              total: '16000',
+              items: [
+                {
+                  ...PEDIDO.items[0],
+                  id: 'f6a7b8c9-d0e1-4f2a-8b3c-4d5e6f7a8b9c',
+                  pedidoId: 'c4d5e6f7-a8b9-4c0d-9e1f-2a3b4c5d6e7f',
+                  cantidad: '1',
+                },
+                { ...PEDIDO.items[1], pedidoId: 'c4d5e6f7-a8b9-4c0d-9e1f-2a3b4c5d6e7f' },
+              ],
+            },
+          },
+        ),
+      },
+      errores: ['400', '404', '409', '422'],
     }),
   },
 
