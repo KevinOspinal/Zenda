@@ -8,6 +8,11 @@
 
 const props = defineProps({
   secciones: { type: /** @type {import('vue').PropType<Seccion[]>} */ (Array), required: true },
+  /** Números para mostrar sobre una sección, por ejemplo { avisos: 2 } (platos listos). */
+  insignias: {
+    type: /** @type {import('vue').PropType<Record<string, number>>} */ (Object),
+    default: () => ({}),
+  },
 });
 
 /** Más de 5 botones ya no caben cómodos en un celular. */
@@ -46,12 +51,21 @@ const masActivo = computed(() => enMas.value.some((s) => ruta.path.startsWith(s.
             @click="navigate"
           >
             <span
-              class="grid h-8 w-14 place-items-center rounded-full transition-colors"
+              class="relative grid h-8 w-14 place-items-center rounded-full transition-colors"
               :class="isActive && 'bg-primary/10'"
             >
               <UIcon :name="seccion.icono" class="size-6" />
+              <span
+                v-if="insignias[seccion.id]"
+                class="cifra absolute -top-1 right-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-info px-1 text-[11px] font-bold text-inverted"
+              >
+                {{ insignias[seccion.id] }}
+              </span>
             </span>
             {{ seccion.etiqueta }}
+            <span v-if="insignias[seccion.id]" class="sr-only">
+              ({{ insignias[seccion.id] }} pendientes)
+            </span>
           </a>
         </NuxtLink>
       </li>

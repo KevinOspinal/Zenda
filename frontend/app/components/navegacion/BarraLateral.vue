@@ -7,6 +7,11 @@
 
 const props = defineProps({
   secciones: { type: /** @type {import('vue').PropType<Seccion[]>} */ (Array), required: true },
+  /** Números para mostrar junto a una sección, por ejemplo { avisos: 2 }. */
+  insignias: {
+    type: /** @type {import('vue').PropType<Record<string, number>>} */ (Object),
+    default: () => ({}),
+  },
 });
 
 const sesion = useSesionStore();
@@ -16,6 +21,9 @@ const opciones = computed(() =>
     label: seccion.etiqueta,
     icon: seccion.icono,
     to: seccion.ruta,
+    badge: props.insignias[seccion.id]
+      ? { label: String(props.insignias[seccion.id]), color: /** @type {const} */ ('info') }
+      : undefined,
   })),
 );
 </script>

@@ -7,19 +7,30 @@
 <script setup>
 const sesion = useSesionStore();
 const conexion = useConexionStore();
+const pedidos = usePedidosStore();
 const ruta = useRoute();
 
 const secciones = computed(() => (sesion.rol ? seccionesDe(sesion.rol) : []));
 const seccionActual = computed(() => SECCIONES.find((s) => s.id === ruta.meta.seccion));
+/** Título: el de la sección, o el que defina la página (por ejemplo, el detalle de un pedido). */
+const titulo = computed(
+  () =>
+    seccionActual.value?.etiqueta ??
+    /** @type {string | undefined} */ (ruta.meta.titulo) ??
+    'Zenda',
+);
 
-useHead(() => ({
-  title: seccionActual.value ? `${seccionActual.value.etiqueta} · Zenda` : 'Zenda',
-}));
+/** Platos listos del mesero, sobre la sección Avisos. */
+const insignias = computed(() =>
+  sesion.rol === 'mesero' ? { avisos: pedidos.platosListos(sesion.usuario?.id).length } : {},
+);
+
+useHead(() => ({ title: titulo.value === 'Zenda' ? 'Zenda' : `${titulo.value} · Zenda` }));
 </script>
 
 <template>
   <div class="min-h-dvh bg-default lg:flex">
-    <BarraLateral :secciones="secciones" class="hidden lg:flex" />
+    <BarraLateral :secciones="secciones" :insignias="insignias" class="hidden lg:flex" />
 
     <div class="flex min-w-0 flex-1 flex-col">
       <header
@@ -29,7 +40,7 @@ useHead(() => ({
           <LogoZenda compacto class="lg:hidden" />
           <div class="min-w-0">
             <h1 class="truncate text-lg font-bold text-highlighted">
-              {{ seccionActual?.etiqueta ?? 'Zenda' }}
+              {{ titulo }}
             </h1>
             <p class="truncate text-xs text-muted lg:hidden">{{ sesion.negocio?.nombre }}</p>
           </div>
@@ -43,6 +54,6 @@ useHead(() => ({
       </main>
     </div>
 
-    <NavegacionInferior :secciones="secciones" class="lg:hidden" />
+    <NavegacionInferior :secciones="secciones" :insignias="insignias" class="lg:hidden" />
   </div>
 </template>

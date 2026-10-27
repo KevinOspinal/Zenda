@@ -1,6 +1,6 @@
 // @ts-check
 // Acceso a la conexión en tiempo real para escuchar eventos del backend.
-// La conexión la crea y la mantiene el plugin plugins/tiempo-real.client.js.
+// La conexión la crea y la mantiene el plugin plugins/01.tiempo-real.client.js.
 
 /**
  * Devuelve el socket del tiempo real.
