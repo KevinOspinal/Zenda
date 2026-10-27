@@ -14,8 +14,15 @@ defineProps({
     ]),
     required: true,
   },
-  /** Hay productos que la cocina todavía no ha recibido. */
-  puedeEnviar: { type: Boolean, default: false },
+  /** Estado del pedido: nuevo (aún no existe), abierto o enviado_a_cocina. */
+  estadoPedido: {
+    type: /** @type {import('vue').PropType<'nuevo' | 'abierto' | 'enviado_a_cocina'>} */ (String),
+    default: 'nuevo',
+  },
+  /** Hay cambios en camino: el total se actualiza al responder el API. */
+  procesando: { type: Boolean, default: false },
+  /** Se está enviando a la cocina. */
+  enviando: { type: Boolean, default: false },
 });
 
 const emit = defineEmits({
@@ -41,14 +48,29 @@ const emit = defineEmits({
     <div class="space-y-3 border-t border-default pt-4">
       <div class="flex items-baseline justify-between gap-3">
         <span class="font-semibold text-toned">Total</span>
-        <CifraAnimada :valor="total" class="text-3xl font-bold tracking-tight text-highlighted" />
+        <CifraAnimada
+          :valor="total"
+          class="text-3xl font-bold tracking-tight text-highlighted transition-opacity"
+          :class="procesando && 'animate-pulse opacity-60'"
+        />
       </div>
+
+      <UAlert
+        v-if="estadoPedido === 'enviado_a_cocina'"
+        color="info"
+        variant="subtle"
+        icon="i-lucide-chef-hat"
+        title="La cocina ya tiene este pedido"
+        description="Lo que agregues le llega al instante."
+      />
       <UButton
+        v-else
         block
         size="xl"
         icon="i-lucide-chef-hat"
         label="Enviar a cocina"
-        :disabled="!puedeEnviar"
+        :loading="enviando"
+        :disabled="!items.length || procesando"
         @click="emit('enviar')"
       />
     </div>
