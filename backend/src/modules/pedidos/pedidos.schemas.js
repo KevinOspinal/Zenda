@@ -153,6 +153,14 @@ export const esquemaEstadoCocina = z.object({
   estadoCocina: z.enum(['preparando', 'listo', 'entregado']),
 });
 
+/**
+ * PATCH /pedidos/:id/cocina: todos los platos del pedido a la vez.
+ * "listo" termina lo pendiente y lo que se prepara; "entregado" entrega lo que está listo.
+ */
+export const esquemaEstadoCocinaPedido = z.object({
+  estadoCocina: z.enum(['listo', 'entregado']),
+});
+
 /** Un pago dentro del cobro. */
 const esquemaPago = z
   .object({

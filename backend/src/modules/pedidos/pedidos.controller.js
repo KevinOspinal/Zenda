@@ -77,6 +77,21 @@ export async function cambiarEstadoCocina(_req, res) {
 }
 
 /**
+ * PATCH /pedidos/:id/cocina: todos los platos del pedido a la vez.
+ * @type {import('express').RequestHandler}
+ */
+export async function cambiarEstadoCocinaDelPedido(_req, res) {
+  const { params, body } = res.locals.entrada;
+  const { pedido, cambiados } = await servicio.cambiarEstadoCocinaDelPedido(
+    obtenerSesion(res),
+    params.id,
+    body.estadoCocina,
+  );
+  eventos.avisarEstadoCocinaDelPedido(pedido, cambiados);
+  res.json(pedido);
+}
+
+/**
  * POST /pedidos/:id/enviar-cocina
  * @type {import('express').RequestHandler}
  */

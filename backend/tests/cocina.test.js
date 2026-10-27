@@ -283,3 +283,75 @@ describe('GET /pedidos?cocina=true', () => {
     expect(await comandasDeCocina(otroNegocio.encabezados.cocina)).toEqual([]);
   });
 });
+
+describe('PATCH /pedidos/:id/cocina (todos los platos a la vez)', () => {
+  /** Pedido de mesa con dos platos, enviado a cocina. */
+  async function pedidoDeDosPlatos() {
+    const creado = await llamar('post', '/pedidos', negocio.encabezados.mesero, {
+      mesaId: await nuevaMesa(),
+      items: [
+        { productoId: ids.hamburguesa, cantidad: 1 },
+        { productoId: ids.gaseosa, cantidad: 1 },
+      ],
+    });
+    const enviado = await llamar(
+      'post',
+      `/pedidos/${creado.body.id}/enviar-cocina`,
+      negocio.encabezados.mesero,
+    );
+    return enviado.body;
+  }
+
+  /**
+   * @param {any} pedido
+   * @param {'listo' | 'entregado'} estadoCocina
+   * @param {string} encabezado
+   */
+  const todos = (pedido, estadoCocina, encabezado) =>
+    llamar('patch', `/pedidos/${pedido.id}/cocina`, encabezado, { estadoCocina });
+  const estados = (/** @type {any} */ pedido) =>
+    pedido.items.map((/** @type {any} */ item) => item.estadoCocina);
+
+  it('"Todo listo": la cocina termina de una vez lo pendiente y lo que se prepara', async () => {
+    const pedido = await pedidoDeDosPlatos();
+    await marcarPlato(pedido, 'preparando', negocio.encabezados.cocina);
+
+    const res = await todos(pedido, 'listo', negocio.encabezados.cocina);
+
+    expect(res.status).toBe(200);
+    expect(estados(res.body)).toEqual(['listo', 'listo']);
+  });
+
+  it('"Entregar todo": el mesero entrega lo listo y deja lo que sigue en preparación', async () => {
+    const pedido = await pedidoDeDosPlatos();
+    await marcarPlato(pedido, 'listo', negocio.encabezados.cocina);
+    await llamar(
+      'patch',
+      `/pedidos/${pedido.id}/items/${pedido.items[1].id}/cocina`,
+      negocio.encabezados.cocina,
+      { estadoCocina: 'preparando' },
+    );
+
+    const res = await todos(pedido, 'entregado', negocio.encabezados.mesero);
+
+    expect(res.status).toBe(200);
+    expect(estados(res.body)).toEqual(['entregado', 'preparando']);
+  });
+
+  it('respeta quién marca cada paso: el mesero no termina todo; la cocina no entrega en mesa', async () => {
+    const pedido = await pedidoDeDosPlatos();
+
+    expect((await todos(pedido, 'listo', negocio.encabezados.mesero)).status).toBe(403);
+    await todos(pedido, 'listo', negocio.encabezados.cocina);
+    expect((await todos(pedido, 'entregado', negocio.encabezados.cocina)).status).toBe(403);
+  });
+
+  it('si no hay platos que avanzar, lo dice', async () => {
+    const pedido = await pedidoDeDosPlatos();
+
+    const res = await todos(pedido, 'entregado', negocio.encabezados.mesero);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('NADA_QUE_AVANZAR');
+  });
+});

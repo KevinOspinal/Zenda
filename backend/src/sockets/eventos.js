@@ -16,6 +16,8 @@ export const EVENTOS = Object.freeze({
   PEDIDO_PAGADO: 'pedido:pagado',
   PEDIDO_ANULADO: 'pedido:anulado',
   ITEM_ESTADO_COCINA: 'item:estado_cocina',
+  // Varios platos de un pedido cambiaron a la vez ("Todo listo", "Entregar todo").
+  PEDIDO_ESTADO_COCINA: 'pedido:estado_cocina',
   MESA_ESTADO: 'mesa:estado',
   CAJA_ABIERTA: 'caja:abierta',
   CAJA_CERRADA: 'caja:cerrada',

@@ -9,6 +9,7 @@ import {
   esquemaDespachar,
   esquemaDividir,
   esquemaEstadoCocina,
+  esquemaEstadoCocinaPedido,
   esquemaFiltrosPedidos,
   esquemaItem,
   esquemaParamsItem,
@@ -317,6 +318,33 @@ Funciona aunque el pedido ya esté pagado (en comidas rápidas se cobra antes de
         descripciones: { estadoCocina: 'Estado nuevo: `preparando`, `listo` o `entregado`.' },
       }),
       respuestas: { 200: respuesta('Pedido con el ítem actualizado.', PEDIDO) },
+      errores: ['400', '403', '404', '409'],
+    }),
+  },
+
+  '/pedidos/{id}/cocina': {
+    patch: operacion({
+      etiqueta: 'Pedidos',
+      resumen: 'Avanzar todos los platos de un pedido a la vez',
+      roles: TODOS,
+      descripcion: `
+Avanza de una vez los platos que pueden pasar a ese estado:
+- \`listo\`: los pendientes y los que se preparan ("Todo listo" de la cocina).
+- \`entregado\`: los que ya están listos ("Entregar todo" del mesero; "Ya salió" en mostrador).
+  Lo que sigue en preparación se queda: se entrega cuando esté listo.
+
+Mismas reglas de quién marca cada paso que \`PATCH /pedidos/{id}/items/{itemId}/cocina\`
+(si no, 403 \`SIN_PERMISO\`). Si ningún plato puede pasar a ese estado, 409
+\`NADA_QUE_AVANZAR\`.
+
+📡 Avisa en tiempo real con **un solo** \`pedido:estado_cocina\` con todos los platos que
+cambiaron, para que el mesero reciba un solo aviso por mesa.`,
+      parametros: idPedido,
+      cuerpo: cuerpo(esquemaEstadoCocinaPedido, {
+        ejemplo: { estadoCocina: 'entregado' },
+        descripciones: { estadoCocina: '`listo` o `entregado`.' },
+      }),
+      respuestas: { 200: respuesta('Pedido con sus platos actualizados.', PEDIDO) },
       errores: ['400', '403', '404', '409'],
     }),
   },

@@ -109,6 +109,29 @@ export function avisarEstadoCocina(pedido, itemId) {
   });
 }
 
+/**
+ * Varios platos de un pedido cambiaron a la vez ("Todo listo", "Entregar todo"). Un solo
+ * evento con todos, para que el mesero reciba un solo aviso y no uno por plato.
+ * @param {PedidoCompleto} pedido
+ * @param {string[]} itemIds Los platos que cambiaron.
+ */
+export function avisarEstadoCocinaDelPedido(pedido, itemIds) {
+  const cambiados = pedido.items.filter((item) => itemIds.includes(item.id));
+  if (cambiados.length === 0) return;
+  emitirANegocio(pedido.tenantId, EVENTOS.PEDIDO_ESTADO_COCINA, {
+    pedidoId: pedido.id,
+    tipo: pedido.tipo,
+    numero: pedido.numero,
+    mesa: pedido.mesa ? { id: pedido.mesa.id, nombre: pedido.mesa.nombre } : null,
+    estadoCocina: cambiados[0].estadoCocina,
+    items: cambiados.map((item) => ({
+      id: item.id,
+      producto: item.producto.nombre,
+      cantidad: item.cantidad,
+    })),
+  });
+}
+
 /** @param {PedidoCompleto} pedido */
 export function avisarPedidoPagado(pedido) {
   emitirANegocio(pedido.tenantId, EVENTOS.PEDIDO_PAGADO, resumen(pedido));

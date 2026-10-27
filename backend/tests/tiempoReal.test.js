@@ -261,6 +261,22 @@ describe('eventos del ciclo de una venta', () => {
     });
   });
 
+  it('entregar todo avisa una sola vez, con todos los platos que cambiaron', async () => {
+    const { body: pedido } = await llamar('get', `/pedidos/${pedidoId}`, 'mesero');
+    const entregados = esperarEvento(cocina, EVENTOS.PEDIDO_ESTADO_COCINA);
+
+    await llamar('patch', `/pedidos/${pedidoId}/cocina`, 'mesero', { estadoCocina: 'entregado' });
+
+    expect(await entregados).toEqual({
+      pedidoId,
+      tipo: 'mesa',
+      numero: expect.any(Number),
+      mesa: { id: ids.mesa, nombre: 'Mesa 1' },
+      estadoCocina: 'entregado',
+      items: [{ id: pedido.items[0].id, producto: 'IND Classic Artesanal', cantidad: '2' }],
+    });
+  });
+
   it('cobrar avisa el pago y que la mesa quedó libre, sin datos del cliente', async () => {
     const pagado = esperarEvento(cocina, EVENTOS.PEDIDO_PAGADO);
     const mesa = esperarEvento(cocina, EVENTOS.MESA_ESTADO);

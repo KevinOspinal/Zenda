@@ -295,6 +295,57 @@ export function cambiarEstadoCocina(sesion, pedidoId, itemId, estadoCocina) {
   });
 }
 
+/** Estados desde los que cada plato avanza cuando se cambian todos a la vez. */
+const AVANZAN_A = Object.freeze({
+  listo: /** @type {const} */ (['pendiente', 'preparando']),
+  entregado: /** @type {const} */ (['listo']),
+});
+
+/**
+ * Avanza de una vez todos los platos de un pedido que pueden pasar a ese estado:
+ * - "listo": los pendientes y los que se preparan ("Todo listo" de la cocina).
+ * - "entregado": los que ya están listos ("Entregar todo" del mesero, "Ya salió" en
+ *   mostrador). Lo que sigue en preparación se queda: se entrega cuando esté listo.
+ * Aplica las mismas reglas de quién marca cada paso (revisarPermisoCocina). Así un solo
+ * cambio genera un solo aviso, en lugar de uno por plato.
+ * @param {DatosSesion} sesion
+ * @param {string} pedidoId
+ * @param {'listo' | 'entregado'} estadoCocina
+ * @returns {Promise<{ pedido: any, cambiados: string[] }>} El pedido y los platos que cambiaron.
+ * @throws {AppError} 409 NADA_QUE_AVANZAR si ningún plato puede pasar a ese estado.
+ */
+export function cambiarEstadoCocinaDelPedido(sesion, pedidoId, estadoCocina) {
+  return conNegocio(sesion.tenantId, async (tx) => {
+    // 1. El pedido existe, quien lo pide puede marcar ese paso y no está anulado.
+    const pedido = await tx.pedido.findUnique({ where: { id: pedidoId } });
+    if (!pedido) throw errorPedidoNoEncontrado();
+    revisarPermisoCocina(sesion.rol, estadoCocina, pedido);
+    if (pedido.estado === 'anulado') {
+      throw new AppError(409, 'PEDIDO_ANULADO', 'El pedido está anulado');
+    }
+
+    // 2. Los platos que pueden avanzar a ese estado.
+    const platos = await tx.itemPedido.findMany({
+      where: { pedidoId, estadoCocina: { in: [...AVANZAN_A[estadoCocina]] } },
+      select: { id: true },
+    });
+    if (platos.length === 0) {
+      throw new AppError(
+        409,
+        'NADA_QUE_AVANZAR',
+        estadoCocina === 'listo'
+          ? 'Este pedido no tiene platos por terminar'
+          : 'Este pedido no tiene platos listos para entregar',
+      );
+    }
+
+    // 3. Avanzarlos todos en una sola instrucción.
+    const cambiados = platos.map((plato) => plato.id);
+    await tx.itemPedido.updateMany({ where: { id: { in: cambiados } }, data: { estadoCocina } });
+    return { pedido: await cargarPedido(tx, pedidoId, sesion.rol), cambiados };
+  });
+}
+
 /**
  * Envía el pedido a cocina. Repetirlo no es un error (por ejemplo, tras agregar más ítems).
  * @param {DatosSesion} sesion

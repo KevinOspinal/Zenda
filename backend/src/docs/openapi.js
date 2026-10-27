@@ -159,6 +159,7 @@ personales de clientes, montos de caja ni arqueos.
 | \`pedido:actualizado\` | Se agregan o quitan productos | Lo anterior + la comanda (\`items\`) |
 | \`pedido:enviado_a_cocina\` | Se envía a cocina | **La comanda**: productos, cantidades y notas |
 | \`item:estado_cocina\` | La cocina avanza un producto | Pedido, mesa, producto y estado (\`listo\`…) |
+| \`pedido:estado_cocina\` | Varios platos de un pedido cambian a la vez ("Todo listo", "Entregar todo") | Pedido, tipo, número, mesa, estado y los platos que cambiaron |
 | \`pedido:pagado\` | Se cobra | id, estado, mesa, total |
 | \`pedido:anulado\` | Se anula | id, estado, mesa, total |
 | \`mesa:estado\` | Una mesa se ocupa o se libera | mesaId, nombre, estado |

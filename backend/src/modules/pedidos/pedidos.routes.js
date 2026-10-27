@@ -20,6 +20,7 @@ import {
   esquemaDespachar,
   esquemaDividir,
   esquemaEstadoCocina,
+  esquemaEstadoCocinaPedido,
   esquemaFiltrosPedidos,
   esquemaItem,
   esquemaParamsItem,
@@ -52,6 +53,12 @@ rutasPedidos.patch(
   '/:id/items/:itemId/cocina',
   validar({ params: esquemaParamsItem, body: esquemaEstadoCocina }),
   controlador.cambiarEstadoCocina,
+);
+// Todos los platos a la vez; quién marca cada paso lo revisa el servicio.
+rutasPedidos.patch(
+  '/:id/cocina',
+  validar({ params: esquemaParamsId, body: esquemaEstadoCocinaPedido }),
+  controlador.cambiarEstadoCocinaDelPedido,
 );
 rutasPedidos.post(
   '/:id/enviar-cocina',
