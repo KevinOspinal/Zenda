@@ -19,3 +19,6 @@ dist/
 # Instrucciones y skills de Claude Code (solo locales, no se publican)
 CLAUDE.md
 .claude/
+
+# Documentos de diseño (solo locales, no se publican)
+Documentacion/
