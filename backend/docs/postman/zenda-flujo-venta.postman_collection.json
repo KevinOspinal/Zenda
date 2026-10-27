@@ -583,7 +583,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["pedidos", "{{pedidoId}}"]
             },
-            "description": "",
+            "description": "El pedido completo. Trae la propina que el mesero le sugiere al cliente: 10 % del subtotal antes de impuestos.",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -602,7 +602,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Responde 200', () => pm.response.to.have.status(200));",
-                  "pm.test('3 ítems', () => pm.expect(pm.response.json().items.length).to.eql(3));"
+                  "pm.test('3 ítems', () => pm.expect(pm.response.json().items.length).to.eql(3));",
+                  "pm.test('Propina sugerida $3.518 (10 % de $35.185,18)', () => pm.expect(pm.response.json().propinaSugerida).to.eql('3518.00'));"
                 ]
               }
             }
@@ -712,7 +713,7 @@
           ]
         },
         {
-          "name": "Cobrar: efectivo + tarjeta",
+          "name": "Cobrar con propina: efectivo + tarjeta",
           "request": {
             "method": "POST",
             "header": [
@@ -726,7 +727,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["pedidos", "{{pedidoId}}", "cobrar"]
             },
-            "description": "El cliente paga $30.000 en efectivo (entrega un billete de $50.000) y $8.000 con tarjeta. La mesa queda libre y se descuenta la gaseosa del inventario.",
+            "description": "El cliente acepta dar $4.000 de propina (redondea la sugerida). Paga $34.000 en efectivo (entrega un billete de $50.000) y $8.000 con tarjeta: $38.000 de la cuenta + $4.000 de propina. La propina no cambia el total ni los impuestos. La mesa queda libre y se descuenta la gaseosa del inventario.",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -739,7 +740,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"pagos\": [\n    {\n      \"metodo\": \"efectivo\",\n      \"monto\": 30000,\n      \"recibido\": 50000\n    },\n    {\n      \"metodo\": \"tarjeta\",\n      \"monto\": 8000,\n      \"referencia\": \"APROB-123456\"\n    }\n  ]\n}",
+              "raw": "{\n  \"propina\": 4000,\n  \"pagos\": [\n    {\n      \"metodo\": \"efectivo\",\n      \"monto\": 34000,\n      \"recibido\": 50000\n    },\n    {\n      \"metodo\": \"tarjeta\",\n      \"monto\": 8000,\n      \"referencia\": \"APROB-123456\"\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -756,7 +757,11 @@
                   "pm.test('Responde 200', () => pm.response.to.have.status(200));",
                   "const r = pm.response.json();",
                   "pm.test('Pedido pagado', () => pm.expect(r.pedido.estado).to.eql('pagado'));",
-                  "pm.test('Cambio de $20.000', () => pm.expect(r.cambio).to.eql('20000.00'));"
+                  "pm.test('Propina de $4.000 aparte del total', () => {",
+                  "  pm.expect(r.pedido.propina).to.eql('4000');",
+                  "  pm.expect(r.pedido.total).to.eql('38000');",
+                  "});",
+                  "pm.test('Cambio de $16.000', () => pm.expect(r.cambio).to.eql('16000.00'));"
                 ]
               }
             }
@@ -951,7 +956,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["caja", "actual"]
             },
-            "description": "",
+            "description": "Ventas y propinas van por separado. La propina pagada en efectivo sí está en el cajón.",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -971,8 +976,10 @@
                 "exec": [
                   "pm.test('Responde 200', () => pm.response.to.have.status(200));",
                   "const r = pm.response.json().resumen;",
-                  "pm.test('Vendido $38.000', () => pm.expect(r.totalVendido).to.eql('38000.00'));",
-                  "pm.test('Efectivo esperado $130.000', () => pm.expect(r.efectivoEsperado).to.eql('130000.00'));"
+                  "pm.test('Vendido $38.000 (sin propinas)', () => pm.expect(r.totalVendido).to.eql('38000.00'));",
+                  "pm.test('Propinas $4.000', () => pm.expect(r.propinas).to.eql('4000.00'));",
+                  "pm.test('Cobrado $42.000', () => pm.expect(r.totalCobrado).to.eql('42000.00'));",
+                  "pm.test('Efectivo esperado $134.000', () => pm.expect(r.efectivoEsperado).to.eql('134000.00'));"
                 ]
               }
             }
@@ -993,7 +1000,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["caja", "cerrar"]
             },
-            "description": "El cajero cuenta $130.000 en efectivo: $100.000 de base + $30.000 cobrados.",
+            "description": "El cajero cuenta $134.000 en efectivo: $100.000 de base + $34.000 cobrados en efectivo ($30.000 de la cuenta y $4.000 de propina).",
             "auth": {
               "type": "bearer",
               "bearer": [
@@ -1006,7 +1013,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"montoContado\": 130000\n}",
+              "raw": "{\n  \"montoContado\": 134000\n}",
               "options": {
                 "raw": {
                   "language": "json"

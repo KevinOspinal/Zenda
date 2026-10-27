@@ -154,6 +154,7 @@ Totales del periodo y su distribución en el tiempo.
 | \`ventas\` | Cuántos pedidos se cobraron |
 | \`total\` | Lo que pagaron los clientes (precios del menú) |
 | \`subtotal\` · \`impuestos\` | Base sin impuesto e INC, calculados como exige la DIAN |
+| \`propinas\` | Propinas del periodo. **No son ventas**: no suman al total |
 | \`ticketPromedio\` | Total ÷ ventas: lo que gasta en promedio cada venta |
 | \`anulaciones\` | Ventas anuladas (no suman al total) |
 | \`porHora\` | Ventas por hora (0 a 23): muestra la **hora pico** |
@@ -168,6 +169,7 @@ ${REGLAS_REPORTES}`,
           subtotal: '53703.70',
           impuestos: '4296.30',
           ajusteRedondeo: '0.00',
+          propinas: '2500.00',
           ticketPromedio: '19333.33',
           anulaciones: { cantidad: 1, total: '10000.00' },
           porHora: [
@@ -231,6 +233,9 @@ Lo cobrado con cada método. Siempre trae los **4 métodos**, aunque alguno est�
 
 \`pagos\` cuenta pagos, no ventas: una venta pagada mitad en efectivo y mitad con tarjeta
 suma un pago a cada método.
+
+Los totales **incluyen las propinas**, porque el cliente las paga junto con la cuenta. Para
+ver las propinas aparte, usa \`GET /reportes/resumen\`.
 ${REGLAS_REPORTES}`,
       parametros: parametrosRango,
       respuestas: {

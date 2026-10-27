@@ -118,7 +118,9 @@ describe('caja: ciclo completo de un turno', () => {
         transferencia: '0.00',
         otro: '0.00',
       },
+      totalCobrado: '31500.00',
       totalVendido: '31500.00',
+      propinas: '0.00',
       // Base de $100.000 + $20.000 cobrados en efectivo.
       efectivoEsperado: '120000.00',
       pedidos: { pagados: 1, abiertos: 0, anulados: 1 },

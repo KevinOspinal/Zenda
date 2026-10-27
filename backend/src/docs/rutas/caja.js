@@ -26,7 +26,9 @@ const RESUMEN = {
     transferencia: '0.00',
     otro: '0.00',
   },
-  totalVendido: '38000.00',
+  totalCobrado: '38000.00',
+  totalVendido: '36000.00',
+  propinas: '2000.00',
   efectivoEsperado: '130000.00',
   pedidos: { pagados: 1, abiertos: 0, anulados: 1 },
 };
@@ -75,9 +77,11 @@ El turno abierto con su **resumen**:
 
 | Campo | Significado |
 |---|---|
-| \`ventasPorMetodo\` | Lo cobrado con cada método de pago |
-| \`totalVendido\` | Suma de todos los pagos del turno |
-| \`efectivoEsperado\` | Monto inicial + pagos en efectivo: lo que debería haber en la caja |
+| \`ventasPorMetodo\` | Lo cobrado con cada método de pago, propinas incluidas |
+| \`totalCobrado\` | Suma de todos los pagos del turno (ventas + propinas) |
+| \`totalVendido\` | Lo vendido por el negocio, **sin propinas** |
+| \`propinas\` | Propinas del turno, para repartir entre los trabajadores |
+| \`efectivoEsperado\` | Monto inicial + pagos en efectivo (con la propina en efectivo): lo que debería haber en la caja |
 | \`pedidos\` | Cuántos pedidos están pagados, abiertos y anulados |
 
 Los pagos de pedidos **anulados no cuentan**. Si no hay caja abierta, responde 404 \`SIN_TURNO_ABIERTO\`.`,

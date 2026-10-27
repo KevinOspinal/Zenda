@@ -1,10 +1,23 @@
 // @ts-check
 // Documentación de /negocios.
-import { esquemaRegistroNegocio } from '../../modules/negocios/negocios.schemas.js';
-import { cuerpo, operacion, respuesta } from '../ayudantes.js';
-import { TOKEN_EJEMPLO } from '../ejemplos.js';
+import {
+  esquemaConfiguracionNegocio,
+  esquemaRegistroNegocio,
+} from '../../modules/negocios/negocios.schemas.js';
+import { TODOS, cuerpo, operacion, respuesta } from '../ayudantes.js';
+import { ID, TOKEN_EJEMPLO } from '../ejemplos.js';
 
 const ID_NEGOCIO_NUEVO = 'f0e1d2c3-b4a5-4697-8879-6a5b4c3d2e1f';
+
+/** El negocio del demo, como lo entregan GET y PATCH /negocios/actual. */
+const NEGOCIO_ACTUAL = {
+  id: ID.negocio,
+  nombre: 'La Industria',
+  nit: '900111222',
+  ciudad: 'Cali',
+  regimenImpuesto: 'responsable_inc',
+  propinaSugerida: '10',
+};
 
 export const documentacionNegocios = {
   '/negocios/registro': {
@@ -24,7 +37,9 @@ la **sesión iniciada** del dueño para que empiece a configurarlo: menú, mesas
   \`no_responsable\` (sin impuesto al consumo). ⚠️ Confírmalo con un contador.
 - Límite: **5 registros por hora** desde una misma IP (si no, 429).
 - El registro está **abierto en desarrollo y cerrado en producción** (403
-  \`REGISTRO_DESHABILITADO\`). Se controla con la variable \`REGISTRO_HABILITADO\`.`,
+  \`REGISTRO_DESHABILITADO\`). Se controla con la variable \`REGISTRO_HABILITADO\`.
+- El negocio empieza sugiriendo una **propina del 10 %**; el dueño la cambia con
+  \`PATCH /negocios/actual\`.`,
       cuerpo: cuerpo(esquemaRegistroNegocio, {
         ejemplo: {
           negocio: {
@@ -58,6 +73,7 @@ la **sesión iniciada** del dueño para que empiece a configurarlo: menú, mesas
             nit: '901234567',
             ciudad: 'Medellín',
             regimenImpuesto: 'responsable_inc',
+            propinaSugerida: '10',
           },
           tokenAcceso: TOKEN_EJEMPLO,
           refreshToken: `${ID_NEGOCIO_NUEVO}.Qm9vbGVhbnNBcmVGdW5CdXRUaGlzSXNKdXN0QW5FeGFtcGxl`,
@@ -77,6 +93,43 @@ la **sesión iniciada** del dueño para que empiece a configurarlo: menú, mesas
         }),
       },
       errores: ['400', '409', '429'],
+    }),
+  },
+
+  '/negocios/actual': {
+    get: operacion({
+      etiqueta: 'Negocios',
+      resumen: 'Ver el negocio de la sesión',
+      roles: TODOS,
+      descripcion: `
+Datos y configuración del negocio con el que se inició sesión: nombre, NIT, ciudad,
+régimen de impuesto y **porcentaje de propina sugerida**.`,
+      respuestas: { 200: respuesta('El negocio.', NEGOCIO_ACTUAL) },
+    }),
+    patch: operacion({
+      etiqueta: 'Negocios',
+      resumen: 'Cambiar la propina sugerida',
+      roles: ['dueno'],
+      descripcion: `
+Cambia el **porcentaje de propina** que se le sugiere al cliente al cobrar.
+
+**Reglas** (Ley 1935 de 2018)
+- Entre **0 y 10 %**. La ley no permite sugerir más del 10 % (si no, 400).
+- En **0** el negocio no sugiere propina; el cliente igual puede darla si quiere.
+- La propina sugerida de cada pedido se calcula sobre el **subtotal antes de impuestos**.
+  ⚠️ Confírmalo con un contador.
+- El cambio queda en la **auditoría** con el valor anterior (\`cambiar_propina_sugerida\`).`,
+      cuerpo: cuerpo(esquemaConfiguracionNegocio, {
+        ejemplo: { propinaSugerida: 8 },
+        descripciones: {
+          propinaSugerida:
+            'Porcentaje de 0 a 10, con máximo 2 decimales. 0 desactiva la sugerencia.',
+        },
+      }),
+      respuestas: {
+        200: respuesta('Configuración actualizada.', { ...NEGOCIO_ACTUAL, propinaSugerida: '8' }),
+      },
+      errores: ['400'],
     }),
   },
 };

@@ -29,13 +29,14 @@ export function obtenerResumen(sesion, rango) {
   return conNegocio(tenantId, async (tx) => {
     // 1. Totales de las ventas pagadas.
     /** @type {{ ventas: number, total: ValorNumerico, subtotal: ValorNumerico,
-     *   impuestos: ValorNumerico, ajuste: ValorNumerico }[]} */
+     *   impuestos: ValorNumerico, ajuste: ValorNumerico, propinas: ValorNumerico }[]} */
     const [totales] = await tx.$queryRaw`
       SELECT count(*)::int                      AS ventas,
              coalesce(sum(total), 0)           AS total,
              coalesce(sum(subtotal), 0)        AS subtotal,
              coalesce(sum(impuestos), 0)       AS impuestos,
-             coalesce(sum(ajuste_redondeo), 0) AS ajuste
+             coalesce(sum(ajuste_redondeo), 0) AS ajuste,
+             coalesce(sum(propina), 0)         AS propinas
       FROM pedidos
       WHERE tenant_id = ${tenantId}::uuid AND estado = 'pagado'
         AND cerrado_en >= ${inicio} AND cerrado_en < ${fin}`;
@@ -80,6 +81,8 @@ export function obtenerResumen(sesion, rango) {
       subtotal: aDecimal(totales.subtotal).toFixed(2),
       impuestos: aDecimal(totales.impuestos).toFixed(2),
       ajusteRedondeo: aDecimal(totales.ajuste).toFixed(2),
+      // Las propinas no son ventas del negocio: van aparte y no suman al total.
+      propinas: aDecimal(totales.propinas).toFixed(2),
       ticketPromedio: ticketPromedio.toFixed(2),
       anulaciones: {
         cantidad: anulaciones.cantidad,
@@ -136,6 +139,7 @@ export function obtenerVentasPorProducto(sesion, rango) {
 
 /**
  * Lo cobrado con cada método de pago en el periodo. Siempre trae los 4 métodos.
+ * Incluye las propinas, porque el cliente las paga junto con la cuenta.
  * @param {DatosSesion} sesion
  * @param {Rango} rango
  */

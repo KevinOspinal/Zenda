@@ -130,6 +130,9 @@ model Tenant {
   plan            String          @default("demo")
   // Define qué impuesto cobra el negocio: INC 8 %, IVA 19 % (franquicia) o ninguno.
   regimenImpuesto RegimenImpuesto @default(responsable_inc) @map("regimen_impuesto")
+  // Porcentaje de propina que se le sugiere al cliente (Ley 1935 de 2018: máximo 10 %).
+  // En 0 el negocio no sugiere propina.
+  propinaSugerida Decimal         @default(10) @map("propina_sugerida") @db.Decimal(5, 2)
   creadoEn        DateTime        @default(now()) @map("creado_en") @db.Timestamptz(6)
 
   usuarios              Usuario[]
@@ -334,6 +337,9 @@ model Pedido {
   // subtotal + impuestos calculados como exige la DIAN. Se cumple siempre:
   // subtotal + impuestos + ajusteRedondeo = total.
   ajusteRedondeo Decimal      @default(0) @map("ajuste_redondeo") @db.Decimal(14, 2)
+  // Propina voluntaria que decidió dar el cliente. No es venta del negocio: va aparte del
+  // total, no lleva impuesto y se paga junto con el total (pagos = total + propina).
+  propina        Decimal      @default(0) @db.Decimal(14, 2)
   // Lo genera la app al vender sin internet; evita duplicar el pedido al sincronizar.
   uuidOffline    String       @default(dbgenerated("gen_random_uuid()")) @map("uuid_offline") @db.Uuid
   abiertoEn      DateTime     @default(now()) @map("abierto_en") @db.Timestamptz(6)

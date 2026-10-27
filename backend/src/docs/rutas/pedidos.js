@@ -148,7 +148,7 @@ generó. Si el mismo pedido llega dos veces, la segunda vez **no se duplica**: r
           {
             ...Object.fromEntries(
               Object.entries(PEDIDO).filter(
-                ([campo]) => !['items', 'pagos', 'cliente'].includes(campo),
+                ([campo]) => !['items', 'pagos', 'cliente', 'propinaSugerida'].includes(campo),
               ),
             ),
             mesa: { id: ID.mesa, nombre: 'Mesa 1' },
@@ -164,8 +164,13 @@ generó. Si el mismo pedido llega dos veces, la segunda vez **no se duplica**: r
       etiqueta: 'Pedidos',
       resumen: 'Ver un pedido completo',
       roles: TODOS,
-      descripcion:
-        'El pedido con sus ítems (en el orden en que se agregaron), pagos, mesa y cliente.',
+      descripcion: `
+El pedido con sus ítems (en el orden en que se agregaron), pagos, mesa y cliente.
+
+Trae \`propinaSugerida\`: la propina que el mesero le sugiere al cliente antes de cobrar.
+Es el porcentaje del negocio (10 % por defecto, ver \`PATCH /negocios/actual\`) sobre el
+**subtotal antes de impuestos**, en pesos enteros. Todas las respuestas que devuelven el
+pedido completo la incluyen.`,
       parametros: idPedido,
       respuestas: { 200: respuesta('El pedido.', PEDIDO) },
       errores: ['400', '404'],
@@ -338,8 +343,18 @@ propia factura**.
       descripcion: `
 Cobra con **uno o varios pagos** (por ejemplo, parte en efectivo y parte con tarjeta).
 
+**Propina voluntaria** (Ley 1935 de 2018)
+- El mesero le muestra al cliente la \`propinaSugerida\` del pedido y le **pregunta** si
+  quiere darla. El cliente puede aceptarla, cambiar el valor o no darla.
+- Si la da, se envía en \`propina\`. Si no, se omite el campo.
+- La propina **no es venta del negocio**: no cambia el total, no lleva impuesto y la
+  caja y los reportes la muestran aparte.
+- No puede ser mayor que el total del pedido (422 \`PROPINA_EXCEDE_TOTAL\`), para evitar
+  errores como un cero de más.
+
 **Reglas**
-- Los pagos deben sumar **exactamente** el total (si no, 422 \`PAGO_NO_CUADRA\`).
+- Los pagos deben sumar **exactamente** el total **más la propina** (si no, 422
+  \`PAGO_NO_CUADRA\`).
 - \`monto\` es lo que se abona a la cuenta. En efectivo, envía \`recibido\` (el billete del
   cliente) y la respuesta trae el **cambio** a devolver. El cambio no entra a la caja.
 - Se puede cobrar desde \`abierto\`: en comidas rápidas el cliente paga antes de que cocinen.
@@ -363,6 +378,13 @@ Cobra con **uno o varios pagos** (por ejemplo, parte en efectivo y parte con tar
               ],
             },
           },
+          propina: {
+            summary: 'Con propina: el cliente acepta dar $3.000',
+            value: {
+              propina: 3000,
+              pagos: [{ metodo: 'efectivo', monto: 31000, recibido: 50000 }],
+            },
+          },
           cliente: {
             summary: 'Transferencia con factura a nombre de un cliente',
             value: {
@@ -372,7 +394,9 @@ Cobra con **uno o varios pagos** (por ejemplo, parte en efectivo y parte con tar
           },
         },
         descripciones: {
-          pagos: 'Uno o varios pagos (máximo 10) que suman exactamente el total.',
+          pagos: 'Uno o varios pagos (máximo 10) que suman exactamente el total más la propina.',
+          propina:
+            'Propina voluntaria que decidió dar el cliente, en pesos. Opcional: sin ella, los pagos suman solo el total.',
           'pagos.metodo': '`efectivo`, `tarjeta`, `transferencia` u `otro`.',
           'pagos.monto': 'Lo que se abona a la cuenta con este pago, en pesos.',
           'pagos.referencia': 'Número de aprobación del datáfono o de la transferencia. Opcional.',

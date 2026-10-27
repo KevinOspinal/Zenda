@@ -76,6 +76,9 @@ const esquemaPago = z
 /** POST /pedidos/:id/cobrar */
 export const esquemaCobrar = z.object({
   pagos: z.array(esquemaPago).min(1, 'envíe al menos un pago').max(10),
+  // Propina voluntaria (Ley 1935 de 2018): la decide el cliente. Si no la da, se omite.
+  // Los pagos deben sumar el total más esta propina.
+  propina: esquemaMonto.optional(),
   // Cliente a cuyo nombre se factura. Sin cliente, la factura va a "consumidor final".
   clienteId: esquemaId.optional(),
 });

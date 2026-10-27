@@ -7,6 +7,10 @@
 // Arqueo: al cerrar, el cajero cuenta el efectivo. El sistema calcula cuánto debería haber
 // (monto inicial + pagos en efectivo del turno) y guarda la diferencia:
 //   diferencia > 0 → sobrante;  diferencia < 0 → faltante.
+//
+// Propinas: se pagan junto con la cuenta, así que los pagos las incluyen y la propina en
+// efectivo queda en el cajón. El resumen las muestra aparte de las ventas porque no son
+// del negocio sino de los trabajadores (Ley 1935 de 2018).
 import { Prisma } from '@prisma/client';
 import { ACCIONES, registrarAuditoria } from '../../lib/auditoria.js';
 import { Decimal, aDecimal } from '../../lib/dinero.js';
@@ -25,8 +29,10 @@ const ESTADOS_PEDIDO_ABIERTO = /** @type {const} */ (['abierto', 'enviado_a_coci
 
 /**
  * @typedef {object} ResumenTurno
- * @property {Record<MetodoPago, string>} ventasPorMetodo Total cobrado con cada método de pago.
- * @property {string} totalVendido Suma de todos los pagos del turno.
+ * @property {Record<MetodoPago, string>} ventasPorMetodo Total cobrado con cada método de pago, propinas incluidas.
+ * @property {string} totalCobrado Suma de todos los pagos del turno (ventas + propinas).
+ * @property {string} totalVendido Lo vendido por el negocio, sin las propinas.
+ * @property {string} propinas Propinas del turno, para repartir entre los trabajadores.
  * @property {string} efectivoEsperado Monto inicial + pagos en efectivo: lo que debería haber en caja.
  * @property {{ pagados: number, abiertos: number, anulados: number }} pedidos Cantidad de pedidos por estado.
  */
@@ -185,7 +191,14 @@ async function calcularResumen(tx, turno) {
     porMetodo[grupo.metodo] = aDecimal(grupo._sum.monto ?? 0);
   }
 
-  // 2. Contar los pedidos según su estado.
+  // 2. Sumar las propinas de los pedidos cobrados.
+  const { _sum: propinasDelTurno } = await tx.pedido.aggregate({
+    where: { turnoId: turno.id, estado: 'pagado' },
+    _sum: { propina: true },
+  });
+  const propinas = aDecimal(propinasDelTurno.propina ?? 0);
+
+  // 3. Contar los pedidos según su estado.
   const estados = await tx.pedido.groupBy({
     by: ['estado'],
     where: { turnoId: turno.id },
@@ -196,15 +209,18 @@ async function calcularResumen(tx, turno) {
       .filter((grupo) => buscados.includes(grupo.estado))
       .reduce((total, grupo) => total + grupo._count._all, 0);
 
-  // 3. Totales.
-  const totalVendido = Object.values(porMetodo).reduce((total, monto) => total.plus(monto));
+  // 4. Totales. Las propinas en efectivo también están en el cajón.
+  const totalCobrado = Object.values(porMetodo).reduce((total, monto) => total.plus(monto));
+  const totalVendido = totalCobrado.minus(propinas);
   const efectivoEsperado = aDecimal(turno.montoInicial).plus(porMetodo.efectivo);
 
   return {
     ventasPorMetodo: /** @type {Record<MetodoPago, string>} */ (
       Object.fromEntries(METODOS_PAGO.map((metodo) => [metodo, porMetodo[metodo].toFixed(2)]))
     ),
+    totalCobrado: totalCobrado.toFixed(2),
     totalVendido: totalVendido.toFixed(2),
+    propinas: propinas.toFixed(2),
     efectivoEsperado: efectivoEsperado.toFixed(2),
     pedidos: {
       pagados: contar(['pagado']),

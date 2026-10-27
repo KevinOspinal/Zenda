@@ -220,7 +220,14 @@ const ERRORES = {
     pedidoCerrado: ['PEDIDO_CERRADO', 'El pedido ya fue cobrado o anulado'],
   }),
   Error422: error('Una regla de negocio impide la acción.', {
-    pagoNoCuadra: ['PAGO_NO_CUADRA', 'Los pagos suman 27000.00 y el total es 28000.00'],
+    pagoNoCuadra: [
+      'PAGO_NO_CUADRA',
+      'Los pagos suman 28000.00 y deben sumar 31000.00 (total 28000.00 + propina 3000.00)',
+    ],
+    propinaExcedeTotal: [
+      'PROPINA_EXCEDE_TOTAL',
+      'La propina (280000.00) no puede ser mayor que el total del pedido (28000.00)',
+    ],
     productoInactivo: ['PRODUCTO_INACTIVO', '"Agua" no está disponible en el menú'],
     impuesto: [
       'IMPUESTO_NO_PERMITIDO',
@@ -254,7 +261,11 @@ export const documentoOpenApi = {
   security: [{ tokenAcceso: [] }],
   tags: [
     { name: 'Sistema', description: 'Estado del servicio.' },
-    { name: 'Negocios', description: 'Registro de un restaurante o cafetería nuevo con su dueño.' },
+    {
+      name: 'Negocios',
+      description:
+        'Registro de un restaurante o cafetería nuevo con su dueño, y configuración del negocio (propina sugerida).',
+    },
     {
       name: 'Autenticación',
       description: 'Iniciar sesión, renovar el token y cerrar sesión. **Empieza aquí.**',

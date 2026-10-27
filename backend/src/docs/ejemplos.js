@@ -76,6 +76,7 @@ export const PEDIDO = Object.freeze({
   impuestos: '2074.08',
   total: '28000',
   ajusteRedondeo: '0',
+  propina: '0',
   uuidOffline: ID.uuidOffline,
   abiertoEn: '2026-10-26T22:15:03.120Z',
   cerradoEn: null,
@@ -110,6 +111,8 @@ export const PEDIDO = Object.freeze({
   pagos: [],
   mesa: { id: ID.mesa, nombre: 'Mesa 1', estado: 'ocupada' },
   cliente: null,
+  // 10 % del subtotal (25925.92), en pesos enteros hacia abajo.
+  propinaSugerida: '2592.00',
 });
 
 /** Rango de fechas de ejemplo para los reportes. */

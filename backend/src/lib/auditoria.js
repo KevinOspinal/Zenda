@@ -19,6 +19,7 @@ export const ACCIONES = Object.freeze({
   EDITAR_USUARIO: 'editar_usuario',
   RESTABLECER_CONTRASENA: 'restablecer_contrasena',
   CAMBIAR_CREDENCIALES_FACTURACION: 'cambiar_credenciales_facturacion',
+  CAMBIAR_PROPINA_SUGERIDA: 'cambiar_propina_sugerida',
 });
 
 /**

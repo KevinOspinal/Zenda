@@ -19,6 +19,7 @@ import {
   devolverInventarioPorAnulacion,
 } from '../inventario/movimientos.js';
 import { calcularLinea, calcularTotalesPedido, obtenerTasaImpuesto } from './calculoImpuestos.js';
+import { calcularPropinaSugerida } from './propina.js';
 
 /** @typedef {import('../../lib/tokens.js').DatosSesion} DatosSesion */
 /** @typedef {import('../../lib/negocio.js').TransaccionPrisma} TransaccionPrisma */
@@ -33,7 +34,10 @@ const ESTADOS_ABIERTOS = /** @type {const} */ (['abierto', 'enviado_a_cocina']);
 /** Orden de los estados de cocina: un ítem solo puede avanzar, nunca retroceder. */
 const ORDEN_COCINA = /** @type {const} */ (['pendiente', 'preparando', 'listo', 'entregado']);
 
-/** Lo que se devuelve de un pedido: sus ítems con el nombre del producto, sus pagos y la mesa. */
+/**
+ * Lo que se devuelve de un pedido: sus ítems con el nombre del producto, sus pagos y la mesa.
+ * El porcentaje de propina del negocio se usa para calcular la propina sugerida (ver `presentarPedido`).
+ */
 const DETALLE_PEDIDO = /** @type {const} */ ({
   items: {
     // En el orden en que se agregaron.
@@ -43,6 +47,7 @@ const DETALLE_PEDIDO = /** @type {const} */ ({
   pagos: { orderBy: { creadoEn: 'asc' } },
   mesa: { select: { id: true, nombre: true, estado: true } },
   cliente: { select: { id: true, nombre: true, tipoDocumento: true, numeroDocumento: true } },
+  tenant: { select: { propinaSugerida: true } },
 });
 
 // ───────────────────────────── Crear y consultar ─────────────────────────────
@@ -125,7 +130,7 @@ export function obtenerPedido(sesion, id) {
   return conNegocio(sesion.tenantId, async (tx) => {
     const pedido = await tx.pedido.findUnique({ where: { id }, include: DETALLE_PEDIDO });
     if (!pedido) throw errorPedidoNoEncontrado();
-    return pedido;
+    return presentarPedido(pedido);
   });
 }
 
@@ -314,18 +319,19 @@ export function dividirPedido(sesion, pedidoId, { items }) {
 // ───────────────────────────── Cobrar y anular ─────────────────────────────
 
 /**
- * Cobra el pedido con uno o varios pagos que deben sumar exactamente el total.
+ * Cobra el pedido con uno o varios pagos que deben sumar exactamente el total más la
+ * propina voluntaria (si el cliente decidió darla).
  *
  * El monto de cada pago es lo que se abona a la cuenta. En efectivo se puede enviar
  * `recibido` (el billete del cliente) para calcular el cambio, que no entra a la caja.
  *
  * @param {DatosSesion} sesion
  * @param {string} pedidoId
- * @param {{ pagos: DatosPago[], clienteId?: string }} datos
+ * @param {{ pagos: DatosPago[], propina?: string, clienteId?: string }} datos
  * @returns {Promise<{ pedido: object, cambio: string,
  *   advertencias: import('../inventario/movimientos.js').AdvertenciaStock[] }>}
  */
-export function cobrarPedido(sesion, pedidoId, { pagos, clienteId }) {
+export function cobrarPedido(sesion, pedidoId, { pagos, propina = '0', clienteId }) {
   return conNegocio(sesion.tenantId, async (tx) => {
     // 1. El pedido debe estar abierto y tener ítems.
     const pedido = await buscarPedidoAbierto(tx, pedidoId);
@@ -333,31 +339,43 @@ export function cobrarPedido(sesion, pedidoId, { pagos, clienteId }) {
       throw new AppError(409, 'PEDIDO_VACIO', 'El pedido no tiene productos para cobrar');
     }
 
-    // 2. Los pagos deben sumar exactamente el total (ni más ni menos).
-    const sumaPagos = sumar(pagos.map((pago) => pago.monto));
-    if (!sumaPagos.equals(pedido.total)) {
+    // 2. La propina no puede ser mayor que el total: protege de errores de digitación
+    //    (por ejemplo un cero de más).
+    if (aDecimal(propina).greaterThan(pedido.total)) {
       throw new AppError(
         422,
-        'PAGO_NO_CUADRA',
-        `Los pagos suman ${sumaPagos.toFixed(2)} y el total es ${pedido.total.toFixed(2)}`,
+        'PROPINA_EXCEDE_TOTAL',
+        `La propina (${aDecimal(propina).toFixed(2)}) no puede ser mayor que el total del pedido (${pedido.total.toFixed(2)})`,
       );
     }
 
-    // 3. Si se factura a nombre de un cliente, debe ser del negocio.
+    // 3. Los pagos deben sumar exactamente el total más la propina (ni más ni menos).
+    const aPagar = pedido.total.plus(propina);
+    const sumaPagos = sumar(pagos.map((pago) => pago.monto));
+    if (!sumaPagos.equals(aPagar)) {
+      throw new AppError(
+        422,
+        'PAGO_NO_CUADRA',
+        `Los pagos suman ${sumaPagos.toFixed(2)} y deben sumar ${aPagar.toFixed(2)} ` +
+          `(total ${pedido.total.toFixed(2)} + propina ${aDecimal(propina).toFixed(2)})`,
+      );
+    }
+
+    // 4. Si se factura a nombre de un cliente, debe ser del negocio.
     if (clienteId) {
       const cliente = await tx.cliente.findUnique({ where: { id: clienteId } });
       if (!cliente) throw new AppError(404, 'CLIENTE_NO_ENCONTRADO', 'El cliente no existe');
     }
 
-    // 4. Marcar como pagado. La condición de estado evita cobrar dos veces si llegan
+    // 5. Marcar como pagado. La condición de estado evita cobrar dos veces si llegan
     //    dos peticiones juntas.
     const actualizados = await tx.pedido.updateMany({
       where: { id: pedidoId, estado: { in: [...ESTADOS_ABIERTOS] } },
-      data: { estado: 'pagado', cerradoEn: new Date(), clienteId },
+      data: { estado: 'pagado', cerradoEn: new Date(), clienteId, propina },
     });
     if (actualizados.count !== 1) throw errorPedidoCerrado();
 
-    // 5. Registrar los pagos.
+    // 6. Registrar los pagos.
     await tx.pago.createMany({
       data: pagos.map(({ metodo, monto, referencia }) => ({
         tenantId: sesion.tenantId,
@@ -368,13 +386,13 @@ export function cobrarPedido(sesion, pedidoId, { pagos, clienteId }) {
       })),
     });
 
-    // 6. Descontar del inventario los productos que lo controlan.
+    // 7. Descontar del inventario los productos que lo controlan.
     const advertencias = await descontarInventarioPorVenta(tx, sesion.tenantId, pedidoId);
 
-    // 7. Liberar la mesa.
+    // 8. Liberar la mesa.
     if (pedido.mesaId) await liberarMesa(tx, pedido.mesaId);
 
-    // 8. Cambio a devolver: lo recibido en efectivo menos lo abonado en efectivo.
+    // 9. Cambio a devolver: lo recibido en efectivo menos lo abonado en efectivo.
     const cambio = sumar(
       pagos
         .filter((pago) => pago.recibido !== undefined)
@@ -580,8 +598,12 @@ async function buscarItem(tx, pedidoId, itemId) {
  * @param {TransaccionPrisma} tx
  * @param {string} pedidoId
  */
-function cargarPedido(tx, pedidoId) {
-  return tx.pedido.findUniqueOrThrow({ where: { id: pedidoId }, include: DETALLE_PEDIDO });
+async function cargarPedido(tx, pedidoId) {
+  const pedido = await tx.pedido.findUniqueOrThrow({
+    where: { id: pedidoId },
+    include: DETALLE_PEDIDO,
+  });
+  return presentarPedido(pedido);
 }
 
 /**
@@ -589,11 +611,25 @@ function cargarPedido(tx, pedidoId) {
  * @param {string} tenantId
  * @param {string} uuidOffline
  */
-function buscarPorUuidOffline(tx, tenantId, uuidOffline) {
-  return tx.pedido.findUnique({
+async function buscarPorUuidOffline(tx, tenantId, uuidOffline) {
+  const pedido = await tx.pedido.findUnique({
     where: { tenantId_uuidOffline: { tenantId, uuidOffline } },
     include: DETALLE_PEDIDO,
   });
+  return pedido && presentarPedido(pedido);
+}
+
+/**
+ * Da forma al pedido que se entrega: quita los datos internos del negocio y agrega la
+ * propina que se le sugiere al cliente, para que el mesero se la muestre antes de cobrar.
+ * @template {{ subtotal: Prisma.Decimal, tenant: { propinaSugerida: Prisma.Decimal } }} T
+ * @param {T} pedido
+ */
+function presentarPedido({ tenant, ...pedido }) {
+  return {
+    ...pedido,
+    propinaSugerida: calcularPropinaSugerida(pedido.subtotal, tenant.propinaSugerida).toFixed(2),
+  };
 }
 
 /** @param {unknown} error */

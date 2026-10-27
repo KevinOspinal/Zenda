@@ -1,7 +1,9 @@
 // @ts-check
-// Esquema del registro de un negocio nuevo.
+// Esquemas del registro de un negocio nuevo y de su configuración.
 import { z } from 'zod';
-import { esquemaContrasenaNueva, textoObligatorio } from '../../lib/esquemas.js';
+import { aDecimal } from '../../lib/dinero.js';
+import { esquemaContrasenaNueva, esquemaMonto, textoObligatorio } from '../../lib/esquemas.js';
+import { PROPINA_MAXIMA_SUGERIDA } from '../pedidos/propina.js';
 
 /** POST /negocios/registro */
 export const esquemaRegistroNegocio = z.object({
@@ -23,4 +25,15 @@ export const esquemaRegistroNegocio = z.object({
     email: z.string().trim().toLowerCase().pipe(z.email('correo inválido')),
     contrasena: esquemaContrasenaNueva,
   }),
+});
+
+/**
+ * PATCH /negocios/actual
+ * Porcentaje de propina que se sugiere al cliente: de 0 (no sugerir) a 10 % (Ley 1935 de 2018).
+ */
+export const esquemaConfiguracionNegocio = z.object({
+  propinaSugerida: esquemaMonto.refine(
+    (valor) => aDecimal(valor).lessThanOrEqualTo(PROPINA_MAXIMA_SUGERIDA),
+    `no puede superar el ${PROPINA_MAXIMA_SUGERIDA} % (Ley 1935 de 2018)`,
+  ),
 });
