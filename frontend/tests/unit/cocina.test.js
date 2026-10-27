@@ -2,6 +2,7 @@
 // Pruebas de las reglas del tablero de cocina y de los identificadores de pedidos.
 import { describe, expect, it, vi } from 'vitest';
 import {
+  armarTablero,
   columnaDeComanda,
   esAgregadoDespues,
   minutosDeEspera,
@@ -102,5 +103,57 @@ describe('generarUuid', () => {
       globalThis.crypto.randomUUID = original;
       vi.restoreAllMocks();
     }
+  });
+});
+
+describe('armarTablero', () => {
+  const ahora = '2026-10-27T15:30:00.000Z';
+  /**
+   * @param {string} id
+   * @param {string} estado
+   * @param {Array<[string, string]>} platos [estadoCocina, creadoEn]
+   */
+  const pedido = (id, estado, platos) => ({
+    id,
+    estado,
+    items: platos.map(([estadoCocina, creadoEn], i) => ({
+      id: `${id}-${i}`,
+      estadoCocina,
+      creadoEn,
+    })),
+  });
+
+  it('pone cada comanda en su columna y la que más espera va primero', () => {
+    const tablero = armarTablero(
+      [
+        pedido('a', 'enviado_a_cocina', [['pendiente', '2026-10-27T15:20:00.000Z']]),
+        pedido('b', 'enviado_a_cocina', [['pendiente', '2026-10-27T15:05:00.000Z']]),
+        pedido('c', 'enviado_a_cocina', [['preparando', '2026-10-27T15:10:00.000Z']]),
+        pedido('d', 'enviado_a_cocina', [
+          ['listo', '2026-10-27T15:00:00.000Z'],
+          ['entregado', '2026-10-27T15:00:00.000Z'],
+        ]),
+      ],
+      ahora,
+    );
+
+    expect(tablero.pendiente.map((c) => c.pedido.id)).toEqual(['b', 'a']);
+    expect(tablero.preparando.map((c) => c.pedido.id)).toEqual(['c']);
+    expect(tablero.listo.map((c) => c.pedido.id)).toEqual(['d']);
+    // Los platos entregados no se muestran.
+    expect(tablero.listo[0].items).toHaveLength(1);
+    expect(tablero.pendiente[0].minutos).toBe(25);
+  });
+
+  it('no muestra pedidos sin enviar a la cocina ni comandas ya entregadas', () => {
+    const tablero = armarTablero(
+      [
+        pedido('abierto', 'abierto', [['pendiente', '2026-10-27T15:20:00.000Z']]),
+        pedido('entregado', 'enviado_a_cocina', [['entregado', '2026-10-27T15:00:00.000Z']]),
+      ],
+      ahora,
+    );
+
+    expect(Object.values(tablero).flat()).toHaveLength(0);
   });
 });

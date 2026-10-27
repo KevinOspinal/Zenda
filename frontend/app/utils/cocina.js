@@ -75,3 +75,37 @@ export function esAgregadoDespues(item, items) {
   );
   return new Date(item.creadoEn).getTime() - new Date(primero).getTime() > AGREGADO_DESPUES_MS;
 }
+
+/**
+ * @typedef {object} ComandaDelTablero
+ * @property {any} pedido Pedido con sus ítems (forma del API).
+ * @property {any[]} items Platos por entregar, en el orden en que se pidieron.
+ * @property {number} minutos Minutos de espera (ver minutosDeEspera).
+ */
+
+/**
+ * Arma las tres columnas del tablero de cocina con los pedidos enviados a la cocina.
+ * En cada columna, la comanda que más lleva esperando va primero.
+ * @param {any[]} pedidos Pedidos activos con sus ítems.
+ * @param {Date | string | number} [ahora]
+ * @returns {Record<'pendiente' | 'preparando' | 'listo', ComandaDelTablero[]>}
+ */
+export function armarTablero(pedidos, ahora = new Date()) {
+  /** @type {Record<'pendiente' | 'preparando' | 'listo', ComandaDelTablero[]>} */
+  const tablero = { pendiente: [], preparando: [], listo: [] };
+
+  for (const pedido of pedidos) {
+    if (pedido.estado !== 'enviado_a_cocina') continue;
+    const items = pedido.items ?? [];
+    const columna = columnaDeComanda(items);
+    if (!columna) continue;
+    tablero[columna].push({
+      pedido,
+      items: items.filter((/** @type {any} */ item) => item.estadoCocina !== 'entregado'),
+      minutos: minutosDeEspera(items, ahora),
+    });
+  }
+
+  for (const comandas of Object.values(tablero)) comandas.sort((a, b) => b.minutos - a.minutos);
+  return tablero;
+}
