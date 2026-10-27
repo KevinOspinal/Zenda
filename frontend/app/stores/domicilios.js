@@ -67,6 +67,17 @@ export const useDomiciliosStore = defineStore('domicilios', () => {
   }
 
   /**
+   * Manda el domicilio a la cocina. También si ya se cobró (por ejemplo, pagado por
+   * transferencia antes de mandarlo): sigue cobrado y la cocina lo ve igual.
+   * @param {string} id
+   */
+  async function enviarACocina(id) {
+    const pedido = await usePedidosStore().enviarACocina(id);
+    guardar(pedido);
+    return pedido;
+  }
+
+  /**
    * El domicilio sale con un domiciliario.
    * @param {string} id
    * @param {string} domiciliarioId
@@ -132,6 +143,7 @@ export const useDomiciliosStore = defineStore('domicilios', () => {
     cargarDomiciliarios,
     crear,
     actualizar,
+    enviarACocina,
     despachar,
     entregar,
     alCambiarPedido,

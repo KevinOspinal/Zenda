@@ -1,7 +1,11 @@
 <!--
   Un domicilio en curso: a quién y a dónde va, en qué etapa está (con ícono y texto), cuánto
   hay que cobrar, el cambio que debe llevar el domiciliario y la acción que sigue:
-  agregar productos y despachar, o marcarlo como entregado cuando el cliente lo recibió.
+  - Sin enviar a cocina: "Enviar a cocina" (también si ya se cobró).
+  - En cocina: espera; solo se despacha cuando la cocina lo tiene listo.
+  - Listo para salir: "Despachar".
+  - En camino: "Entregado" (o "Cobrar y entregar" si es contra entrega).
+  Los productos se pueden agregar mientras no se haya cobrado ni despachado.
 -->
 <script setup>
 const props = defineProps({
@@ -9,12 +13,18 @@ const props = defineProps({
   domicilio: { type: /** @type {import('vue').PropType<any>} */ (Object), required: true },
 });
 
-const emit = defineEmits({ despachar: () => true, entregar: () => true });
+const emit = defineEmits({
+  enviarACocina: () => true,
+  despachar: () => true,
+  entregar: () => true,
+});
 
 const ahora = useNow({ interval: 30_000 });
 const etapa = computed(() => etapaDelDomicilio(props.domicilio));
 const enCamino = computed(() => etapa.value === 'en_camino');
 const pagado = computed(() => props.domicilio.estado === 'pagado');
+/** Un pedido cobrado o que ya salió no admite más productos. */
+const sePuedenAgregar = computed(() => !pagado.value && !enCamino.value);
 const cambio = computed(() => cambioParaLlevar(props.domicilio));
 const origen = computed(() => ORIGENES_PEDIDO[props.domicilio.origen] ?? ORIGENES_PEDIDO.otro);
 /** Minutos desde que salió, o desde que se registró si aún no sale. */
@@ -79,40 +89,40 @@ const minutos = computed(() =>
     </div>
 
     <div class="mt-auto grid grid-cols-2 gap-2">
-      <template v-if="enCamino">
-        <UButton
-          :to="`/pedidos/${domicilio.id}`"
-          color="neutral"
-          variant="soft"
-          size="lg"
-          icon="i-lucide-receipt"
-          label="Ver pedido"
-        />
-        <UButton
-          size="lg"
-          icon="i-lucide-check-check"
-          :label="pagado ? 'Entregado' : 'Cobrar y entregar'"
-          @click="emit('entregar')"
-        />
-      </template>
-      <template v-else>
-        <UButton
-          :to="`/pedidos/${domicilio.id}`"
-          color="neutral"
-          variant="soft"
-          size="lg"
-          :icon="etapa === 'sin_enviar' ? 'i-lucide-plus' : 'i-lucide-receipt'"
-          :label="etapa === 'sin_enviar' ? 'Agregar productos' : 'Ver pedido'"
-        />
-        <UButton
-          size="lg"
-          icon="i-lucide-bike"
-          label="Despachar"
-          :variant="etapa === 'listo_para_salir' ? 'solid' : 'soft'"
-          :disabled="!domicilio.items?.length"
-          @click="emit('despachar')"
-        />
-      </template>
+      <UButton
+        :to="`/pedidos/${domicilio.id}`"
+        color="neutral"
+        variant="soft"
+        size="lg"
+        :icon="sePuedenAgregar ? 'i-lucide-plus' : 'i-lucide-receipt'"
+        :label="sePuedenAgregar ? 'Agregar productos' : 'Ver pedido'"
+      />
+      <UButton
+        v-if="enCamino"
+        size="lg"
+        icon="i-lucide-check-check"
+        :label="pagado ? 'Entregado' : 'Cobrar y entregar'"
+        @click="emit('entregar')"
+      />
+      <UButton
+        v-else-if="etapa === 'sin_enviar'"
+        size="lg"
+        icon="i-lucide-chef-hat"
+        label="Enviar a cocina"
+        :disabled="!domicilio.items?.length"
+        @click="emit('enviarACocina')"
+      />
+      <!-- Solo se despacha cuando la cocina lo tiene listo. -->
+      <UButton
+        v-else-if="etapa === 'en_cocina'"
+        size="lg"
+        color="neutral"
+        variant="soft"
+        icon="i-lucide-hourglass"
+        label="Esperando a la cocina"
+        disabled
+      />
+      <UButton v-else size="lg" icon="i-lucide-bike" label="Despachar" @click="emit('despachar')" />
     </div>
   </article>
 </template>

@@ -57,10 +57,16 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
   const mesa = computed(
     () => pedido.value?.mesa ?? mesas.lista.find((m) => m.id === mesaId.value) ?? null,
   );
+  /** El pedido que se muestra: el abierto, o el que ya se cerró (cobrado o anulado). */
+  const visible = computed(() => pedido.value ?? pedidoCerrado.value);
   const titulo = computed(() =>
-    pedido.value ? nombreDelPedido(pedido.value) : (mesa.value?.nombre ?? 'Mostrador'),
+    visible.value ? nombreDelPedido(visible.value) : (mesa.value?.nombre ?? 'Mostrador'),
   );
   const subtitulo = computed(() => {
+    const cerrado = !pedido.value && pedidoCerrado.value;
+    if (cerrado) {
+      return cerrado.estado === 'anulado' ? 'Anulado' : `Cobrado ${haceCuanto(cerrado.cerradoEn)}`;
+    }
     if (!pedido.value) return 'Pedido nuevo: toca un producto para empezar';
     const { entrega, valorDomicilio } = pedido.value;
     // Un domicilio recuerda a dónde va y que el total incluye su valor.

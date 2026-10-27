@@ -7,6 +7,7 @@ import DespacharDomicilio from '~/components/caja/DespacharDomicilio.vue';
 import DomiciliosEnCurso from '~/components/caja/DomiciliosEnCurso.vue';
 import NuevoDomicilio from '~/components/caja/NuevoDomicilio.vue';
 import TarjetaDomicilio from '~/components/caja/TarjetaDomicilio.vue';
+import TomarPedido from '~/components/pedidos/TomarPedido.vue';
 import { useDomiciliosStore } from '~/stores/domicilios.js';
 import { useSesionStore } from '~/stores/sesion.js';
 import { simularBackend } from './ayudantes.js';
@@ -143,6 +144,47 @@ describe('tarjeta de un domicilio', () => {
     expect(tarjeta.emitted('despachar')).toHaveLength(1);
   });
 
+  it('sin enviar a cocina y ya cobrado: ofrece enviarlo y ya no deja agregar productos', async () => {
+    const tarjeta = await mountSuspended(TarjetaDomicilio, {
+      props: {
+        domicilio: domicilio({
+          estado: 'pagado',
+          enviadoACocinaEn: null,
+          items: [{ id: 'i1', estadoCocina: 'pendiente', producto: { nombre: 'IND Classic' } }],
+        }),
+      },
+    });
+
+    const texto = tarjeta.text();
+    expect(texto).toContain('Sin enviar a cocina');
+    expect(texto).toContain('Ver pedido');
+    expect(texto).not.toContain('Agregar productos');
+    expect(texto).not.toContain('Despachar');
+    await tarjeta
+      .findAll('button')
+      .find((b) => b.text().includes('Enviar a cocina'))
+      ?.trigger('click');
+    expect(tarjeta.emitted('enviarACocina')).toHaveLength(1);
+  });
+
+  it('en cocina: espera; no se despacha hasta que la cocina lo tenga listo', async () => {
+    const tarjeta = await mountSuspended(TarjetaDomicilio, {
+      props: {
+        domicilio: domicilio({
+          items: [{ id: 'i1', estadoCocina: 'preparando', producto: { nombre: 'IND Classic' } }],
+        }),
+      },
+    });
+
+    const esperando = tarjeta
+      .findAll('button')
+      .find((b) => b.text().includes('Esperando a la cocina'));
+    expect(esperando?.attributes('disabled')).toBeDefined();
+    expect(tarjeta.text()).not.toContain('Despachar');
+    // Sin cobrar, todavía se le pueden agregar productos.
+    expect(tarjeta.text()).toContain('Agregar productos');
+  });
+
   it('en camino: dice quién lo lleva y deja marcarlo entregado', async () => {
     const tarjeta = await mountSuspended(TarjetaDomicilio, {
       props: { domicilio: domicilio({}, EN_CAMINO) },
@@ -182,6 +224,75 @@ describe('domicilios en curso', () => {
       .find((b) => b.text().includes('Cobrar y entregar'))
       ?.trigger('click');
     expect(lista.emitted('cobrarYEntregar')?.[0]?.[0]).toMatchObject({ id: 'porCobrar' });
+  });
+});
+
+describe('enviar a cocina un domicilio', () => {
+  it('desde la lista de domicilios, aunque ya se haya cobrado', async () => {
+    const sinEnviar = domicilio({
+      estado: 'pagado',
+      enviadoACocinaEn: null,
+      items: [{ id: 'i1', estadoCocina: 'pendiente', producto: { nombre: 'IND Classic' } }],
+    });
+    simularBackend(fetchFalso, {
+      'POST /pedidos/d1/enviar-cocina': () => ({
+        ...sinEnviar,
+        enviadoACocinaEn: new Date().toISOString(),
+      }),
+    });
+    const domicilios = useDomiciliosStore();
+    domicilios.porId = { d1: sinEnviar };
+    const lista = await mountSuspended(DomiciliosEnCurso);
+
+    await lista
+      .findAll('button')
+      .find((b) => b.text().includes('Enviar a cocina'))
+      ?.trigger('click');
+
+    await vi.waitFor(() => expect(lista.text()).toContain('En cocina'));
+    expect(fetchFalso.mock.calls.some(([ruta]) => ruta === '/pedidos/d1/enviar-cocina')).toBe(true);
+  });
+
+  it('un domicilio cobrado sin enviar a cocina dice qué falta y deja enviarlo', async () => {
+    const cobrado = domicilio({
+      estado: 'pagado',
+      enviadoACocinaEn: null,
+      cerradoEn: new Date().toISOString(),
+      items: [
+        {
+          id: 'i1',
+          estadoCocina: 'pendiente',
+          cantidad: '1',
+          precioUnitario: '12000',
+          producto: { nombre: 'IND Classic' },
+        },
+      ],
+    });
+    simularBackend(fetchFalso, {
+      'GET /pedidos/d1': () => structuredClone(cobrado),
+      'GET /menu': () => [],
+      'GET /mesas': () => [],
+      'GET /caja/estado': () => ({ abierta: true }),
+      'POST /pedidos/d1/enviar-cocina': () => ({
+        ...cobrado,
+        enviadoACocinaEn: new Date().toISOString(),
+      }),
+    });
+
+    const pantalla = await mountSuspended(TomarPedido, { props: { pedidoId: 'd1' } });
+    await vi.waitFor(() => expect(pantalla.text()).toContain('Este pedido ya se cobró'));
+    expect(pantalla.text()).toContain('#15 · Juan');
+    expect(pantalla.text()).toContain('falta enviarlo a la cocina');
+    expect(pantalla.text()).toContain('IND Classic');
+    expect(pantalla.text()).not.toContain('otro dispositivo');
+
+    await pantalla
+      .findAll('button')
+      .find((b) => b.text().includes('Enviar a cocina'))
+      ?.trigger('click');
+
+    await vi.waitFor(() => expect(navegarFalso).toHaveBeenCalledWith('/caja'));
+    expect(fetchFalso.mock.calls.some(([ruta]) => ruta === '/pedidos/d1/enviar-cocina')).toBe(true);
   });
 });
 

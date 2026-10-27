@@ -15,6 +15,27 @@ const toast = useToast();
 const despachando = ref(false);
 const elegido = ref(/** @type {any} */ (null));
 
+/** @param {unknown} fallo */
+function avisarError(fallo) {
+  toast.add({
+    title: fallo instanceof ErrorApi ? fallo.message : MENSAJE_ERROR_GENERICO,
+    icon: 'i-lucide-circle-alert',
+    color: 'error',
+  });
+}
+
+/**
+ * Manda el domicilio a la cocina (también si ya se cobró).
+ * @param {any} domicilio
+ */
+async function enviarACocina(domicilio) {
+  try {
+    await domicilios.enviarACocina(domicilio.id);
+  } catch (fallo) {
+    avisarError(fallo);
+  }
+}
+
 /** @param {any} domicilio */
 function despachar(domicilio) {
   elegido.value = domicilio;
@@ -38,11 +59,7 @@ async function entregar(domicilio) {
       color: 'success',
     });
   } catch (fallo) {
-    toast.add({
-      title: fallo instanceof ErrorApi ? fallo.message : MENSAJE_ERROR_GENERICO,
-      icon: 'i-lucide-circle-alert',
-      color: 'error',
-    });
+    avisarError(fallo);
   }
 }
 </script>
@@ -62,6 +79,7 @@ async function entregar(domicilio) {
         v-for="domicilio in domicilios.lista"
         :key="domicilio.id"
         :domicilio="domicilio"
+        @enviar-a-cocina="enviarACocina(domicilio)"
         @despachar="despachar(domicilio)"
         @entregar="entregar(domicilio)"
       />

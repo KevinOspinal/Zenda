@@ -91,7 +91,9 @@ const porcentajePagado = computed(() =>
     ? 0
     : Math.min(100, estado.value.pagado.dividedBy(estado.value.aPagar).times(100).toNumber()),
 );
-const titulo = computed(() => `Cobrar · ${pedido.value?.mesa?.nombre ?? 'Mostrador'}`);
+const titulo = computed(
+  () => `Cobrar · ${pedido.value ? nombreDelPedido(pedido.value) : 'Mostrador'}`,
+);
 
 // 3. Confirmar el cobro.
 async function confirmar() {
