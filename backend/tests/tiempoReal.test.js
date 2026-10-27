@@ -73,7 +73,7 @@ function esperarEvento(socket, evento) {
  * Petición REST autenticada al mismo servidor.
  * @param {'get' | 'post' | 'patch'} metodo
  * @param {string} ruta
- * @param {'dueno' | 'administrador' | 'cajero' | 'mesero'} rol
+ * @param {import('./ayudantes.js').Rol} rol
  * @param {Record<string, unknown>} [cuerpo]
  */
 function llamar(metodo, ruta, rol, cuerpo) {
@@ -243,12 +243,12 @@ describe('eventos del ciclo de una venta', () => {
   it('cuando la cocina marca un ítem como listo, el mesero se entera', async () => {
     const { body: pedido } = await llamar('get', `/pedidos/${pedidoId}`, 'mesero');
     const itemId = pedido.items[0].id;
-    await llamar('patch', `/pedidos/${pedidoId}/items/${itemId}/cocina`, 'mesero', {
+    await llamar('patch', `/pedidos/${pedidoId}/items/${itemId}/cocina`, 'cocina', {
       estadoCocina: 'preparando',
     });
 
     const listo = esperarEvento(cocina, EVENTOS.ITEM_ESTADO_COCINA);
-    await llamar('patch', `/pedidos/${pedidoId}/items/${itemId}/cocina`, 'mesero', {
+    await llamar('patch', `/pedidos/${pedidoId}/items/${itemId}/cocina`, 'cocina', {
       estadoCocina: 'listo',
     });
 

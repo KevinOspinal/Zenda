@@ -47,13 +47,16 @@ export const esquemaFiltrosPedidos = z
     mesaId: esquemaId.optional(),
     // Solo los que aún no se cobran ni se anulan (abiertos y en cocina): mapa de mesas y cocina.
     activos: esquemaBooleanoEnUrl.optional(),
+    // Las comandas del tablero de cocina: enviadas a cocina y con platos por entregar, aunque
+    // ya se hayan cobrado (ver filtroComandasDeCocina en el servicio).
+    cocina: esquemaBooleanoEnUrl.optional(),
     // Incluye los ítems de cada pedido: evita pedir el detalle de cada uno por separado.
     incluirItems: esquemaBooleanoEnUrl.optional(),
   })
-  .refine((filtros) => !(filtros.activos && filtros.estado), {
-    message: 'use estado o activos, no ambos',
-    path: ['activos'],
-  });
+  .refine(
+    (filtros) => [filtros.estado, filtros.activos, filtros.cocina].filter(Boolean).length <= 1,
+    { message: 'use solo uno de estos filtros: estado, activos o cocina' },
+  );
 
 /** Rutas /pedidos/:id/items/:itemId */
 export const esquemaParamsItem = z.object({ id: esquemaId, itemId: esquemaId });

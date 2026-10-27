@@ -29,7 +29,7 @@ afterAll(async () => {
 });
 
 describe('seed de datos de ejemplo', () => {
-  it('crea La Industria con su menú, usuarios de los 4 roles y mesas', async () => {
+  it('crea La Industria con su menú, usuarios de los 5 roles y mesas', async () => {
     const conteos = await conNegocio(laIndustria.id, async (tx) => ({
       categorias: await tx.categoria.count(),
       productos: await tx.producto.count(),
@@ -43,7 +43,7 @@ describe('seed de datos de ejemplo', () => {
       categorias: menuLaIndustria.length,
       productos: totalProductosMenu,
       mesas: 10,
-      roles: ['administrador', 'cajero', 'dueno', 'mesero'],
+      roles: ['administrador', 'cajero', 'cocina', 'dueno', 'mesero'],
     });
   });
 

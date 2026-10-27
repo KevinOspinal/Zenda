@@ -47,7 +47,7 @@ afterAll(async () => {
 /**
  * @param {'get' | 'post' | 'patch'} metodo
  * @param {string} ruta
- * @param {'dueno' | 'administrador' | 'cajero' | 'mesero'} rol
+ * @param {import('./ayudantes.js').Rol} rol
  * @param {Record<string, unknown>} [cuerpo]
  */
 function llamar(metodo, ruta, rol, cuerpo) {
@@ -82,7 +82,7 @@ describe('dividir la cuenta de una mesa', () => {
     await llamar(
       'patch',
       `/pedidos/${pedido.id}/items/${itemDe(pedido, 'Hamburguesa')?.id}/cocina`,
-      'mesero',
+      'cocina',
       {
         estadoCocina: 'preparando',
       },

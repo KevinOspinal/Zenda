@@ -11,7 +11,7 @@ import {
   esquemaItem,
   esquemaParamsItem,
 } from '../../modules/pedidos/pedidos.schemas.js';
-import { TODOS, cuerpo, operacion, parametros, respuesta } from '../ayudantes.js';
+import { ATIENDEN, TODOS, cuerpo, operacion, parametros, respuesta } from '../ayudantes.js';
 import { ID, PEDIDO } from '../ejemplos.js';
 
 const COBRAN = /** @type {const} */ (['dueno', 'administrador', 'cajero']);
@@ -67,7 +67,7 @@ export const documentacionPedidos = {
     post: operacion({
       etiqueta: 'Pedidos',
       resumen: 'Crear un pedido (en mesa o de mostrador)',
-      roles: TODOS,
+      roles: ATIENDEN,
       descripcion: `
 Crea un pedido, con o sin productos iniciales.
 
@@ -137,9 +137,17 @@ generó. Si el mismo pedido llega dos veces, la segunda vez **no se duplica**: r
       descripcion: `
 Los últimos 100 pedidos, del más reciente al más antiguo. Se pueden filtrar por estado y por mesa.
 
-**Para el mapa de mesas y la cocina:** \`?activos=true&incluirItems=true\` trae en una sola
-petición los pedidos que aún no se cobran ni se anulan, cada uno con sus ítems y el estado
-de cocina de cada ítem. No se puede combinar \`activos\` con \`estado\` (400).`,
+**Para el mapa de mesas:** \`?activos=true&incluirItems=true\` trae en una sola petición los
+pedidos que aún no se cobran ni se anulan, cada uno con sus ítems y el estado de cocina de
+cada ítem.
+
+**Para la cocina:** \`?cocina=true&incluirItems=true\` trae las comandas del tablero: pedidos
+enviados a cocina con algún plato por entregar, **aunque ya se hayan cobrado** (el cliente pudo
+pagar antes de que salieran sus platos). Los cobrados se incluyen durante 12 horas, para que no
+se acumulen los platos que nadie marcó como entregados. Las ventas que se cobraron sin pasar por
+la cocina no aparecen.
+
+Solo se puede usar uno de estos filtros: \`estado\`, \`activos\` o \`cocina\` (si no, 400).`,
       parametros: parametros('query', esquemaFiltrosPedidos, {
         estado: {
           descripcion: '`abierto`, `enviado_a_cocina`, `pagado` o `anulado`.',
@@ -148,6 +156,11 @@ de cocina de cada ítem. No se puede combinar \`activos\` con \`estado\` (400).`
         mesaId: { descripcion: 'Solo los pedidos de esta mesa.', ejemplo: ID.mesa },
         activos: {
           descripcion: '`true`: solo los abiertos y los que están en cocina.',
+          ejemplo: 'true',
+        },
+        cocina: {
+          descripcion:
+            '`true`: las comandas de la cocina, incluidas las ya cobradas con platos por entregar.',
           ejemplo: 'true',
         },
         incluirItems: {
@@ -193,7 +206,7 @@ pedido completo la incluyen.`,
     post: operacion({
       etiqueta: 'Pedidos',
       resumen: 'Agregar un producto al pedido',
-      roles: TODOS,
+      roles: ATIENDEN,
       descripcion: `
 Agrega un ítem y **recalcula los totales**. Funciona aunque el pedido ya esté en cocina:
 la cocina recibe el cambio en tiempo real.
@@ -218,7 +231,7 @@ producto inactivo (422 \`PRODUCTO_INACTIVO\`).
     delete: operacion({
       etiqueta: 'Pedidos',
       resumen: 'Quitar un producto del pedido',
-      roles: TODOS,
+      roles: ATIENDEN,
       descripcion: `
 Quita un ítem y recalcula los totales. Solo si **la cocina no ha empezado a prepararlo**
 (estado de cocina \`pendiente\`); si no, 409 \`ITEM_EN_PREPARACION\`.
@@ -243,6 +256,11 @@ La cocina avanza cada ítem por separado, **solo hacia adelante**:
 Intentar retroceder o repetir un estado responde 409 \`CAMBIO_COCINA_INVALIDO\`.
 Funciona aunque el pedido ya esté pagado (en comidas rápidas se cobra antes de cocinar).
 
+**Quién marca cada paso** (si no, 403 \`SIN_PERMISO\`)
+- \`preparando\` y \`listo\`: cocina, cajero, administrador y dueño. El mesero no: eso lo sabe la cocina.
+- \`entregado\`: todos. La cocina solo en pedidos sin mesa (mostrador, "Ya salió"); en una mesa
+  lo confirma el mesero.
+
 📡 Avisa en tiempo real con \`item:estado_cocina\`: cuando un ítem está **listo**, el mesero se entera.`,
       parametros: idPedidoEItem,
       cuerpo: cuerpo(esquemaEstadoCocina, {
@@ -250,7 +268,7 @@ Funciona aunque el pedido ya esté pagado (en comidas rápidas se cobra antes de
         descripciones: { estadoCocina: 'Estado nuevo: `preparando`, `listo` o `entregado`.' },
       }),
       respuestas: { 200: respuesta('Pedido con el ítem actualizado.', PEDIDO) },
-      errores: ['400', '404', '409'],
+      errores: ['400', '403', '404', '409'],
     }),
   },
 
@@ -258,16 +276,23 @@ Funciona aunque el pedido ya esté pagado (en comidas rápidas se cobra antes de
     post: operacion({
       etiqueta: 'Pedidos',
       resumen: 'Enviar el pedido a cocina',
-      roles: TODOS,
+      roles: ATIENDEN,
       descripcion: `
 Cambia el pedido a \`enviado_a_cocina\`. Sin cuerpo. El pedido debe tener al menos un
 producto (si no, 409 \`PEDIDO_VACIO\`). Repetirlo no es un error.
+
+La primera vez guarda la hora en \`enviadoACocinaEn\`; reenviar no la cambia. Con ella la
+cocina sigue viendo el pedido aunque se cobre antes de que salgan sus platos.
 
 📡 Avisa en tiempo real con \`pedido:enviado_a_cocina\`: **la comanda** con productos,
 cantidades y notas.`,
       parametros: idPedido,
       respuestas: {
-        200: respuesta('Pedido enviado a cocina.', { ...PEDIDO, estado: 'enviado_a_cocina' }),
+        200: respuesta('Pedido enviado a cocina.', {
+          ...PEDIDO,
+          estado: 'enviado_a_cocina',
+          enviadoACocinaEn: '2026-10-26T22:16:40.512Z',
+        }),
       },
       errores: ['400', '404', '409'],
     }),
@@ -277,7 +302,7 @@ cantidades y notas.`,
     post: operacion({
       etiqueta: 'Pedidos',
       resumen: 'Dividir la cuenta',
-      roles: TODOS,
+      roles: ATIENDEN,
       descripcion: `
 Para cuando en una mesa cada persona paga lo suyo: pasa productos a una **cuenta nueva
 en la misma mesa**. Cada cuenta se cobra por separado, así **cada persona puede tener su

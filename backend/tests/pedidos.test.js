@@ -96,7 +96,7 @@ afterAll(async () => {
  * Petición autenticada.
  * @param {'get' | 'post' | 'patch' | 'delete'} metodo
  * @param {string} ruta
- * @param {'dueno' | 'administrador' | 'cajero' | 'mesero'} rol
+ * @param {import('./ayudantes.js').Rol} rol
  * @param {Record<string, unknown>} [cuerpo]
  */
 function llamar(metodo, ruta, rol, cuerpo) {
@@ -212,7 +212,7 @@ describe('ciclo de una venta en mesa', () => {
     const preparando = await llamar(
       'patch',
       `/pedidos/${pedidoId}/items/${itemId}/cocina`,
-      'mesero',
+      'cocina',
       {
         estadoCocina: 'preparando',
       },
@@ -220,7 +220,7 @@ describe('ciclo de una venta en mesa', () => {
     const retroceso = await llamar(
       'patch',
       `/pedidos/${pedidoId}/items/${itemId}/cocina`,
-      'mesero',
+      'cocina',
       {
         estadoCocina: 'preparando',
       },
@@ -311,7 +311,7 @@ describe('ciclo de una venta en mesa', () => {
     expect(res.body.resumen.efectivoEsperado).toBe('120000.00');
   });
 
-  it('la cocina puede seguir entregando aunque el pedido ya esté pagado', async () => {
+  it('el mesero puede marcar un plato entregado aunque el pedido ya esté pagado', async () => {
     const { body: pedido } = await llamar('get', `/pedidos/${pedidoId}`, 'mesero');
     const res = await llamar(
       'patch',

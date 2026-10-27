@@ -22,6 +22,8 @@ enum RolUsuario {
   administrador
   cajero
   mesero
+  // La tableta de la cocina: solo ve las comandas y marca los platos (preparando y listo).
+  cocina
 
   @@map("rol_usuario")
 }
@@ -322,28 +324,31 @@ model TurnoCaja {
 // ───────────────────────────── Ventas ─────────────────────────────
 
 model Pedido {
-  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String       @map("tenant_id") @db.Uuid
+  id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String       @map("tenant_id") @db.Uuid
   // Null cuando es una venta de mostrador, sin mesa.
-  mesaId         String?      @map("mesa_id") @db.Uuid
-  turnoId        String       @map("turno_id") @db.Uuid
-  meseroId       String       @map("mesero_id") @db.Uuid
-  clienteId      String?      @map("cliente_id") @db.Uuid
-  estado         EstadoPedido @default(abierto)
-  subtotal       Decimal      @default(0) @db.Decimal(14, 2)
-  impuestos      Decimal      @default(0) @db.Decimal(14, 2)
-  total          Decimal      @default(0) @db.Decimal(14, 2)
+  mesaId           String?      @map("mesa_id") @db.Uuid
+  turnoId          String       @map("turno_id") @db.Uuid
+  meseroId         String       @map("mesero_id") @db.Uuid
+  clienteId        String?      @map("cliente_id") @db.Uuid
+  estado           EstadoPedido @default(abierto)
+  subtotal         Decimal      @default(0) @db.Decimal(14, 2)
+  impuestos        Decimal      @default(0) @db.Decimal(14, 2)
+  total            Decimal      @default(0) @db.Decimal(14, 2)
   // Diferencia de centavos entre lo que paga el cliente (precios del menú) y
   // subtotal + impuestos calculados como exige la DIAN. Se cumple siempre:
   // subtotal + impuestos + ajusteRedondeo = total.
-  ajusteRedondeo Decimal      @default(0) @map("ajuste_redondeo") @db.Decimal(14, 2)
+  ajusteRedondeo   Decimal      @default(0) @map("ajuste_redondeo") @db.Decimal(14, 2)
   // Propina voluntaria que decidió dar el cliente. No es venta del negocio: va aparte del
   // total, no lleva impuesto y se paga junto con el total (pagos = total + propina).
-  propina        Decimal      @default(0) @db.Decimal(14, 2)
+  propina          Decimal      @default(0) @db.Decimal(14, 2)
   // Lo genera la app al vender sin internet; evita duplicar el pedido al sincronizar.
-  uuidOffline    String       @default(dbgenerated("gen_random_uuid()")) @map("uuid_offline") @db.Uuid
-  abiertoEn      DateTime     @default(now()) @map("abierto_en") @db.Timestamptz(6)
-  cerradoEn      DateTime?    @map("cerrado_en") @db.Timestamptz(6)
+  uuidOffline      String       @default(dbgenerated("gen_random_uuid()")) @map("uuid_offline") @db.Uuid
+  abiertoEn        DateTime     @default(now()) @map("abierto_en") @db.Timestamptz(6)
+  // Primera vez que se envió a cocina. Así la cocina sigue viendo un pedido que se cobró
+  // antes de terminar sus platos, y no ve las ventas rápidas que nunca pasaron por ella.
+  enviadoACocinaEn DateTime?    @map("enviado_a_cocina_en") @db.Timestamptz(6)
+  cerradoEn        DateTime?    @map("cerrado_en") @db.Timestamptz(6)
 
   tenant             Tenant                 @relation(fields: [tenantId], references: [id])
   mesa               Mesa?                  @relation(fields: [mesaId], references: [id])

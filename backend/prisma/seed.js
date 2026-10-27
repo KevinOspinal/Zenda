@@ -2,7 +2,7 @@
 // Datos de ejemplo para desarrollo y para el demo.
 //
 // Crea dos negocios:
-// - "La Industria": comidas rápidas con su menú real, usuarios de los 4 roles y 10 mesas.
+// - "La Industria": comidas rápidas con su menú real, usuarios de los 5 roles y 10 mesas.
 // - "Cafetería El Trigal": negocio pequeño que sirve para comprobar el aislamiento entre negocios.
 //
 // Uso: npm run db:seed   (necesita SEED_CONTRASENA en el .env)
@@ -19,7 +19,7 @@ import { menuLaIndustria } from './datos/menuLaIndustria.js';
 
 /** @typedef {import('../src/lib/negocio.js').TransaccionPrisma} TransaccionPrisma */
 /** @typedef {import('./datos/menuLaIndustria.js').CategoriaMenu} CategoriaMenu */
-/** @typedef {'dueno' | 'administrador' | 'cajero' | 'mesero'} Rol */
+/** @typedef {'dueno' | 'administrador' | 'cajero' | 'mesero' | 'cocina'} Rol */
 
 /**
  * @typedef {object} DatosNegocio
@@ -42,6 +42,8 @@ const LA_INDUSTRIA = {
     { nombre: 'Camilo Torres', email: 'cajero@laindustria.test', rol: 'cajero' },
     { nombre: 'Laura Pérez', email: 'laura@laindustria.test', rol: 'mesero' },
     { nombre: 'Juan Díaz', email: 'juan@laindustria.test', rol: 'mesero' },
+    // Cuenta compartida de la tableta de la cocina.
+    { nombre: 'Cocina', email: 'cocina@laindustria.test', rol: 'cocina' },
   ],
   mesas: [
     ...Array.from({ length: 8 }, (_, i) => ({

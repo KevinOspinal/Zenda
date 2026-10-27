@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Zenda - Flujo de venta (La Industria)",
-    "description": "Simulación completa de una venta: login, abrir caja, pedido en mesa, cocina, cobro, anulación, cierre de caja y auditoría.\n\nAntes de empezar: docker compose up -d, npm run db:seed y npm run dev. Llena la variable 'password' con el valor de SEED_CONTRASENA de tu .env. Ejecuta las carpetas en orden.",
+    "description": "Simulación completa de una venta: login, abrir caja, pedido en mesa, cocina, cobro, anulación, cierre de caja y auditoría.\n\nAntes de empezar: docker compose up -d, npm run db:seed y npm run dev. Llena la variable 'password' con el valor de SEED_CONTRASENA de tu .env. Ejecuta las carpetas en orden.\n\nLa cuenta de cocina (cocina@laindustria.test) la crea el seed en una base nueva. Si tu base se sembró antes, créala desde Usuarios con el rol Cocina y esa misma contraseña.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -118,6 +118,51 @@
                   "pm.collectionVariables.set('tokenMesero', r.tokenAcceso);",
                   "pm.collectionVariables.set('refreshMesero', r.refreshToken);",
                   "pm.test('Rol mesero', () => pm.expect(r.usuario.rol).to.eql('mesero'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Cocina",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Inicia sesión como mesero y guarda su token en la variable tokenMesero.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nit\": \"{{nit}}\",\n  \"email\": \"cocina@laindustria.test\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.collectionVariables.set('tokenCocina', r.tokenAcceso);",
+                  "pm.collectionVariables.set('refreshCocina', r.refreshToken);",
+                  "pm.test('Rol cocina', () => pm.expect(r.usuario.rol).to.eql('cocina'));"
                 ]
               }
             }
@@ -482,7 +527,7 @@
           ]
         },
         {
-          "name": "Cocina: preparando",
+          "name": "Mesero intenta marcar preparando (debe fallar)",
           "request": {
             "method": "PATCH",
             "header": [
@@ -503,6 +548,55 @@
                 {
                   "key": "token",
                   "value": "{{tokenMesero}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estadoCocina\": \"preparando\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 403: eso lo marca la cocina', () => pm.response.to.have.status(403));",
+                  "pm.test('Código SIN_PERMISO', () => pm.expect(pm.response.json().error.code).to.eql('SIN_PERMISO'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cocina: preparando",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/pedidos/{{pedidoId}}/items/{{itemId}}/cocina",
+              "host": ["{{baseUrl}}"],
+              "path": ["pedidos", "{{pedidoId}}", "items", "{{itemId}}", "cocina"]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenCocina}}",
                   "type": "string"
                 }
               ]
@@ -548,7 +642,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{tokenMesero}}",
+                  "value": "{{tokenCocina}}",
                   "type": "string"
                 }
               ]

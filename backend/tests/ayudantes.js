@@ -4,7 +4,7 @@ import { prisma } from '../src/lib/db.js';
 import { conNegocio } from '../src/lib/negocio.js';
 import { firmarTokenAcceso } from '../src/lib/tokens.js';
 
-/** @typedef {'dueno' | 'administrador' | 'cajero' | 'mesero'} Rol */
+/** @typedef {'dueno' | 'administrador' | 'cajero' | 'mesero' | 'cocina'} Rol */
 
 /**
  * @typedef {object} NegocioDePrueba
@@ -27,7 +27,7 @@ export async function crearNegocioDePrueba(nit, { regimenImpuesto } = {}) {
   });
 
   /** @type {Rol[]} */
-  const roles = ['dueno', 'administrador', 'cajero', 'mesero'];
+  const roles = ['dueno', 'administrador', 'cajero', 'mesero', 'cocina'];
   /** @type {Partial<Record<Rol, string>>} */
   const encabezados = {};
   /** @type {Partial<Record<Rol, string>>} */

@@ -5,7 +5,7 @@
 // peticiones: si cambia una validación, la documentación cambia sola.
 import { z } from 'zod';
 
-/** @typedef {'dueno' | 'administrador' | 'cajero' | 'mesero'} Rol */
+/** @typedef {'dueno' | 'administrador' | 'cajero' | 'mesero' | 'cocina'} Rol */
 /** @typedef {Record<string, any>} Objeto */
 
 /** Nombre legible de cada rol. */
@@ -14,10 +14,20 @@ const NOMBRES_ROL = Object.freeze({
   administrador: 'Administrador',
   cajero: 'Cajero',
   mesero: 'Mesero',
+  cocina: 'Cocina',
 });
 
 /** Todos los roles: para endpoints que cualquier usuario autenticado puede usar. */
-export const TODOS = /** @type {Rol[]} */ (['dueno', 'administrador', 'cajero', 'mesero']);
+export const TODOS = /** @type {Rol[]} */ ([
+  'dueno',
+  'administrador',
+  'cajero',
+  'mesero',
+  'cocina',
+]);
+
+/** Los que atienden a los clientes: todos menos la cocina (tomar y modificar pedidos). */
+export const ATIENDEN = /** @type {Rol[]} */ (['dueno', 'administrador', 'cajero', 'mesero']);
 
 /**
  * Convierte un esquema Zod a JSON Schema tal como lo recibe el API (antes de transformarlo)

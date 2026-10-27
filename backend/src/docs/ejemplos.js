@@ -79,6 +79,7 @@ export const PEDIDO = Object.freeze({
   propina: '0',
   uuidOffline: ID.uuidOffline,
   abiertoEn: '2026-10-26T22:15:03.120Z',
+  enviadoACocinaEn: null,
   cerradoEn: null,
   items: [
     {

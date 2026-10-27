@@ -6,6 +6,8 @@
 //      └──────────┴──────────────→ anulado
 // Se puede cobrar desde "abierto" (comidas rápidas: el cliente paga antes de que cocinen).
 // El estado de cocina de cada ítem avanza por separado: pendiente → preparando → listo → entregado.
+// Cada paso lo marca quien lo ve: la cocina sabe cuándo un plato está listo y el mesero, cuándo
+// llegó a la mesa (ver revisarPermisoCocina).
 //
 // Seguridad: PostgreSQL revisa las llaves foráneas sin aplicar RLS, así que toda mesa,
 // producto o cliente que llega en la petición se busca primero dentro del negocio activo.
@@ -33,6 +35,12 @@ const ESTADOS_ABIERTOS = /** @type {const} */ (['abierto', 'enviado_a_cocina']);
 
 /** Orden de los estados de cocina: un ítem solo puede avanzar, nunca retroceder. */
 const ORDEN_COCINA = /** @type {const} */ (['pendiente', 'preparando', 'listo', 'entregado']);
+
+/** Roles que marcan un plato como "preparando" o "listo". El mesero no: eso lo sabe la cocina. */
+const PREPARAN = /** @type {const} */ (['cocina', 'cajero', 'administrador', 'dueno']);
+
+/** Horas que la cocina sigue viendo un pedido cobrado que aún tiene platos por entregar. */
+const HORAS_COBRADO_EN_COCINA = 12;
 
 /**
  * Lo que se devuelve de un pedido: sus ítems con el nombre del producto, sus pagos y la mesa.
@@ -109,16 +117,23 @@ export async function crearPedido(sesion, { mesaId, uuidOffline, items }) {
 /**
  * Lista pedidos, del más reciente al más antiguo (máximo 100).
  * - `activos`: solo los que aún no se cobran ni se anulan (abiertos y en cocina).
+ * - `cocina`: las comandas del tablero de cocina (ver filtroComandasDeCocina).
  * - `incluirItems`: agrega los ítems de cada pedido, para que el mapa de mesas y la cocina
  *   no tengan que pedir el detalle de cada uno.
  * @param {DatosSesion} sesion
  * @param {{ estado?: 'abierto' | 'enviado_a_cocina' | 'pagado' | 'anulado', mesaId?: string,
- *   activos?: boolean, incluirItems?: boolean }} filtros
+ *   activos?: boolean, cocina?: boolean, incluirItems?: boolean }} filtros
  */
-export function listarPedidos(sesion, { estado, mesaId, activos = false, incluirItems = false }) {
+export function listarPedidos(
+  sesion,
+  { estado, mesaId, activos = false, cocina = false, incluirItems = false },
+) {
+  const filtroDeEstado = cocina
+    ? filtroComandasDeCocina()
+    : { estado: activos ? { in: [...ESTADOS_ABIERTOS] } : estado };
   return conNegocio(sesion.tenantId, (tx) =>
     tx.pedido.findMany({
-      where: { mesaId, estado: activos ? { in: [...ESTADOS_ABIERTOS] } : estado },
+      where: { mesaId, ...filtroDeEstado },
       orderBy: { abiertoEn: 'desc' },
       take: 100,
       include: {
@@ -193,6 +208,7 @@ export function cambiarEstadoCocina(sesion, pedidoId, itemId, estadoCocina) {
   return conNegocio(sesion.tenantId, async (tx) => {
     const pedido = await tx.pedido.findUnique({ where: { id: pedidoId } });
     if (!pedido) throw errorPedidoNoEncontrado();
+    revisarPermisoCocina(sesion.rol, estadoCocina, pedido);
     if (pedido.estado === 'anulado') {
       throw new AppError(409, 'PEDIDO_ANULADO', 'El pedido está anulado');
     }
@@ -219,14 +235,18 @@ export function cambiarEstadoCocina(sesion, pedidoId, itemId, estadoCocina) {
  */
 export function enviarACocina(sesion, pedidoId) {
   return conNegocio(sesion.tenantId, async (tx) => {
-    await buscarPedidoAbierto(tx, pedidoId);
+    const pedido = await buscarPedidoAbierto(tx, pedidoId);
 
     const cantidadItems = await tx.itemPedido.count({ where: { pedidoId } });
     if (cantidadItems === 0) {
       throw new AppError(409, 'PEDIDO_VACIO', 'Agregue productos antes de enviar a cocina');
     }
 
-    await tx.pedido.update({ where: { id: pedidoId }, data: { estado: 'enviado_a_cocina' } });
+    await tx.pedido.update({
+      where: { id: pedidoId },
+      // Se guarda la hora del primer envío; reenviar (tras agregar ítems) no la cambia.
+      data: { estado: 'enviado_a_cocina', enviadoACocinaEn: pedido.enviadoACocinaEn ?? new Date() },
+    });
     return cargarPedido(tx, pedidoId);
   });
 }
@@ -575,6 +595,56 @@ async function liberarMesa(tx, mesaId) {
   });
   if (pendientes === 0) {
     await tx.mesa.update({ where: { id: mesaId }, data: { estado: 'libre' } });
+  }
+}
+
+/**
+ * Filtro de las comandas que ve la cocina: pedidos enviados a cocina con algún plato por
+ * entregar, sin cobrar o cobrados hace menos de HORAS_COBRADO_EN_COCINA. Un cliente puede
+ * pagar antes de que salgan sus platos (comidas rápidas, o pedir la cuenta antes del postre),
+ * y la cocina no debe perder esa comanda. El límite de horas evita que se acumulen los platos
+ * que nadie marcó como entregados.
+ */
+function filtroComandasDeCocina() {
+  const cobradoDesde = new Date(Date.now() - HORAS_COBRADO_EN_COCINA * 60 * 60 * 1000);
+  return {
+    enviadoACocinaEn: { not: null },
+    items: { some: { estadoCocina: { not: /** @type {const} */ ('entregado') } } },
+    OR: [
+      { estado: /** @type {const} */ ('enviado_a_cocina') },
+      { estado: /** @type {const} */ ('pagado'), cerradoEn: { gte: cobradoDesde } },
+    ],
+  };
+}
+
+/**
+ * Revisa que el rol pueda marcar ese paso de la cocina.
+ * - Preparando y listo: la cocina, el cajero (en cafeterías el cajero también prepara), el
+ *   administrador y el dueño. El mesero no.
+ * - Entregado: todos, menos la cocina en una mesa: ahí el mesero confirma que el plato llegó.
+ *   En mostrador la cocina sí puede ("Ya salió"), porque lo entrega ella misma.
+ * @param {DatosSesion['rol']} rol
+ * @param {Exclude<EstadoCocina, 'pendiente'>} estadoCocina
+ * @param {{ mesaId: string | null }} pedido
+ * @throws {AppError} 403 SIN_PERMISO
+ */
+function revisarPermisoCocina(rol, estadoCocina, pedido) {
+  if (estadoCocina === 'entregado') {
+    if (rol === 'cocina' && pedido.mesaId) {
+      throw new AppError(
+        403,
+        'SIN_PERMISO',
+        'En las mesas, el mesero marca el plato como entregado',
+      );
+    }
+    return;
+  }
+  if (!PREPARAN.some((permitido) => permitido === rol)) {
+    throw new AppError(
+      403,
+      'SIN_PERMISO',
+      'Solo la cocina marca los platos como preparando o listos',
+    );
   }
 }
 

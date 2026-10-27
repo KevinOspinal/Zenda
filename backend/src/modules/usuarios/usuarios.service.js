@@ -11,7 +11,7 @@ import { conNegocio } from '../../lib/negocio.js';
 import { revocarSesionesDeUsuario } from '../auth/auth.service.js';
 
 /** @typedef {import('../../lib/tokens.js').DatosSesion} DatosSesion */
-/** @typedef {'administrador' | 'cajero' | 'mesero'} RolAsignable */
+/** @typedef {'administrador' | 'cajero' | 'mesero' | 'cocina'} RolAsignable */
 
 /** Datos públicos de un usuario: nunca se devuelve el hash de la contraseña. */
 const CAMPOS_PUBLICOS = /** @type {const} */ ({
