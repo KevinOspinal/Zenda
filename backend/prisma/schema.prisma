@@ -1,0 +1,464 @@
+// Esquema de la base de datos (PostgreSQL 16).
+//
+// Convenciones:
+// - Los modelos se escriben en singular (Pedido) y las tablas en plural (pedidos) con @@map.
+// - Los campos usan camelCase en el código y snake_case en la base con @map.
+// - Toda tabla de negocio tiene tenant_id. Las políticas de Row-Level Security
+//   no las crea Prisma: están en prisma/rls.sql.
+// - El dinero usa Decimal(14,2) y las cantidades Decimal(12,3). Nunca Float.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────────── Enumeraciones ─────────────────────────────
+
+enum RolUsuario {
+  dueno
+  administrador
+  cajero
+  mesero
+
+  @@map("rol_usuario")
+}
+
+enum EstadoMesa {
+  libre
+  ocupada
+
+  @@map("estado_mesa")
+}
+
+enum TipoImpuesto {
+  iva
+  impoconsumo
+  exento
+
+  @@map("tipo_impuesto")
+}
+
+enum TipoMovimientoInventario {
+  venta
+  compra
+  ajuste
+
+  @@map("tipo_movimiento_inventario")
+}
+
+enum TipoDocumentoCliente {
+  cc
+  nit
+  ce
+  pasaporte
+  otro
+
+  @@map("tipo_documento_cliente")
+}
+
+enum EstadoPedido {
+  abierto
+  enviado_a_cocina
+  pagado
+  anulado
+
+  @@map("estado_pedido")
+}
+
+enum EstadoCocina {
+  pendiente
+  preparando
+  listo
+  entregado
+
+  @@map("estado_cocina")
+}
+
+enum MetodoPago {
+  efectivo
+  tarjeta
+  transferencia
+  otro
+
+  @@map("metodo_pago")
+}
+
+enum TipoDocumentoFiscal {
+  factura
+  nota_credito
+
+  @@map("tipo_documento_fiscal")
+}
+
+enum EstadoDocumentoFiscal {
+  pendiente
+  enviando
+  reintento
+  aceptado
+  rechazado
+
+  @@map("estado_documento_fiscal")
+}
+
+enum AmbienteProveedor {
+  pruebas
+  produccion
+
+  @@map("ambiente_proveedor")
+}
+
+// ───────────────────────────── Negocios y usuarios ─────────────────────────────
+
+/// Cada restaurante o cafetería que usa el sistema. Es la única tabla sin tenant_id.
+model Tenant {
+  id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nombre   String
+  nit      String   @unique @db.VarChar(20)
+  ciudad   String?
+  plan     String   @default("demo")
+  creadoEn DateTime @default(now()) @map("creado_en") @db.Timestamptz(6)
+
+  usuarios              Usuario[]
+  sesiones              SesionUsuario[]
+  mesas                 Mesa[]
+  categorias            Categoria[]
+  productos             Producto[]
+  movimientosInventario MovimientoInventario[]
+  clientes              Cliente[]
+  turnosCaja            TurnoCaja[]
+  pedidos               Pedido[]
+  itemsPedido           ItemPedido[]
+  pagos                 Pago[]
+  resoluciones          ResolucionFacturacion[]
+  documentosFiscales    DocumentoFiscal[]
+  credencialesProveedor CredencialProveedor[]
+  auditoria             Auditoria[]
+
+  @@map("tenants")
+}
+
+/// Persona que usa el sistema dentro de un negocio. El correo es único por negocio.
+model Usuario {
+  id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String     @map("tenant_id") @db.Uuid
+  nombre           String
+  email            String
+  passwordHash     String     @map("password_hash")
+  rol              RolUsuario
+  activo           Boolean    @default(true)
+  // Para el bloqueo temporal tras varios intentos fallidos de inicio de sesión.
+  intentosFallidos Int        @default(0) @map("intentos_fallidos")
+  bloqueadoHasta   DateTime?  @map("bloqueado_hasta") @db.Timestamptz(6)
+  creadoEn         DateTime   @default(now()) @map("creado_en") @db.Timestamptz(6)
+
+  tenant           Tenant          @relation(fields: [tenantId], references: [id])
+  sesiones         SesionUsuario[]
+  turnosAbiertos   TurnoCaja[]     @relation("TurnoAbiertoPor")
+  turnosCerrados   TurnoCaja[]     @relation("TurnoCerradoPor")
+  pedidosAtendidos Pedido[]
+  auditoria        Auditoria[]
+
+  @@unique([tenantId, email])
+  @@map("usuarios")
+}
+
+/// Sesión de un usuario: guarda el hash del refresh token para poder revocarlo.
+model SesionUsuario {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String    @map("tenant_id") @db.Uuid
+  usuarioId  String    @map("usuario_id") @db.Uuid
+  // Nunca se guarda el token en claro, solo su hash.
+  tokenHash  String    @map("token_hash")
+  expiraEn   DateTime  @map("expira_en") @db.Timestamptz(6)
+  revocadaEn DateTime? @map("revocada_en") @db.Timestamptz(6)
+  creadoEn   DateTime  @default(now()) @map("creado_en") @db.Timestamptz(6)
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@unique([tenantId, tokenHash])
+  @@index([tenantId, usuarioId])
+  @@map("sesiones_usuario")
+}
+
+// ───────────────────────────── Salón y menú ─────────────────────────────
+
+model Mesa {
+  id        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String     @map("tenant_id") @db.Uuid
+  nombre    String
+  zona      String?
+  capacidad Int
+  estado    EstadoMesa @default(libre)
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id])
+  pedidos Pedido[]
+
+  @@unique([tenantId, nombre])
+  @@map("mesas")
+}
+
+model Categoria {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  nombre   String
+  // Posición en la que se muestra la categoría en el menú.
+  orden    Int    @default(0)
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id])
+  productos Producto[]
+
+  @@index([tenantId, orden])
+  @@map("categorias")
+}
+
+model Producto {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String       @map("tenant_id") @db.Uuid
+  categoriaId   String       @map("categoria_id") @db.Uuid
+  nombre        String
+  // Precio de venta en pesos colombianos.
+  precio        Decimal      @db.Decimal(14, 2)
+  tipoImpuesto  TipoImpuesto @map("tipo_impuesto")
+  // Si es false, el producto se vende sin descontar inventario.
+  controlaStock Boolean      @default(false) @map("controla_stock")
+  stock         Decimal      @default(0) @db.Decimal(12, 3)
+  activo        Boolean      @default(true)
+
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id])
+  categoria   Categoria              @relation(fields: [categoriaId], references: [id])
+  movimientos MovimientoInventario[]
+  itemsPedido ItemPedido[]
+
+  @@index([tenantId, categoriaId])
+  @@map("productos")
+}
+
+/// Entradas y salidas de inventario. El stock del producto es la suma de estos movimientos.
+model MovimientoInventario {
+  id         String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String                   @map("tenant_id") @db.Uuid
+  productoId String                   @map("producto_id") @db.Uuid
+  // Solo los movimientos de venta tienen pedido.
+  pedidoId   String?                  @map("pedido_id") @db.Uuid
+  tipo       TipoMovimientoInventario
+  // Positivo para entradas, negativo para salidas.
+  cantidad   Decimal                  @db.Decimal(12, 3)
+  fecha      DateTime                 @default(now()) @db.Timestamptz(6)
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  producto Producto @relation(fields: [productoId], references: [id])
+  pedido   Pedido?  @relation(fields: [pedidoId], references: [id])
+
+  @@index([tenantId, productoId, fecha])
+  @@map("movimientos_inventario")
+}
+
+// ───────────────────────────── Clientes y caja ─────────────────────────────
+
+/// Cliente final al que se le factura. Solo se guardan los datos necesarios (Ley 1581 de 2012).
+model Cliente {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String               @map("tenant_id") @db.Uuid
+  tipoDocumento   TipoDocumentoCliente @map("tipo_documento")
+  numeroDocumento String               @map("numero_documento") @db.VarChar(20)
+  nombre          String
+  email           String?
+  telefono        String?              @db.VarChar(20)
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id])
+  pedidos Pedido[]
+
+  @@unique([tenantId, tipoDocumento, numeroDocumento])
+  @@map("clientes")
+}
+
+/// Turno de caja: va desde la apertura hasta el cierre con arqueo.
+/// Solo puede haber un turno abierto por negocio (índice parcial en la migración).
+model TurnoCaja {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String    @map("tenant_id") @db.Uuid
+  abiertoPorId String    @map("abierto_por") @db.Uuid
+  cerradoPorId String?   @map("cerrado_por") @db.Uuid
+  abiertoEn    DateTime  @default(now()) @map("abierto_en") @db.Timestamptz(6)
+  cerradoEn    DateTime? @map("cerrado_en") @db.Timestamptz(6)
+  // Efectivo con el que se abre la caja.
+  montoInicial Decimal   @map("monto_inicial") @db.Decimal(14, 2)
+  // Efectivo contado al cerrar (arqueo).
+  montoContado Decimal?  @map("monto_contado") @db.Decimal(14, 2)
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  abiertoPor Usuario  @relation("TurnoAbiertoPor", fields: [abiertoPorId], references: [id])
+  cerradoPor Usuario? @relation("TurnoCerradoPor", fields: [cerradoPorId], references: [id])
+  pedidos    Pedido[]
+
+  @@index([tenantId, abiertoEn])
+  @@map("turnos_caja")
+}
+
+// ───────────────────────────── Ventas ─────────────────────────────
+
+model Pedido {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String       @map("tenant_id") @db.Uuid
+  // Null cuando es una venta de mostrador, sin mesa.
+  mesaId      String?      @map("mesa_id") @db.Uuid
+  turnoId     String       @map("turno_id") @db.Uuid
+  meseroId    String       @map("mesero_id") @db.Uuid
+  clienteId   String?      @map("cliente_id") @db.Uuid
+  estado      EstadoPedido @default(abierto)
+  subtotal    Decimal      @default(0) @db.Decimal(14, 2)
+  impuestos   Decimal      @default(0) @db.Decimal(14, 2)
+  total       Decimal      @default(0) @db.Decimal(14, 2)
+  // Lo genera la app al vender sin internet; evita duplicar el pedido al sincronizar.
+  uuidOffline String       @default(dbgenerated("gen_random_uuid()")) @map("uuid_offline") @db.Uuid
+  abiertoEn   DateTime     @default(now()) @map("abierto_en") @db.Timestamptz(6)
+  cerradoEn   DateTime?    @map("cerrado_en") @db.Timestamptz(6)
+
+  tenant             Tenant                 @relation(fields: [tenantId], references: [id])
+  mesa               Mesa?                  @relation(fields: [mesaId], references: [id])
+  turno              TurnoCaja              @relation(fields: [turnoId], references: [id])
+  mesero             Usuario                @relation(fields: [meseroId], references: [id])
+  cliente            Cliente?               @relation(fields: [clienteId], references: [id])
+  items              ItemPedido[]
+  pagos              Pago[]
+  movimientos        MovimientoInventario[]
+  documentosFiscales DocumentoFiscal[]
+
+  @@unique([tenantId, uuidOffline])
+  @@index([tenantId, abiertoEn])
+  @@index([tenantId, estado])
+  @@map("pedidos")
+}
+
+/// Línea de un pedido. Copia el precio y la tasa del momento de la venta:
+/// si después cambia el menú, las ventas pasadas no se alteran.
+model ItemPedido {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  pedidoId       String       @map("pedido_id") @db.Uuid
+  productoId     String       @map("producto_id") @db.Uuid
+  cantidad       Decimal      @db.Decimal(12, 3)
+  precioUnitario Decimal      @map("precio_unitario") @db.Decimal(14, 2)
+  // Porcentaje, por ejemplo 19.00 para IVA del 19 %.
+  tasaImpuesto   Decimal      @map("tasa_impuesto") @db.Decimal(5, 2)
+  estadoCocina   EstadoCocina @default(pendiente) @map("estado_cocina")
+  notas          String?
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
+  pedido   Pedido   @relation(fields: [pedidoId], references: [id])
+  producto Producto @relation(fields: [productoId], references: [id])
+
+  @@index([tenantId, pedidoId])
+  @@map("items_pedido")
+}
+
+/// Un pedido puede pagarse con varios pagos (por ejemplo, parte en efectivo y parte con tarjeta).
+model Pago {
+  id         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String     @map("tenant_id") @db.Uuid
+  pedidoId   String     @map("pedido_id") @db.Uuid
+  metodo     MetodoPago
+  monto      Decimal    @db.Decimal(14, 2)
+  // Número de aprobación del datáfono o de la transferencia, si aplica.
+  referencia String?
+  creadoEn   DateTime   @default(now()) @map("creado_en") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  pedido Pedido @relation(fields: [pedidoId], references: [id])
+
+  @@index([tenantId, pedidoId])
+  @@map("pagos")
+}
+
+// ───────────────────────────── Facturación electrónica ─────────────────────────────
+
+/// Rango de numeración autorizado por la DIAN y registrado en Factus.
+model ResolucionFacturacion {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String              @map("tenant_id") @db.Uuid
+  tipo              TipoDocumentoFiscal
+  prefijo           String?             @db.VarChar(10)
+  desde             Int
+  hasta             Int
+  vigenteDesde      DateTime            @map("vigente_desde") @db.Date
+  vigenteHasta      DateTime            @map("vigente_hasta") @db.Date
+  // Solo informativo: el número real lo asigna Factus.
+  consecutivoActual Int                 @default(0) @map("consecutivo_actual")
+  factusRangeId     Int                 @map("factus_range_id")
+
+  tenant     Tenant            @relation(fields: [tenantId], references: [id])
+  documentos DocumentoFiscal[]
+
+  @@index([tenantId, tipo])
+  @@map("resoluciones_facturacion")
+}
+
+/// Factura o nota crédito. Funciona como "outbox": se crea en la misma transacción
+/// de la venta y un worker aparte la envía a Factus.
+model DocumentoFiscal {
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String                @map("tenant_id") @db.Uuid
+  pedidoId          String                @map("pedido_id") @db.Uuid
+  resolucionId      String                @map("resolucion_id") @db.Uuid
+  tipo              TipoDocumentoFiscal
+  numero            Int?
+  estado            EstadoDocumentoFiscal @default(pendiente)
+  cufe              String?
+  qr                String?
+  xmlUrl            String?               @map("xml_url")
+  pdfUrl            String?               @map("pdf_url")
+  idExterno         String?               @map("id_externo")
+  // Evita emitir dos veces el mismo documento si el envío se reintenta.
+  claveIdempotencia String                @map("clave_idempotencia")
+  intentos          Int                   @default(0)
+  ultimoError       String?               @map("ultimo_error")
+  emitidoEn         DateTime?             @map("emitido_en") @db.Timestamptz(6)
+
+  tenant     Tenant                @relation(fields: [tenantId], references: [id])
+  pedido     Pedido                @relation(fields: [pedidoId], references: [id])
+  resolucion ResolucionFacturacion @relation(fields: [resolucionId], references: [id])
+
+  @@unique([tenantId, resolucionId, numero])
+  @@unique([tenantId, claveIdempotencia])
+  @@index([tenantId, estado])
+  @@map("documentos_fiscales")
+}
+
+/// Credenciales de Factus del negocio, cifradas con AES-256-GCM. Nunca se guardan en claro.
+model CredencialProveedor {
+  id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String            @map("tenant_id") @db.Uuid
+  proveedor            String
+  ambiente             AmbienteProveedor
+  credencialesCifradas Bytes             @map("credenciales_cifradas")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, ambiente])
+  @@map("credenciales_proveedor")
+}
+
+// ───────────────────────────── Auditoría ─────────────────────────────
+
+/// Registro de acciones sensibles (anular venta, cambiar precio, cerrar caja...).
+/// Solo admite inserciones: los permisos de UPDATE y DELETE se retiran en rls.sql.
+model Auditoria {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  usuarioId String?  @map("usuario_id") @db.Uuid
+  accion    String
+  entidad   String
+  entidadId String?  @map("entidad_id") @db.Uuid
+  detalle   Json?
+  fecha     DateTime @default(now()) @db.Timestamptz(6)
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id])
+  usuario Usuario? @relation(fields: [usuarioId], references: [id])
+
+  @@index([tenantId, fecha])
+  @@map("auditoria")
+}
