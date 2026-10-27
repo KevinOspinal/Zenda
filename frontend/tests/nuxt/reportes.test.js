@@ -39,6 +39,17 @@ const resumenConVentas = () => ({
     { hora: 13, ventas: 2, total: '30000.00' },
   ],
   porDia: [{ fecha: '2026-10-28', ventas: 3, total: '58000.00' }],
+  porTipo: [
+    { tipo: 'mesa', ventas: 2, total: '43000.00' },
+    { tipo: 'mostrador', ventas: 0, total: '0.00' },
+    { tipo: 'domicilio', ventas: 1, total: '15000.00' },
+  ],
+  porOrigen: [
+    { origen: 'local', ventas: 2, total: '43000.00' },
+    { origen: 'whatsapp', ventas: 1, total: '15000.00' },
+    { origen: 'telefono', ventas: 0, total: '0.00' },
+    { origen: 'otro', ventas: 0, total: '0.00' },
+  ],
 });
 
 /** Productos más vendidos; se puede cambiar el nombre del primero. */
@@ -113,6 +124,10 @@ describe('tablero de reportes', () => {
     expect(texto).toContain('Métodos de pago');
     expect(texto).toContain('Efectivo');
     expect(texto).toContain('64,52');
+    // Ventas por canal: por tipo de pedido y por dónde llegaron.
+    expect(texto).toContain('Ventas por canal');
+    expect(texto).toContain('Domicilio');
+    expect(texto).toContain('WhatsApp');
   });
 
   it('si el dueño cambia de periodo antes de que llegue la respuesta, muestra solo el último', async () => {

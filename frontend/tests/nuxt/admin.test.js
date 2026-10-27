@@ -1,11 +1,13 @@
 // @ts-check
-// Pruebas de la administración con un backend simulado: menú, mesas, usuarios y
-// configuración.
+// Pruebas de la administración con un backend simulado: menú, mesas, usuarios,
+// domiciliarios y configuración.
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import FormularioDomiciliario from '~/components/admin/FormularioDomiciliario.vue';
 import FormularioMesa from '~/components/admin/FormularioMesa.vue';
 import FormularioProducto from '~/components/admin/FormularioProducto.vue';
 import PaginaConfiguracion from '~/pages/admin/configuracion.vue';
+import PaginaDomiciliarios from '~/pages/admin/domiciliarios.vue';
 import PaginaMenu from '~/pages/admin/menu.vue';
 import PaginaUsuarios from '~/pages/admin/usuarios.vue';
 import { useSesionStore } from '~/stores/sesion.js';
@@ -153,6 +155,7 @@ describe('configuración', () => {
         ciudad: 'Cali',
         regimenImpuesto: 'responsable_inc',
         propinaSugerida: '10',
+        valorDomicilio: '3000',
       }),
     });
     const pagina = await mountSuspended(PaginaConfiguracion);
@@ -160,5 +163,68 @@ describe('configuración', () => {
     await vi.waitFor(() => expect(pagina.text()).toContain('La Industria'));
     expect(pagina.text()).toContain('Impuesto al consumo (INC 8 %)');
     expect(pagina.text()).toContain(`se sugieren $${ESPACIO_FIJO}5.000`);
+    expect(pagina.text()).toContain('Valor del domicilio');
+  });
+
+  it('el dueño cambia el valor del domicilio por defecto', async () => {
+    const negocio = {
+      id: 'n1',
+      nombre: 'La Industria',
+      propinaSugerida: '10',
+      valorDomicilio: '3000',
+    };
+    simularBackend(fetchFalso, {
+      'GET /negocios/actual': () => negocio,
+      'PATCH /negocios/actual': (opciones) => ({ ...negocio, ...opciones.body }),
+    });
+    const pagina = await mountSuspended(PaginaConfiguracion);
+    await vi.waitFor(() =>
+      expect(pagina.find('input[aria-label="Valor del domicilio por defecto"]').exists()).toBe(
+        true,
+      ),
+    );
+
+    await pagina.find('input[aria-label="Valor del domicilio por defecto"]').setValue('3.500');
+    const seccion = pagina.findAll('section').find((s) => s.text().includes('Valor del domicilio'));
+    await seccion?.find('button').trigger('click');
+
+    await vi.waitFor(() => expect(llamadas()).toContain('PATCH /negocios/actual'));
+    const [, opciones] =
+      fetchFalso.mock.calls.find(
+        ([ruta, o]) => ruta === '/negocios/actual' && o?.method === 'PATCH',
+      ) ?? [];
+    expect(opciones.body).toEqual({ valorDomicilio: '3500' });
+  });
+});
+
+describe('domiciliarios', () => {
+  it('registra un domiciliario con su nombre y su celular', async () => {
+    simularBackend(fetchFalso, {
+      'POST /domiciliarios': (opciones) => ({ id: 'dm1', activo: true, ...opciones.body }),
+    });
+    const formulario = await mountSuspended(FormularioDomiciliario);
+
+    const [nombre, celular] = formulario.findAll('input');
+    await nombre?.setValue('Pedro Gómez');
+    await celular?.setValue('300 123 4567');
+    await formulario.find('form').trigger('submit');
+
+    await vi.waitFor(() => expect(formulario.emitted('guardado')).toHaveLength(1));
+    const [, opciones] = fetchFalso.mock.calls.find(([ruta]) => ruta === '/domiciliarios') ?? [];
+    expect(opciones.body).toEqual({ nombre: 'Pedro Gómez', telefono: '300 123 4567' });
+  });
+
+  it('la página muestra cuántos están activos y marca los inactivos', async () => {
+    simularBackend(fetchFalso, {
+      'GET /domiciliarios': () => [
+        { id: 'a', nombre: 'Pedro Gómez', telefono: '3001234567', activo: true },
+        { id: 'b', nombre: 'Luis Prado', telefono: '3011112233', activo: false },
+      ],
+    });
+    const pagina = await mountSuspended(PaginaDomiciliarios);
+
+    await vi.waitFor(() => expect(pagina.text()).toContain('Pedro Gómez'));
+    expect(pagina.text()).toContain('1 activo de 2');
+    expect(pagina.text()).toContain('Inactivo');
   });
 });

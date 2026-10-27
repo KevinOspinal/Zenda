@@ -1,8 +1,9 @@
 <!--
-  Configuración del negocio (solo el dueño): sus datos y la propina sugerida, de 0 a 10 %
-  (Ley 1935 de 2018), con una vista previa. El cambio queda en la auditoría.
+  Configuración del negocio (solo el dueño): sus datos, la propina sugerida en mesa, de 0 a
+  10 % (Ley 1935 de 2018) con una vista previa, y el valor del domicilio por defecto. Cada
+  cambio queda en la auditoría.
   Los datos del negocio se ven pero no se editan aquí: el backend solo permite cambiar la
-  propina sugerida.
+  propina sugerida y el valor del domicilio.
 -->
 <script setup>
 definePageMeta({ seccion: 'configuracion' });
@@ -14,12 +15,18 @@ const cargando = ref(true);
 const error = ref('');
 const propina = ref(10);
 const guardando = ref(false);
+/** Valor del domicilio por defecto, como lo escribe CampoDinero ("3000"). */
+const valorDomicilio = ref('');
 
 async function cargar() {
   error.value = '';
   try {
     negocio.value = await useApi().get('/negocios/actual');
     propina.value = Number(negocio.value.propinaSugerida);
+    // Si el API no lo trae, el campo queda vacío y el resto de la configuración sigue igual.
+    valorDomicilio.value = negocio.value.valorDomicilio
+      ? montoComoTexto(negocio.value.valorDomicilio)
+      : '';
   } catch (fallo) {
     error.value = fallo instanceof ErrorApi ? fallo.message : MENSAJE_ERROR_GENERICO;
   } finally {
@@ -36,6 +43,33 @@ const ejemplo = computed(() =>
 const cambio = computed(
   () => negocio.value && Number(negocio.value.propinaSugerida) !== propina.value,
 );
+
+const cambioDomicilio = computed(
+  () =>
+    negocio.value &&
+    esMontoValido(valorDomicilio.value) &&
+    !aDecimal(negocio.value.valorDomicilio ?? 0).equals(valorDomicilio.value),
+);
+
+async function guardarDomicilio() {
+  try {
+    negocio.value = await useApi().patch('/negocios/actual', {
+      valorDomicilio: valorDomicilio.value,
+    });
+    toast.add({
+      title: 'Valor del domicilio actualizado',
+      description: `Los domicilios nuevos proponen ${formatearPesos(valorDomicilio.value)}.`,
+      icon: 'i-lucide-circle-check',
+      color: 'success',
+    });
+  } catch (fallo) {
+    toast.add({
+      title: fallo instanceof ErrorApi ? fallo.message : MENSAJE_ERROR_GENERICO,
+      icon: 'i-lucide-circle-alert',
+      color: 'error',
+    });
+  }
+}
 
 async function guardar() {
   guardando.value = true;
@@ -102,7 +136,7 @@ async function guardar() {
         <div>
           <h2 class="text-lg font-semibold text-highlighted">Propina sugerida</h2>
           <p class="text-sm text-muted">
-            La que el mesero le sugiere al cliente al cobrar. Por ley no puede pasar del 10 % y
+            La que se le sugiere al cliente al cobrar en mesa. Por ley no puede pasar del 10 % y
             siempre es voluntaria. En 0 % no se sugiere.
           </p>
         </div>
@@ -137,6 +171,27 @@ async function guardar() {
             :loading="guardando"
             :disabled="!cambio"
             @click="guardar"
+          />
+        </div>
+      </section>
+
+      <section class="space-y-4 rounded-xl bg-default p-5 ring-1 ring-default">
+        <div>
+          <h2 class="text-lg font-semibold text-highlighted">Valor del domicilio</h2>
+          <p class="text-sm text-muted">
+            El que se propone en cada domicilio nuevo. En cada pedido se puede cambiar, por ejemplo
+            si es lejos. Se suma al total de la cuenta.
+          </p>
+        </div>
+        <CampoDinero v-model="valorDomicilio" etiqueta="Valor del domicilio por defecto" />
+        <div class="flex justify-end">
+          <UButton
+            size="lg"
+            icon="i-lucide-check"
+            label="Guardar"
+            loading-auto
+            :disabled="!cambioDomicilio"
+            @click="guardarDomicilio"
           />
         </div>
       </section>

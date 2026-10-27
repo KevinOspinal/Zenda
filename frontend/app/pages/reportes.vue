@@ -2,7 +2,7 @@
   Tablero del dueño: cómo va el negocio en el periodo elegido.
   - Indicadores: ventas, número de ventas, ticket promedio, propinas y anulaciones.
   - Ventas por hora (con la hora pico) y, si el periodo tiene varios días, por día.
-  - Productos más vendidos y métodos de pago.
+  - Productos más vendidos, métodos de pago y ventas por canal (tipo de pedido y origen).
   Las cifras las calcula el backend (GET /reportes/*); aquí solo se muestran.
 -->
 <script setup>
@@ -140,6 +140,11 @@ const porDia = computed(() =>
         <div class="grid gap-5 xl:grid-cols-2">
           <TopProductos :productos="porProducto.productos" />
           <MetodosDePago v-if="variosDias" :metodos="porMetodo.metodos" :total="porMetodo.total" />
+          <VentasPorCanal
+            v-if="resumen.porTipo && resumen.porOrigen"
+            :por-tipo="resumen.porTipo"
+            :por-origen="resumen.porOrigen"
+          />
         </div>
       </template>
     </template>
