@@ -364,6 +364,9 @@ model ItemPedido {
   tasaImpuesto   Decimal      @map("tasa_impuesto") @db.Decimal(5, 2)
   estadoCocina   EstadoCocina @default(pendiente) @map("estado_cocina")
   notas          String?
+  // Hora exacta en que se agregó. clock_timestamp() (y no now()) para que los ítems
+  // agregados en una misma transacción conserven su orden. La cocina los atiende así.
+  creadoEn       DateTime     @default(dbgenerated("clock_timestamp()")) @map("creado_en") @db.Timestamptz(6)
 
   tenant   Tenant   @relation(fields: [tenantId], references: [id])
   pedido   Pedido   @relation(fields: [pedidoId], references: [id])
