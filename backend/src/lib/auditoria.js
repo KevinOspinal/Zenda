@@ -14,6 +14,7 @@ export const ACCIONES = Object.freeze({
   CAMBIAR_PRECIO: 'cambiar_precio',
   ANULAR_VENTA: 'anular_venta',
   CERRAR_CAJA: 'cerrar_caja',
+  AJUSTAR_INVENTARIO: 'ajustar_inventario',
   CAMBIAR_CREDENCIALES_FACTURACION: 'cambiar_credenciales_facturacion',
 });
 

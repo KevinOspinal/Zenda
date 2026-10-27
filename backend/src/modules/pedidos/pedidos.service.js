@@ -14,6 +14,10 @@ import { ACCIONES, registrarAuditoria } from '../../lib/auditoria.js';
 import { aDecimal, sumar } from '../../lib/dinero.js';
 import { AppError } from '../../lib/errors.js';
 import { conNegocio } from '../../lib/negocio.js';
+import {
+  descontarInventarioPorVenta,
+  devolverInventarioPorAnulacion,
+} from '../inventario/movimientos.js';
 import { calcularLinea, calcularTotalesPedido, obtenerTasaImpuesto } from './calculoImpuestos.js';
 
 /** @typedef {import('../../lib/tokens.js').DatosSesion} DatosSesion */
@@ -226,7 +230,8 @@ export function enviarACocina(sesion, pedidoId) {
  * @param {DatosSesion} sesion
  * @param {string} pedidoId
  * @param {{ pagos: DatosPago[], clienteId?: string }} datos
- * @returns {Promise<{ pedido: object, cambio: string }>}
+ * @returns {Promise<{ pedido: object, cambio: string,
+ *   advertencias: import('../inventario/movimientos.js').AdvertenciaStock[] }>}
  */
 export function cobrarPedido(sesion, pedidoId, { pagos, clienteId }) {
   return conNegocio(sesion.tenantId, async (tx) => {
@@ -271,17 +276,24 @@ export function cobrarPedido(sesion, pedidoId, { pagos, clienteId }) {
       })),
     });
 
-    // 6. Liberar la mesa.
+    // 6. Descontar del inventario los productos que lo controlan.
+    const advertencias = await descontarInventarioPorVenta(tx, sesion.tenantId, pedidoId);
+
+    // 7. Liberar la mesa.
     if (pedido.mesaId) await liberarMesa(tx, pedido.mesaId);
 
-    // 7. Cambio a devolver: lo recibido en efectivo menos lo abonado en efectivo.
+    // 8. Cambio a devolver: lo recibido en efectivo menos lo abonado en efectivo.
     const cambio = sumar(
       pagos
         .filter((pago) => pago.recibido !== undefined)
         .map((pago) => aDecimal(/** @type {string} */ (pago.recibido)).minus(pago.monto)),
     );
 
-    return { pedido: await cargarPedido(tx, pedidoId), cambio: cambio.toFixed(2) };
+    return {
+      pedido: await cargarPedido(tx, pedidoId),
+      cambio: cambio.toFixed(2),
+      advertencias,
+    };
   });
 }
 
@@ -324,7 +336,12 @@ export function anularPedido(sesion, pedidoId, { motivo }) {
     // 3. Liberar la mesa si el pedido la ocupaba.
     if (pedido.mesaId && pedido.estado !== 'pagado') await liberarMesa(tx, pedido.mesaId);
 
-    // 4. Auditoría.
+    // 4. Si estaba cobrado, devolver al inventario lo que se descontó.
+    if (pedido.estado === 'pagado') {
+      await devolverInventarioPorAnulacion(tx, sesion.tenantId, pedidoId);
+    }
+
+    // 5. Auditoría.
     await registrarAuditoria(tx, sesion, {
       accion: ACCIONES.ANULAR_VENTA,
       entidad: 'pedidos',
