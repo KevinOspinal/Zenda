@@ -1,7 +1,7 @@
 // @ts-check
 // Lógica de autenticación: iniciar sesión, renovar el token de acceso y cerrar sesión.
 import { env } from '../../config/env.js';
-import { HASH_FICTICIO, verificarContrasena } from '../../lib/contrasenas.js';
+import { HASH_FICTICIO, hashearContrasena, verificarContrasena } from '../../lib/contrasenas.js';
 import { prisma } from '../../lib/db.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
@@ -109,8 +109,9 @@ export async function renovarSesion(refreshToken) {
 
     if (!sesion) return { error: errorRefreshInvalido() };
 
-    // 2. Token reutilizado: cerrar todas las sesiones abiertas del usuario.
-    if (sesion.revocadaEn) {
+    // 2. Token ya usado para renovar (rotado) que vuelve a llegar: probablemente lo robaron.
+    //    Se cierran todas las sesiones abiertas del usuario.
+    if (sesion.revocadaEn && sesion.rotada) {
       await tx.sesionUsuario.updateMany({
         where: { usuarioId: sesion.usuarioId, revocadaEn: null },
         data: { revocadaEn: ahora },
@@ -122,8 +123,8 @@ export async function renovarSesion(refreshToken) {
       return { error: errorRefreshInvalido() };
     }
 
-    // 3. Token vencido o usuario desactivado.
-    if (sesion.expiraEn <= ahora || !sesion.usuario.activo) {
+    // 3. Token cerrado (logout, cambio de contraseña...), vencido o usuario desactivado.
+    if (sesion.revocadaEn || sesion.expiraEn <= ahora || !sesion.usuario.activo) {
       return { error: errorRefreshInvalido() };
     }
 
@@ -131,7 +132,7 @@ export async function renovarSesion(refreshToken) {
     //    simultáneas con el mismo token obtengan cada una una sesión nueva.
     const revocadas = await tx.sesionUsuario.updateMany({
       where: { id: sesion.id, revocadaEn: null },
-      data: { revocadaEn: ahora },
+      data: { revocadaEn: ahora, rotada: true },
     });
     if (revocadas.count !== 1) return { error: errorRefreshInvalido() };
 
@@ -186,6 +187,63 @@ export async function obtenerPerfil({ usuarioId, tenantId }) {
   // Se devuelven solo los datos públicos del usuario.
   const { id, nombre, email, rol } = perfil.usuario;
   return { usuario: { id, nombre, email, rol }, negocio: perfil.negocio };
+}
+
+/**
+ * El usuario cambia su propia contraseña dando la actual.
+ *
+ * Por seguridad se cierran todas sus sesiones (por ejemplo, la de un celular perdido)
+ * y se entrega una sesión nueva para que siga trabajando sin volver a iniciar sesión.
+ *
+ * @param {import('../../lib/tokens.js').DatosSesion} datosSesion
+ * @param {{ contrasenaActual: string, contrasenaNueva: string }} datos
+ * @returns {Promise<SesionIniciada>}
+ * @throws {AppError} 401 si la contraseña actual no es correcta; 422 si la nueva es igual.
+ */
+export async function cambiarContrasenaPropia(
+  { usuarioId, tenantId },
+  { contrasenaActual, contrasenaNueva },
+) {
+  // 1. Verificar la contraseña actual.
+  const usuario = await conNegocio(tenantId, (tx) =>
+    tx.usuario.findUnique({ where: { id: usuarioId } }),
+  );
+  if (!usuario || !usuario.activo) {
+    throw new AppError(401, 'NO_AUTENTICADO', 'Debe iniciar sesión');
+  }
+  if (!(await verificarContrasena(usuario.passwordHash, contrasenaActual))) {
+    throw new AppError(401, 'CONTRASENA_INCORRECTA', 'La contraseña actual no es correcta');
+  }
+  if (contrasenaActual === contrasenaNueva) {
+    throw new AppError(
+      422,
+      'CONTRASENA_REPETIDA',
+      'La contraseña nueva debe ser distinta a la actual',
+    );
+  }
+
+  // 2. Guardar la nueva (el hash va fuera de la transacción porque argon2 es lento).
+  const passwordHash = await hashearContrasena(contrasenaNueva);
+
+  // 3. Cerrar todas las sesiones y abrir una nueva.
+  return conNegocio(tenantId, async (tx) => {
+    await tx.usuario.update({ where: { id: usuarioId }, data: { passwordHash } });
+    await revocarSesionesDeUsuario(tx, usuarioId);
+    return crearSesion(tx, usuario);
+  });
+}
+
+/**
+ * Cierra todas las sesiones abiertas de un usuario: sus refresh tokens dejan de servir.
+ * El token de acceso que tenga en uso vence en máximo 15 minutos.
+ * @param {TransaccionPrisma} tx
+ * @param {string} usuarioId
+ */
+export async function revocarSesionesDeUsuario(tx, usuarioId) {
+  await tx.sesionUsuario.updateMany({
+    where: { usuarioId, revocadaEn: null },
+    data: { revocadaEn: new Date() },
+  });
 }
 
 // ───────────────────────────── Funciones internas ─────────────────────────────

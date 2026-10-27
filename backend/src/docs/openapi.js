@@ -11,6 +11,7 @@ import { documentacionInventarioReportesAuditoria } from './rutas/inventarioRepo
 import { documentacionMenu } from './rutas/menu.js';
 import { documentacionMesasYClientes } from './rutas/mesasYClientes.js';
 import { documentacionPedidos } from './rutas/pedidos.js';
+import { documentacionUsuarios } from './rutas/usuarios.js';
 
 const INTRODUCCION = `
 API del software de administración para restaurantes y cafeterías. Cubre el ciclo de una
@@ -60,7 +61,7 @@ de tu archivo \`.env\`):
 
 | Rol | Puede |
 |---|---|
-| **Dueño** | Todo, incluida la auditoría |
+| **Dueño** | Todo, incluidos los empleados (usuarios) y la auditoría |
 | **Administrador** | Menú, mesas, inventario, caja, anulaciones y reportes |
 | **Cajero** | Caja, cobros, clientes y consulta de inventario |
 | **Mesero** | Tomar pedidos, enviarlos a cocina y consultar menú y mesas. **No cobra** |
@@ -243,6 +244,11 @@ export const documentoOpenApi = {
       name: 'Autenticación',
       description: 'Iniciar sesión, renovar el token y cerrar sesión. **Empieza aquí.**',
     },
+    {
+      name: 'Usuarios',
+      description:
+        'Empleados del negocio: crear, cambiar rol, desactivar y restablecer contraseñas.',
+    },
     { name: 'Menú', description: 'Categorías y productos. El menú para tomar pedidos.' },
     { name: 'Mesas', description: 'Mesas del local y su estado (libre u ocupada).' },
     { name: 'Clientes', description: 'Personas o empresas que piden factura a su nombre.' },
@@ -260,6 +266,7 @@ export const documentoOpenApi = {
   ],
   paths: {
     ...documentacionAuth,
+    ...documentacionUsuarios,
     ...documentacionMenu,
     ...documentacionMesasYClientes,
     ...documentacionCaja,

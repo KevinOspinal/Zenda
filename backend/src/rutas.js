@@ -12,10 +12,12 @@ import { rutasCategorias, rutasMenu, rutasProductos } from './modules/menu/menu.
 import { rutasMesas } from './modules/mesas/mesas.routes.js';
 import { rutasPedidos } from './modules/pedidos/pedidos.routes.js';
 import { rutasReportes } from './modules/reportes/reportes.routes.js';
+import { rutasUsuarios } from './modules/usuarios/usuarios.routes.js';
 
 /** @type {ReadonlyArray<[prefijo: string, rutas: import('express').Router]>} */
 export const MODULOS = Object.freeze([
   ['/auth', rutasAuth],
+  ['/usuarios', rutasUsuarios],
   ['/menu', rutasMenu],
   ['/categorias', rutasCategorias],
   ['/productos', rutasProductos],

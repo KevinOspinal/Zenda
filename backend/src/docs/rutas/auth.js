@@ -1,6 +1,10 @@
 // @ts-check
 // Documentación de /health y /auth.
-import { esquemaLogin, esquemaRefreshToken } from '../../modules/auth/auth.schemas.js';
+import {
+  esquemaCambiarContrasena,
+  esquemaLogin,
+  esquemaRefreshToken,
+} from '../../modules/auth/auth.schemas.js';
 import { TODOS, cuerpo, operacion, respuesta } from '../ayudantes.js';
 import { ID, TOKEN_EJEMPLO, USUARIO_CAJERO } from '../ejemplos.js';
 
@@ -112,6 +116,35 @@ Cerrar sesión dos veces no es un error: siempre responde 204.`,
       cuerpo: cuerpoRefresh,
       respuestas: { 204: respuesta('Sesión cerrada. Sin contenido.') },
       errores: ['400'],
+    }),
+  },
+
+  '/auth/cambiar-contrasena': {
+    post: operacion({
+      etiqueta: 'Autenticación',
+      resumen: 'Cambiar mi contraseña',
+      roles: TODOS,
+      descripcion: `
+Cada usuario cambia su propia contraseña dando la actual.
+
+Por seguridad **se cierran todas tus sesiones** (por ejemplo, la de un celular perdido) y la
+respuesta trae **tokens nuevos** para que sigas trabajando sin volver a iniciar sesión.
+Si usas Swagger, vuelve a autorizar con el \`tokenAcceso\` nuevo.`,
+      cuerpo: cuerpo(esquemaCambiarContrasena, {
+        ejemplo: { contrasenaActual: 'tu-contraseña-actual', contrasenaNueva: 'MiClaveNueva2026' },
+        descripciones: {
+          contrasenaActual: 'Tu contraseña de hoy.',
+          contrasenaNueva:
+            'La nueva: mínimo 8 caracteres, con al menos una letra y un número, y distinta a la actual.',
+        },
+      }),
+      respuestas: {
+        200: respuesta('Contraseña cambiada. Sesión nueva.', SESION_INICIADA),
+        401: respuesta('La contraseña actual no es correcta (o el token no es válido).', {
+          error: { code: 'CONTRASENA_INCORRECTA', message: 'La contraseña actual no es correcta' },
+        }),
+      },
+      errores: ['400', '422'],
     }),
   },
 

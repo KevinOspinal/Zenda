@@ -263,6 +263,9 @@ Quién hizo cada acción sensible y cuándo. Los registros **nunca se editan ni 
 | \`anular_venta\` | Se anula un pedido | Motivo, estado anterior y total |
 | \`cerrar_caja\` | Se cierra un turno | Arqueo y ventas por método |
 | \`ajustar_inventario\` | Se registra un ajuste de inventario | Producto, cantidad, motivo y stock antes y después |
+| \`crear_usuario\` | El dueño crea un empleado | Nombre, correo y rol |
+| \`editar_usuario\` | Cambia el nombre, el rol o el estado de un empleado | Valor anterior y nuevo de cada campo |
+| \`restablecer_contrasena\` | El dueño restablece la contraseña de un empleado | A quién (nunca la contraseña) |
 
 Devuelve los últimos 200 registros que cumplan los filtros, del más reciente al más antiguo.`,
       parametros: parametros('query', esquemaFiltrosAuditoria, {

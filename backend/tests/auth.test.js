@@ -250,6 +250,26 @@ describe('POST /auth/refresh y /auth/logout', () => {
   });
 });
 
+describe('tokens cerrados sin rotación', () => {
+  it('reusar un token cerrado por logout falla, pero no cierra las sesiones de otros dispositivos', async () => {
+    // El mismo usuario con dos dispositivos.
+    const { body: tablet } = await login('dueno@cafe.co');
+    const { body: celular } = await login('dueno@cafe.co');
+
+    await request(app).post('/auth/logout').send({ refreshToken: tablet.refreshToken });
+    const reusarTablet = await request(app)
+      .post('/auth/refresh')
+      .send({ refreshToken: tablet.refreshToken });
+    const renovarCelular = await request(app)
+      .post('/auth/refresh')
+      .send({ refreshToken: celular.refreshToken });
+
+    expect(reusarTablet.status).toBe(401);
+    // A diferencia de un token rotado, este no dispara el cierre de todas las sesiones.
+    expect(renovarCelular.status).toBe(200);
+  });
+});
+
 describe('permitirRoles', () => {
   // App mínima con una ruta solo para el dueño.
   const appRoles = express();

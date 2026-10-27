@@ -1,6 +1,7 @@
 // @ts-check
 // Esquemas Zod de las peticiones de autenticación.
 import { z } from 'zod';
+import { esquemaContrasenaNueva } from '../../lib/esquemas.js';
 
 /** POST /auth/login */
 export const esquemaLogin = z.object({
@@ -17,4 +18,10 @@ export const esquemaLogin = z.object({
 /** POST /auth/refresh y POST /auth/logout */
 export const esquemaRefreshToken = z.object({
   refreshToken: z.string().min(1, 'es obligatorio').max(200),
+});
+
+/** POST /auth/cambiar-contrasena */
+export const esquemaCambiarContrasena = z.object({
+  contrasenaActual: z.string().min(1, 'es obligatoria').max(200),
+  contrasenaNueva: esquemaContrasenaNueva,
 });

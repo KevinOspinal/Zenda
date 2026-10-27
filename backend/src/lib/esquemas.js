@@ -45,3 +45,14 @@ export function alMenosUnCampo(esquema) {
     message: 'envíe al menos un campo para actualizar',
   });
 }
+
+/**
+ * Contraseña nueva: entre 8 y 128 caracteres, con al menos una letra y un número.
+ * Solo se valida al crearla o cambiarla; para iniciar sesión basta con que no esté vacía.
+ */
+export const esquemaContrasenaNueva = z
+  .string()
+  .min(8, 'debe tener al menos 8 caracteres')
+  .max(128, 'máximo 128 caracteres')
+  .regex(/[A-Za-zÁÉÍÓÚáéíóúÑñ]/, 'debe tener al menos una letra')
+  .regex(/\d/, 'debe tener al menos un número');

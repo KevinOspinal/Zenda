@@ -185,6 +185,10 @@ model SesionUsuario {
   tokenHash  String    @map("token_hash")
   expiraEn   DateTime  @map("expira_en") @db.Timestamptz(6)
   revocadaEn DateTime? @map("revocada_en") @db.Timestamptz(6)
+  // true si se revocó porque se usó para renovar (rotación). Si alguien vuelve a usar un
+  // token rotado, probablemente fue robado. Un token cerrado por logout o por cambio de
+  // contraseña no está rotado: reutilizarlo solo falla, sin cerrar las demás sesiones.
+  rotada     Boolean   @default(false)
   creadoEn   DateTime  @default(now()) @map("creado_en") @db.Timestamptz(6)
 
   tenant  Tenant  @relation(fields: [tenantId], references: [id])

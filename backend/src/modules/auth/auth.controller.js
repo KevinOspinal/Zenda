@@ -32,6 +32,14 @@ export async function logout(_req, res) {
 }
 
 /**
+ * POST /auth/cambiar-contrasena → 200 con una sesión nueva.
+ * @type {import('express').RequestHandler}
+ */
+export async function cambiarContrasena(_req, res) {
+  res.json(await servicioAuth.cambiarContrasenaPropia(obtenerSesion(res), res.locals.entrada.body));
+}
+
+/**
  * GET /auth/yo → 200 con el usuario autenticado y su negocio.
  * @type {import('express').RequestHandler}
  */
