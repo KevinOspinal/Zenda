@@ -112,6 +112,7 @@ Todos los errores tienen el mismo formato:
 | **409** | Conflicto con el estado actual | Ej.: mesa ocupada, caja cerrada, pedido ya cobrado |
 | **422** | Una regla de negocio lo impide | Ej.: los pagos no suman el total |
 | **423** | Cuenta bloqueada por intentos fallidos | Espera 15 minutos |
+| **429** | Demasiadas peticiones desde tu IP (\`DEMASIADAS_SOLICITUDES\`) | Espera lo que indica el encabezado \`Retry-After\` |
 
 ---
 
@@ -226,6 +227,15 @@ const ERRORES = {
       'Un negocio con régimen "responsable_inc" no puede cobrar "iva"',
     ],
   }),
+  Error429: error(
+    'Demasiadas peticiones desde tu IP. El encabezado Retry-After indica cuántos segundos esperar.',
+    {
+      limite: [
+        'DEMASIADAS_SOLICITUDES',
+        'Demasiados intentos. Espere hasta 60 segundos e intente de nuevo',
+      ],
+    },
+  ),
   Error423: error('Cuenta bloqueada temporalmente por intentos fallidos.', {
     bloqueada: ['CUENTA_BLOQUEADA', 'Demasiados intentos fallidos. Intente de nuevo en 15 minutos'],
   }),

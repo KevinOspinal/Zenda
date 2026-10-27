@@ -1,0 +1,12 @@
+{
+  "//": "Configuración para el editor: activa los tipos de Node en los archivos con // @ts-check.",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "es2024",
+    "types": ["node"],
+    "checkJs": false,
+    "skipLibCheck": true
+  },
+  "include": ["src", "tests", "prisma", "*.js"]
+}

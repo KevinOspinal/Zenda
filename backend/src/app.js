@@ -2,9 +2,11 @@
 // Arma la aplicación Express: middlewares, rutas y manejo de errores.
 import cors from 'cors';
 import express from 'express';
+import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env.js';
 import { documentoOpenApi } from './docs/openapi.js';
+import { revisarSalud } from './lib/salud.js';
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
 import { MODULOS } from './rutas.js';
 
@@ -17,15 +19,28 @@ export function createApp() {
 
   // No revelar que el servidor usa Express.
   app.disable('x-powered-by');
+  // Detrás de un proxy, tomar la IP real del cliente (la usan los límites de peticiones).
+  app.set('trust proxy', env.CONFIAR_EN_PROXY ? 1 : false);
+  // Cabeceras de seguridad estándar (evitan que el navegador adivine tipos de archivo,
+  // que el sitio se incruste en otros, etc.). Sin HTTPS (desarrollo) no se fuerza a
+  // pasar a HTTPS, porque Swagger no cargaría sus estilos en localhost.
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: { upgradeInsecureRequests: env.NODE_ENV === 'production' ? [] : null },
+      },
+    }),
+  );
   // Solo los orígenes configurados pueden llamar al API desde un navegador.
   // La autenticación va en el encabezado Authorization, no en cookies.
   app.use(cors({ origin: env.CORS_ORIGENES }));
   // Lee cuerpos JSON con un límite de tamaño para evitar abusos.
   app.use(express.json({ limit: '1mb' }));
 
-  // Indica si el proceso está vivo. Los chequeos de PostgreSQL y Redis llegan en la Fase 1.
-  app.get('/health', (_req, res) => {
-    res.json({ status: 'ok' });
+  // Estado del servicio: 200 si PostgreSQL y Redis responden; 503 si alguno está caído.
+  app.get('/health', async (_req, res) => {
+    const salud = await revisarSalud();
+    res.status(salud.status === 'ok' ? 200 : 503).json(salud);
   });
 
   // Documentación Swagger en /docs (activa por defecto, salvo en producción).

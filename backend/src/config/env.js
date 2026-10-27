@@ -38,6 +38,17 @@ const envSchema = z.object({
   // Registro público de negocios nuevos (POST /negocios/registro). Si no se indica, está
   // abierto en desarrollo y cerrado en producción hasta tener un proceso de alta formal.
   REGISTRO_HABILITADO: z.stringbool().optional(),
+
+  // Límite de peticiones por IP en los endpoints públicos sensibles. Frenan a quien prueba
+  // muchas contraseñas o crea negocios en masa. Al pasarse, el API responde 429.
+  LIMITE_LOGIN_POR_MINUTO: z.coerce.number().int().min(1).default(10),
+  LIMITE_REFRESH_POR_MINUTO: z.coerce.number().int().min(1).default(30),
+  LIMITE_REGISTRO_POR_HORA: z.coerce.number().int().min(1).default(5),
+
+  // true si el API está detrás de un proxy (Nginx, Caddy, balanceador). Así toma la IP real
+  // del cliente del encabezado X-Forwarded-For. Sin proxy debe ser false: si no, cualquiera
+  // podría falsificar su IP para saltarse los límites.
+  CONFIAR_EN_PROXY: z.stringbool().default(false),
 });
 
 /** @typedef {z.infer<typeof envSchema>} Env */

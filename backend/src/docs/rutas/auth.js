@@ -24,12 +24,27 @@ export const documentacionAuth = {
   '/health': {
     get: operacion({
       etiqueta: 'Sistema',
-      resumen: 'Comprobar que el API está funcionando',
+      resumen: 'Comprobar que el API y sus servicios funcionan',
       roles: null,
       descripcion: `
-Responde \`{ "status": "ok" }\` si el proceso está vivo. Úsalo para confirmar que
-\`npm run dev\` está corriendo antes de probar lo demás.`,
-      respuestas: { 200: respuesta('El API está funcionando.', { status: 'ok' }) },
+Comprueba que el API responde y que puede hablar con **PostgreSQL** y **Redis**.
+
+- **200**: todo funciona.
+- **503**: el API está vivo pero algún servicio no responde (en \`servicios\` se ve cuál).
+  Revisa que Docker esté encendido: \`docker compose up -d\`.
+
+Los servidores (Docker, balanceadores) usan este endpoint para saber si deben reiniciar
+el proceso o dejar de enviarle tráfico.`,
+      respuestas: {
+        200: respuesta('Todo funciona.', {
+          status: 'ok',
+          servicios: { baseDeDatos: 'ok', redis: 'ok' },
+        }),
+        503: respuesta('Algún servicio no responde.', {
+          status: 'error',
+          servicios: { baseDeDatos: 'ok', redis: 'caido' },
+        }),
+      },
     }),
   },
 
@@ -52,6 +67,8 @@ puede existir en dos negocios distintos. El NIT indica en cuál buscar.
 **Seguridad**
 - El token de acceso dura **15 minutos**. Después responde \`TOKEN_EXPIRADO\`: usa \`/auth/refresh\`.
 - Tras **5 intentos fallidos seguidos**, la cuenta se bloquea **15 minutos** (responde 423).
+- Desde una misma IP se permiten **10 intentos por minuto** (si no, 429), para frenar a
+  quien prueba muchas cuentas.
 - El mensaje de error es el mismo si falla el NIT, el correo o la contraseña, para no dar pistas.
 
 **Usuarios de prueba** (NIT \`900111222\`, contraseña = \`SEED_CONTRASENA\` de tu \`.env\`):
@@ -74,7 +91,7 @@ puede existir en dos negocios distintos. El NIT indica en cuál buscar.
           },
         }),
       },
-      errores: ['400', '423'],
+      errores: ['400', '423', '429'],
     }),
   },
 
@@ -87,8 +104,10 @@ puede existir en dos negocios distintos. El NIT indica en cuál buscar.
 Cambia un \`refreshToken\` por un token de acceso nuevo **y un refreshToken nuevo**.
 
 ⚠️ **Cada refreshToken sirve una sola vez.** Guarda siempre el nuevo que llega en la respuesta.
-Si alguien usa un refreshToken viejo, el sistema asume que fue robado y **cierra todas las
-sesiones** de ese usuario por seguridad.`,
+Si alguien vuelve a usar un refreshToken que ya se usó para renovar, el sistema asume que
+fue robado y **cierra todas las sesiones** de ese usuario por seguridad.
+
+Límite: **30 renovaciones por minuto** por IP (si no, 429).`,
       cuerpo: cuerpoRefresh,
       respuestas: {
         200: respuesta('Tokens nuevos.', SESION_INICIADA),
@@ -99,7 +118,7 @@ sesiones** de ese usuario por seguridad.`,
           },
         }),
       },
-      errores: ['400'],
+      errores: ['400', '429'],
     }),
   },
 

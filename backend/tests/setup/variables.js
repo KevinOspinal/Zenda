@@ -11,4 +11,9 @@ export const variablesDePrueba = {
   REDIS_URL: 'redis://localhost:6379',
   // Clave solo para pruebas; no sirve fuera de ellas.
   JWT_SECRET: 'clave-de-pruebas-que-no-se-usa-en-ningun-otro-lugar',
+  // Límites altos: las pruebas hacen muchos logins seguidos desde la misma IP.
+  // El comportamiento del límite se prueba aparte (tests/seguridad.test.js).
+  LIMITE_LOGIN_POR_MINUTO: '100000',
+  LIMITE_REFRESH_POR_MINUTO: '100000',
+  LIMITE_REGISTRO_POR_HORA: '100000',
 };

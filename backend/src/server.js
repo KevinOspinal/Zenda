@@ -5,6 +5,7 @@ import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { prisma } from './lib/db.js';
 import { logger } from './lib/logger.js';
+import { redis } from './lib/redis.js';
 import { registrarServidorSocket } from './sockets/eventos.js';
 import { crearServidorSocket } from './sockets/servidor.js';
 
@@ -28,7 +29,7 @@ function cerrarServidor(signal) {
   // Cierra las conexiones de Socket.IO y deja de aceptar peticiones nuevas; espera a que
   // terminen las que están en curso y libera las conexiones a la base de datos.
   io.close(async (err) => {
-    await prisma.$disconnect();
+    await Promise.allSettled([prisma.$disconnect(), redis.quit()]);
     if (err) {
       logger.error({ err }, 'Error al cerrar el servidor');
       process.exit(1);

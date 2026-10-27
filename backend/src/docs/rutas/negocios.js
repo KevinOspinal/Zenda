@@ -22,6 +22,7 @@ la **sesión iniciada** del dueño para que empiece a configurarlo: menú, mesas
 - El **régimen de impuesto** define qué cobra el negocio: \`responsable_inc\` (INC 8 %,
   restaurantes independientes, por defecto), \`franquicia_iva\` (IVA 19 %) o
   \`no_responsable\` (sin impuesto al consumo). ⚠️ Confírmalo con un contador.
+- Límite: **5 registros por hora** desde una misma IP (si no, 429).
 - El registro está **abierto en desarrollo y cerrado en producción** (403
   \`REGISTRO_DESHABILITADO\`). Se controla con la variable \`REGISTRO_HABILITADO\`.`,
       cuerpo: cuerpo(esquemaRegistroNegocio, {
@@ -75,7 +76,7 @@ la **sesión iniciada** del dueño para que empiece a configurarlo: menú, mesas
           },
         }),
       },
-      errores: ['400', '409'],
+      errores: ['400', '409', '429'],
     }),
   },
 };

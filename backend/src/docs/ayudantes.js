@@ -103,7 +103,7 @@ export function respuesta(descripcion, ejemplo) {
  * @param {Objeto[]} [op.parametros]
  * @param {Objeto} [op.cuerpo]
  * @param {Record<string, Objeto>} op.respuestas Respuestas exitosas por código.
- * @param {('400' | '403' | '404' | '409' | '422' | '423')[]} [op.errores] Errores posibles
+ * @param {('400' | '403' | '404' | '409' | '422' | '423' | '429')[]} [op.errores] Errores posibles
  *   además del 401, que se agrega solo en los endpoints protegidos.
  */
 export function operacion(op) {

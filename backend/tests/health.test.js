@@ -6,11 +6,11 @@ import { createApp } from '../src/app.js';
 import { parseEnv } from '../src/config/env.js';
 
 describe('GET /health', () => {
-  it('responde 200 con status ok', async () => {
+  it('responde 200 cuando PostgreSQL y Redis funcionan', async () => {
     const res = await request(createApp()).get('/health');
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: 'ok' });
+    expect(res.body).toEqual({ status: 'ok', servicios: { baseDeDatos: 'ok', redis: 'ok' } });
   });
 });
 
