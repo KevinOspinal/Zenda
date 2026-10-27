@@ -1,0 +1,21 @@
+/* Estilos globales: Tailwind, Nuxt UI y los ajustes propios del tema de Zenda. */
+@import 'tailwindcss';
+@import '@nuxt/ui';
+
+@theme {
+  /* Tipografía de toda la interfaz. @nuxt/fonts (incluido en Nuxt UI) la descarga y la
+     sirve desde la propia app, así no depende de internet al usarse. */
+  --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  /* Base de las esquinas redondeadas. Nuxt UI calcula toda la escala desde aquí:
+     rounded-md (botones y campos) ≈ 9 px, rounded-lg ≈ 12 px, rounded-xl (tarjetas) ≈ 18 px. */
+  --ui-radius: 0.375rem;
+}
+
+/* Números de dinero y cantidades: todos los dígitos con el mismo ancho, para que las
+   cifras no "bailen" al cambiar ni se desalineen en columnas. */
+.cifra {
+  font-variant-numeric: tabular-nums;
+}

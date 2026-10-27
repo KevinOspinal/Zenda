@@ -1,0 +1,10 @@
+{
+  "//": "Configuración para el editor: usa los tipos que Nuxt genera en .nuxt/ (auto-importaciones, componentes y rutas) en los archivos con // @ts-check.",
+  "files": [],
+  "references": [
+    { "path": "./.nuxt/tsconfig.app.json" },
+    { "path": "./.nuxt/tsconfig.server.json" },
+    { "path": "./.nuxt/tsconfig.shared.json" },
+    { "path": "./.nuxt/tsconfig.node.json" }
+  ]
+}

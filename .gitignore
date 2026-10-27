@@ -11,6 +11,11 @@ coverage/
 dist/
 *.log
 
+# Archivos que genera Nuxt (frontend)
+.nuxt/
+.output/
+.data/
+
 # Sistema y editores
 .DS_Store
 .idea/
