@@ -2,17 +2,11 @@
 // Arma la aplicación Express: middlewares, rutas y manejo de errores.
 import cors from 'cors';
 import express from 'express';
+import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env.js';
+import { documentoOpenApi } from './docs/openapi.js';
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
-import { rutasAuditoria } from './modules/auditoria/auditoria.routes.js';
-import { rutasAuth } from './modules/auth/auth.routes.js';
-import { rutasCaja } from './modules/caja/caja.routes.js';
-import { rutasClientes } from './modules/clientes/clientes.routes.js';
-import { rutasInventario } from './modules/inventario/inventario.routes.js';
-import { rutasCategorias, rutasMenu, rutasProductos } from './modules/menu/menu.routes.js';
-import { rutasMesas } from './modules/mesas/mesas.routes.js';
-import { rutasPedidos } from './modules/pedidos/pedidos.routes.js';
-import { rutasReportes } from './modules/reportes/reportes.routes.js';
+import { MODULOS } from './rutas.js';
 
 /**
  * Crea la app Express sin abrir el puerto, para poder probarla con Supertest.
@@ -34,18 +28,34 @@ export function createApp() {
     res.json({ status: 'ok' });
   });
 
-  // Rutas de cada módulo.
-  app.use('/auth', rutasAuth);
-  app.use('/menu', rutasMenu);
-  app.use('/categorias', rutasCategorias);
-  app.use('/productos', rutasProductos);
-  app.use('/mesas', rutasMesas);
-  app.use('/clientes', rutasClientes);
-  app.use('/caja', rutasCaja);
-  app.use('/pedidos', rutasPedidos);
-  app.use('/inventario', rutasInventario);
-  app.use('/auditoria', rutasAuditoria);
-  app.use('/reportes', rutasReportes);
+  // Documentación Swagger en /docs (activa por defecto, salvo en producción).
+  if (env.DOCS_HABILITADA ?? env.NODE_ENV !== 'production') {
+    app.get('/docs/openapi.json', (_req, res) => {
+      res.json(documentoOpenApi);
+    });
+    app.use(
+      '/docs',
+      swaggerUi.serve,
+      swaggerUi.setup(documentoOpenApi, {
+        customSiteTitle: 'Zenda · Documentación del API',
+        swaggerOptions: {
+          // Recuerda el token al recargar la página.
+          persistAuthorization: true,
+          // Los grupos empiezan cerrados para ver todo el índice de un vistazo.
+          docExpansion: 'none',
+          // Muestra un buscador para filtrar endpoints por grupo.
+          filter: true,
+          // Muestra cuánto tardó cada petición hecha con "Try it out".
+          displayRequestDuration: true,
+        },
+      }),
+    );
+  }
+
+  // Rutas de cada módulo (la lista está en rutas.js).
+  for (const [prefijo, rutas] of MODULOS) {
+    app.use(prefijo, rutas);
+  }
 
   // Estos dos van al final: atrapan rutas inexistentes y cualquier error de las rutas anteriores.
   app.use(notFound);

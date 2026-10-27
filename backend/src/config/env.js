@@ -30,6 +30,10 @@ const envSchema = z.object({
         .filter(Boolean),
     )
     .pipe(z.array(z.url('cada origen debe ser una URL, por ejemplo http://localhost:3001'))),
+
+  // Documentación Swagger en /docs. Si no se indica, está activa en desarrollo y apagada
+  // en producción: mostrar toda la estructura del API facilita el trabajo a un atacante.
+  DOCS_HABILITADA: z.stringbool().optional(),
 });
 
 /** @typedef {z.infer<typeof envSchema>} Env */

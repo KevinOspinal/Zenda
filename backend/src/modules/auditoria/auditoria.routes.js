@@ -12,7 +12,7 @@ import { autenticar, obtenerSesion, permitirRoles } from '../../middlewares/auth
 import { validar } from '../../middlewares/validar.js';
 
 /** GET /auditoria?accion=anular_venta&desde=2026-10-01&hasta=2026-10-31 */
-const esquemaFiltrosAuditoria = z.object({
+export const esquemaFiltrosAuditoria = z.object({
   accion: z.enum(/** @type {[string, ...string[]]} */ (Object.values(ACCIONES))).optional(),
   // Fechas en formato AAAA-MM-DD; "hasta" incluye todo ese día.
   desde: z.iso.date('use el formato AAAA-MM-DD').optional(),
