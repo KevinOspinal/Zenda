@@ -116,6 +116,13 @@ export const SECCIONES = Object.freeze([
     roles: GERENCIA,
   },
   {
+    id: 'mesasAdmin',
+    etiqueta: 'Mesas y zonas',
+    icono: 'i-lucide-armchair',
+    ruta: '/admin/mesas',
+    roles: GERENCIA,
+  },
+  {
     id: 'inventario',
     etiqueta: 'Inventario',
     icono: 'i-lucide-package',

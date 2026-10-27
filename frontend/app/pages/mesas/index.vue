@@ -109,7 +109,12 @@ function abrirMesa(mesa) {
       v-else-if="!mesas.lista.length"
       icon="i-lucide-armchair"
       title="Aún no hay mesas"
-      description="El dueño o el administrador las crea en Administración."
+      description="El dueño o el administrador las crea en «Mesas y zonas»."
+      :actions="
+        puede(sesion.rol, 'gestionarMesas')
+          ? [{ label: 'Crear mesas', icon: 'i-lucide-plus', to: '/admin/mesas' }]
+          : []
+      "
     />
 
     <template v-else>
@@ -132,6 +137,15 @@ function abrirMesa(mesa) {
             @click="zonaActiva = zona"
           />
         </div>
+        <UButton
+          v-if="puede(sesion.rol, 'gestionarMesas')"
+          to="/admin/mesas"
+          color="neutral"
+          variant="ghost"
+          icon="i-lucide-pencil"
+          label="Editar mesas"
+          class="order-last sm:order-none"
+        />
         <p class="text-sm text-muted">
           <span class="font-semibold text-success">{{ libres }} libres</span>
           ·

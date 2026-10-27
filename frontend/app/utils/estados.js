@@ -99,3 +99,35 @@ export function aparienciaDeArqueo(diferencia) {
     icono,
   };
 }
+
+/**
+ * Acciones sensibles que guarda la auditoría (mismos nombres del backend).
+ * @type {Readonly<Record<string, Apariencia>>}
+ */
+export const ACCIONES_AUDITORIA = Object.freeze({
+  cambiar_precio: { etiqueta: 'Cambio de precio', color: 'warning', icono: 'i-lucide-tag' },
+  anular_venta: { etiqueta: 'Venta anulada', color: 'error', icono: 'i-lucide-ban' },
+  cerrar_caja: { etiqueta: 'Cierre de caja', color: 'info', icono: 'i-lucide-lock' },
+  ajustar_inventario: {
+    etiqueta: 'Ajuste de inventario',
+    color: 'warning',
+    icono: 'i-lucide-package',
+  },
+  crear_usuario: { etiqueta: 'Empleado creado', color: 'success', icono: 'i-lucide-user-plus' },
+  editar_usuario: { etiqueta: 'Empleado editado', color: 'info', icono: 'i-lucide-user-pen' },
+  restablecer_contrasena: {
+    etiqueta: 'Contraseña restablecida',
+    color: 'warning',
+    icono: 'i-lucide-key-round',
+  },
+  cambiar_credenciales_facturacion: {
+    etiqueta: 'Credenciales de facturación',
+    color: 'warning',
+    icono: 'i-lucide-file-key',
+  },
+  cambiar_propina_sugerida: {
+    etiqueta: 'Propina sugerida',
+    color: 'info',
+    icono: 'i-lucide-hand-coins',
+  },
+});
