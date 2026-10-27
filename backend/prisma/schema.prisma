@@ -26,6 +26,15 @@ enum RolUsuario {
   @@map("rol_usuario")
 }
 
+/// Régimen del negocio frente a los impuestos al consumo (ver src/config/impuestos.js).
+enum RegimenImpuesto {
+  responsable_inc
+  franquicia_iva
+  no_responsable
+
+  @@map("regimen_impuesto")
+}
+
 enum EstadoMesa {
   libre
   ocupada
@@ -114,12 +123,14 @@ enum AmbienteProveedor {
 
 /// Cada restaurante o cafetería que usa el sistema. Es la única tabla sin tenant_id.
 model Tenant {
-  id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  nombre   String
-  nit      String   @unique @db.VarChar(20)
-  ciudad   String?
-  plan     String   @default("demo")
-  creadoEn DateTime @default(now()) @map("creado_en") @db.Timestamptz(6)
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nombre          String
+  nit             String          @unique @db.VarChar(20)
+  ciudad          String?
+  plan            String          @default("demo")
+  // Define qué impuesto cobra el negocio: INC 8 %, IVA 19 % (franquicia) o ninguno.
+  regimenImpuesto RegimenImpuesto @default(responsable_inc) @map("regimen_impuesto")
+  creadoEn        DateTime        @default(now()) @map("creado_en") @db.Timestamptz(6)
 
   usuarios              Usuario[]
   sesiones              SesionUsuario[]
@@ -302,21 +313,25 @@ model TurnoCaja {
 // ───────────────────────────── Ventas ─────────────────────────────
 
 model Pedido {
-  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId    String       @map("tenant_id") @db.Uuid
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
   // Null cuando es una venta de mostrador, sin mesa.
-  mesaId      String?      @map("mesa_id") @db.Uuid
-  turnoId     String       @map("turno_id") @db.Uuid
-  meseroId    String       @map("mesero_id") @db.Uuid
-  clienteId   String?      @map("cliente_id") @db.Uuid
-  estado      EstadoPedido @default(abierto)
-  subtotal    Decimal      @default(0) @db.Decimal(14, 2)
-  impuestos   Decimal      @default(0) @db.Decimal(14, 2)
-  total       Decimal      @default(0) @db.Decimal(14, 2)
+  mesaId         String?      @map("mesa_id") @db.Uuid
+  turnoId        String       @map("turno_id") @db.Uuid
+  meseroId       String       @map("mesero_id") @db.Uuid
+  clienteId      String?      @map("cliente_id") @db.Uuid
+  estado         EstadoPedido @default(abierto)
+  subtotal       Decimal      @default(0) @db.Decimal(14, 2)
+  impuestos      Decimal      @default(0) @db.Decimal(14, 2)
+  total          Decimal      @default(0) @db.Decimal(14, 2)
+  // Diferencia de centavos entre lo que paga el cliente (precios del menú) y
+  // subtotal + impuestos calculados como exige la DIAN. Se cumple siempre:
+  // subtotal + impuestos + ajusteRedondeo = total.
+  ajusteRedondeo Decimal      @default(0) @map("ajuste_redondeo") @db.Decimal(14, 2)
   // Lo genera la app al vender sin internet; evita duplicar el pedido al sincronizar.
-  uuidOffline String       @default(dbgenerated("gen_random_uuid()")) @map("uuid_offline") @db.Uuid
-  abiertoEn   DateTime     @default(now()) @map("abierto_en") @db.Timestamptz(6)
-  cerradoEn   DateTime?    @map("cerrado_en") @db.Timestamptz(6)
+  uuidOffline    String       @default(dbgenerated("gen_random_uuid()")) @map("uuid_offline") @db.Uuid
+  abiertoEn      DateTime     @default(now()) @map("abierto_en") @db.Timestamptz(6)
+  cerradoEn      DateTime?    @map("cerrado_en") @db.Timestamptz(6)
 
   tenant             Tenant                 @relation(fields: [tenantId], references: [id])
   mesa               Mesa?                  @relation(fields: [mesaId], references: [id])
