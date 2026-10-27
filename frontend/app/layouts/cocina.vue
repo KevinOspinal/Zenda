@@ -4,6 +4,7 @@
 -->
 <script setup>
 const sesion = useSesionStore();
+const conexion = useConexionStore();
 const ahora = useNow({ interval: 15_000 });
 const confirmandoSalida = ref(false);
 
@@ -30,7 +31,7 @@ function salirDeCocina() {
         <span class="cifra hidden text-2xl font-bold text-highlighted sm:inline">
           {{ formatearHora(ahora) }}
         </span>
-        <slot name="acciones" />
+        <IndicadorConexion :estado="conexion.estado" />
         <UButton
           color="neutral"
           variant="ghost"

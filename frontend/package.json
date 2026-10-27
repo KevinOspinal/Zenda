@@ -26,6 +26,7 @@
     "decimal.js": "^10.6.0",
     "nuxt": "^4.6.3",
     "pinia": "^4.1.0",
+    "socket.io-client": "^4.8.4",
     "tailwindcss": "^4.3.3",
     "zod": "^4.6.7"
   },

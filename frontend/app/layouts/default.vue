@@ -6,6 +6,7 @@
 -->
 <script setup>
 const sesion = useSesionStore();
+const conexion = useConexionStore();
 const ruta = useRoute();
 
 const secciones = computed(() => (sesion.rol ? seccionesDe(sesion.rol) : []));
@@ -33,7 +34,7 @@ useHead(() => ({
             <p class="truncate text-xs text-muted lg:hidden">{{ sesion.negocio?.nombre }}</p>
           </div>
         </div>
-        <slot name="acciones" />
+        <IndicadorConexion :estado="conexion.estado" />
       </header>
 
       <!-- Espacio abajo en el celular para que la navegación no tape el contenido. -->
