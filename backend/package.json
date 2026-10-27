@@ -16,9 +16,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "postinstall": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
-    "db:studio": "prisma studio"
+    "db:migrate": "prisma migrate dev && npm run db:rls",
+    "db:deploy": "prisma migrate deploy && npm run db:rls",
+    "db:studio": "prisma studio",
+    "db:rls": "prisma db execute --file prisma/rls.sql"
   },
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",

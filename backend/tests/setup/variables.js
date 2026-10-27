@@ -1,0 +1,12 @@
+// @ts-check
+// Variables de entorno de las pruebas. Las usan vitest.config.js y la preparación de la base.
+
+export const variablesDePrueba = {
+  NODE_ENV: 'test',
+  LOG_LEVEL: 'silent',
+  // La app se conecta con el usuario sin privilegios para que RLS aplique igual que en producción.
+  DATABASE_URL: 'postgresql://zenda_app:zenda_app@localhost:5433/zenda_test',
+  // El dueño de las tablas solo se usa para migrar y limpiar la base de pruebas.
+  DATABASE_URL_MIGRACIONES: 'postgresql://zenda:zenda@localhost:5433/zenda_test',
+  REDIS_URL: 'redis://localhost:6379',
+};
