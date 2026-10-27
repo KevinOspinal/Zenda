@@ -17,12 +17,14 @@ import { env } from '../config/env.js';
  * @property {string} usuarioId
  * @property {string} tenantId Negocio al que pertenece el usuario.
  * @property {Rol} rol
+ * @property {number} [expiraEn] Momento en que vence el token (segundos desde 1970). Solo al verificarlo.
  */
 
 const esquemaContenidoToken = z.object({
   sub: z.uuid(),
   tenantId: z.uuid(),
   rol: z.enum(['dueno', 'administrador', 'cajero', 'mesero']),
+  exp: z.number(),
 });
 
 /**
@@ -48,8 +50,8 @@ export function firmarTokenAcceso({ usuarioId, tenantId, rol }) {
 export function verificarTokenAcceso(token) {
   // Se fija el algoritmo para que nadie pueda enviar un token con "alg: none".
   const contenido = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] });
-  const { sub, tenantId, rol } = esquemaContenidoToken.parse(contenido);
-  return { usuarioId: sub, tenantId, rol };
+  const { sub, tenantId, rol, exp } = esquemaContenidoToken.parse(contenido);
+  return { usuarioId: sub, tenantId, rol, expiraEn: exp };
 }
 
 /**

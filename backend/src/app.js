@@ -1,6 +1,8 @@
 // @ts-check
 // Arma la aplicación Express: middlewares, rutas y manejo de errores.
+import cors from 'cors';
 import express from 'express';
+import { env } from './config/env.js';
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
 import { rutasAuditoria } from './modules/auditoria/auditoria.routes.js';
 import { rutasAuth } from './modules/auth/auth.routes.js';
@@ -20,6 +22,9 @@ export function createApp() {
 
   // No revelar que el servidor usa Express.
   app.disable('x-powered-by');
+  // Solo los orígenes configurados pueden llamar al API desde un navegador.
+  // La autenticación va en el encabezado Authorization, no en cookies.
+  app.use(cors({ origin: env.CORS_ORIGENES }));
   // Lee cuerpos JSON con un límite de tamaño para evitar abusos.
   app.use(express.json({ limit: '1mb' }));
 

@@ -1,6 +1,7 @@
 // @ts-check
 // Controladores de la caja.
 import { obtenerSesion } from '../../middlewares/auth.js';
+import { EVENTOS, emitirANegocio } from '../../sockets/eventos.js';
 import * as servicio from './caja.service.js';
 
 /**
@@ -8,7 +9,14 @@ import * as servicio from './caja.service.js';
  * @type {import('express').RequestHandler}
  */
 export async function abrir(_req, res) {
-  res.status(201).json(await servicio.abrirTurno(obtenerSesion(res), res.locals.entrada.body));
+  const sesion = obtenerSesion(res);
+  const turno = await servicio.abrirTurno(sesion, res.locals.entrada.body);
+  // Los meseros ya pueden tomar pedidos. No se envían montos: el mesero no los necesita.
+  emitirANegocio(sesion.tenantId, EVENTOS.CAJA_ABIERTA, {
+    turnoId: turno.id,
+    abiertoEn: turno.abiertoEn,
+  });
+  res.status(201).json(turno);
 }
 
 /**
@@ -24,7 +32,14 @@ export async function actual(_req, res) {
  * @type {import('express').RequestHandler}
  */
 export async function cerrar(_req, res) {
-  res.json(await servicio.cerrarTurno(obtenerSesion(res), res.locals.entrada.body));
+  const sesion = obtenerSesion(res);
+  const turno = await servicio.cerrarTurno(sesion, res.locals.entrada.body);
+  // No se envía el arqueo: es información solo para quien maneja la caja.
+  emitirANegocio(sesion.tenantId, EVENTOS.CAJA_CERRADA, {
+    turnoId: turno.id,
+    cerradoEn: turno.cerradoEn,
+  });
+  res.json(turno);
 }
 
 /**

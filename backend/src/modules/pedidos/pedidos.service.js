@@ -41,7 +41,7 @@ const DETALLE_PEDIDO = /** @type {const} */ ({
     include: { producto: { select: { nombre: true } } },
   },
   pagos: { orderBy: { creadoEn: 'asc' } },
-  mesa: { select: { id: true, nombre: true } },
+  mesa: { select: { id: true, nombre: true, estado: true } },
   cliente: { select: { id: true, nombre: true, tipoDocumento: true, numeroDocumento: true } },
 });
 

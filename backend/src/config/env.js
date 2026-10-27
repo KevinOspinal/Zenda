@@ -16,6 +16,20 @@ const envSchema = z.object({
   JWT_MINUTOS: z.coerce.number().int().min(1).max(60).default(15),
   // Vida del refresh token, con el que la app pide un token de acceso nuevo sin volver a iniciar sesión.
   REFRESH_TOKEN_DIAS: z.coerce.number().int().min(1).max(90).default(30),
+
+  // Orígenes (dominios) desde los que un navegador puede llamar al API y conectarse por Socket.IO,
+  // separados por coma. Por ejemplo: "http://localhost:3001,https://app.zenda.co".
+  // Postman y curl no los necesitan: CORS solo aplica en navegadores.
+  CORS_ORIGENES: z
+    .string()
+    .default('http://localhost:3001')
+    .transform((valor) =>
+      valor
+        .split(',')
+        .map((origen) => origen.trim())
+        .filter(Boolean),
+    )
+    .pipe(z.array(z.url('cada origen debe ser una URL, por ejemplo http://localhost:3001'))),
 });
 
 /** @typedef {z.infer<typeof envSchema>} Env */
