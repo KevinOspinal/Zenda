@@ -10,6 +10,7 @@ import { documentacionCaja } from './rutas/caja.js';
 import { documentacionInventarioReportesAuditoria } from './rutas/inventarioReportesAuditoria.js';
 import { documentacionMenu } from './rutas/menu.js';
 import { documentacionMesasYClientes } from './rutas/mesasYClientes.js';
+import { documentacionNegocios } from './rutas/negocios.js';
 import { documentacionPedidos } from './rutas/pedidos.js';
 import { documentacionUsuarios } from './rutas/usuarios.js';
 
@@ -29,6 +30,9 @@ venta: **mesa → pedido → cocina → cobro**, con caja, inventario, reportes 
 
 > ⏱️ El token dura **15 minutos**. Si una respuesta dice \`TOKEN_EXPIRADO\`, repite el paso 1
 > (o usa \`POST /auth/refresh\`) y vuelve a autorizar.
+
+**¿Negocio nuevo?** Regístralo con \`POST /negocios/registro\`: la respuesta ya trae el
+token del dueño.
 
 **Usuarios de prueba** (negocio "La Industria", NIT \`900111222\`, contraseña = \`SEED_CONTRASENA\`
 de tu archivo \`.env\`):
@@ -240,6 +244,7 @@ export const documentoOpenApi = {
   security: [{ tokenAcceso: [] }],
   tags: [
     { name: 'Sistema', description: 'Estado del servicio.' },
+    { name: 'Negocios', description: 'Registro de un restaurante o cafetería nuevo con su dueño.' },
     {
       name: 'Autenticación',
       description: 'Iniciar sesión, renovar el token y cerrar sesión. **Empieza aquí.**',
@@ -265,6 +270,7 @@ export const documentoOpenApi = {
     { name: 'Auditoría', description: 'Registro de acciones sensibles. Solo lo ve el dueño.' },
   ],
   paths: {
+    ...documentacionNegocios,
     ...documentacionAuth,
     ...documentacionUsuarios,
     ...documentacionMenu,

@@ -10,12 +10,14 @@ import { rutasClientes } from './modules/clientes/clientes.routes.js';
 import { rutasInventario } from './modules/inventario/inventario.routes.js';
 import { rutasCategorias, rutasMenu, rutasProductos } from './modules/menu/menu.routes.js';
 import { rutasMesas } from './modules/mesas/mesas.routes.js';
+import { rutasNegocios } from './modules/negocios/negocios.routes.js';
 import { rutasPedidos } from './modules/pedidos/pedidos.routes.js';
 import { rutasReportes } from './modules/reportes/reportes.routes.js';
 import { rutasUsuarios } from './modules/usuarios/usuarios.routes.js';
 
 /** @type {ReadonlyArray<[prefijo: string, rutas: import('express').Router]>} */
 export const MODULOS = Object.freeze([
+  ['/negocios', rutasNegocios],
   ['/auth', rutasAuth],
   ['/usuarios', rutasUsuarios],
   ['/menu', rutasMenu],

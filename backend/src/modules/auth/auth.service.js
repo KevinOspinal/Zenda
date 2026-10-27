@@ -254,7 +254,7 @@ export async function revocarSesionesDeUsuario(tx, usuarioId) {
  * @param {{ id: string, tenantId: string, nombre: string, email: string, rol: Rol }} usuario
  * @returns {Promise<SesionIniciada>}
  */
-async function crearSesion(tx, usuario) {
+export async function crearSesion(tx, usuario) {
   const { token, tokenHash } = generarRefreshToken(usuario.tenantId);
   const expiraEn = new Date(Date.now() + env.REFRESH_TOKEN_DIAS * 24 * 60 * 60 * 1000);
 

@@ -34,6 +34,10 @@ const envSchema = z.object({
   // Documentación Swagger en /docs. Si no se indica, está activa en desarrollo y apagada
   // en producción: mostrar toda la estructura del API facilita el trabajo a un atacante.
   DOCS_HABILITADA: z.stringbool().optional(),
+
+  // Registro público de negocios nuevos (POST /negocios/registro). Si no se indica, está
+  // abierto en desarrollo y cerrado en producción hasta tener un proceso de alta formal.
+  REGISTRO_HABILITADO: z.stringbool().optional(),
 });
 
 /** @typedef {z.infer<typeof envSchema>} Env */
