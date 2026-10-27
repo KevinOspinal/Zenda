@@ -8,7 +8,8 @@ node_modules/
 
 # Salidas y registros
 coverage/
-dist/
+# Sin barra final: nuxt generate crea frontend/dist como enlace, no como carpeta.
+dist
 *.log
 
 # Archivos que genera Nuxt (frontend)

@@ -14,6 +14,10 @@ export default defineNuxtConfig({
   // Tailwind, Nuxt UI y los ajustes propios del tema (ver app/assets/css/main.css).
   css: ['~/assets/css/main.css'],
 
+  // Los componentes se usan por su nombre de archivo, sin la carpeta como prefijo:
+  // components/mesas/TarjetaMesa.vue es <TarjetaMesa>. Por eso cada nombre debe ser único.
+  components: [{ path: '~/components', pathPrefix: false }],
+
   // El backend acepta peticiones de este origen (CORS_ORIGENES en backend/.env).
   devServer: { port: 3001 },
 
@@ -30,8 +34,8 @@ export default defineNuxtConfig({
       title: 'Zenda',
       meta: [
         { name: 'description', content: 'Administración para restaurantes y cafeterías' },
-        // Color de la barra del navegador en el celular: el esmeralda de la marca.
-        { name: 'theme-color', content: '#059669' },
+        // Color de la barra del navegador en el celular: el esmeralda de la marca (700).
+        { name: 'theme-color', content: '#047857' },
       ],
     },
   },
