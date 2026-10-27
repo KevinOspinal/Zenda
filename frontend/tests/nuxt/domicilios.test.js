@@ -7,6 +7,7 @@ import DespacharDomicilio from '~/components/caja/DespacharDomicilio.vue';
 import DomiciliosEnCurso from '~/components/caja/DomiciliosEnCurso.vue';
 import NuevoDomicilio from '~/components/caja/NuevoDomicilio.vue';
 import TarjetaDomicilio from '~/components/caja/TarjetaDomicilio.vue';
+import PedidoCerrado from '~/components/pedidos/PedidoCerrado.vue';
 import TomarPedido from '~/components/pedidos/TomarPedido.vue';
 import { useDomiciliosStore } from '~/stores/domicilios.js';
 import { useSesionStore } from '~/stores/sesion.js';
@@ -280,11 +281,15 @@ describe('enviar a cocina un domicilio', () => {
     });
 
     const pantalla = await mountSuspended(TomarPedido, { props: { pedidoId: 'd1' } });
-    await vi.waitFor(() => expect(pantalla.text()).toContain('Este pedido ya se cobró'));
-    expect(pantalla.text()).toContain('#15 · Juan');
-    expect(pantalla.text()).toContain('falta enviarlo a la cocina');
-    expect(pantalla.text()).toContain('IND Classic');
-    expect(pantalla.text()).not.toContain('otro dispositivo');
+    await vi.waitFor(() => expect(pantalla.text()).toContain('Falta enviarlo a la cocina'));
+    const texto = pantalla.text();
+    expect(texto).toContain('#15 · Juan');
+    expect(texto).toContain('IND Classic');
+    // El seguimiento dice qué pasó y qué sigue; la entrega, a dónde va.
+    expect(texto).toContain('Seguimiento');
+    expect(texto).toContain('Falta');
+    expect(texto).toContain('Calle 10 # 5-20');
+    expect(texto).not.toContain('otro dispositivo');
 
     await pantalla
       .findAll('button')
@@ -293,6 +298,46 @@ describe('enviar a cocina un domicilio', () => {
 
     await vi.waitFor(() => expect(navegarFalso).toHaveBeenCalledWith('/caja'));
     expect(fetchFalso.mock.calls.some(([ruta]) => ruta === '/pedidos/d1/enviar-cocina')).toBe(true);
+  });
+});
+
+describe('pedido cerrado', () => {
+  it('una mesa cobrada: recibo con el pago, sin pedir nada más', async () => {
+    const vista = await mountSuspended(PedidoCerrado, {
+      props: {
+        volverA: '/mesas',
+        pedido: {
+          id: 'p4',
+          tipo: 'mesa',
+          mesa: { id: 'm4', nombre: 'Mesa 4' },
+          estado: 'pagado',
+          total: '38000',
+          propina: '3800',
+          valorDomicilio: '0',
+          abiertoEn: '2026-10-27T18:40:00.000Z',
+          enviadoACocinaEn: '2026-10-27T18:45:00.000Z',
+          cerradoEn: '2026-10-27T19:30:00.000Z',
+          items: [
+            {
+              id: 'i1',
+              cantidad: '2',
+              precioUnitario: '19000',
+              estadoCocina: 'entregado',
+              producto: { nombre: 'IND Classic Artesanal' },
+            },
+          ],
+          pagos: [{ id: 'pg1', metodo: 'efectivo', monto: '41800' }],
+        },
+      },
+    });
+
+    const texto = vista.text();
+    expect(texto).toContain('Pedido cobrado');
+    expect(texto).toContain(pesos('38.000'));
+    expect(texto).toContain('Propina');
+    expect(texto).toContain('Pagado con');
+    expect(texto).toContain('Efectivo');
+    expect(texto).not.toContain('Enviar a cocina');
   });
 });
 

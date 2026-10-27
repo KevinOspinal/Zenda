@@ -40,3 +40,86 @@ export function nombreDelPedido(pedido) {
   const quien = pedido.nombreCliente || TIPOS_PEDIDO[tipoDelPedido(pedido)].etiqueta;
   return pedido.numero ? `#${pedido.numero} · ${quien}` : quien;
 }
+
+/**
+ * @typedef {object} PasoDelPedido
+ * @property {string} id
+ * @property {string} etiqueta
+ * @property {string} icono
+ * @property {string | null} en Cuándo pasó; null si falta.
+ * @property {boolean} siguiente Es lo que sigue ahora.
+ */
+
+/**
+ * Pasos de un pedido para su seguimiento: los que ya pasaron, con su hora y en orden, y los
+ * que faltan, en el orden en que deben pasar (el primero es el siguiente).
+ * - Un domicilio debe pasar por la cocina, salir con el domiciliario y entregarse.
+ * - En mesa y mostrador, la cocina solo aparece si el pedido pasó por ella (una venta rápida
+ *   de bebidas puede cobrarse sin cocina).
+ * - Un pedido anulado termina ahí: solo se ve lo que alcanzó a pasar.
+ * @param {any} pedido Pedido completo (forma del API).
+ * @returns {PasoDelPedido[]}
+ */
+export function pasosDelPedido(pedido) {
+  const tipo = tipoDelPedido(pedido);
+  const anulado = pedido.estado === 'anulado';
+  const esDomicilio = tipo === 'domicilio';
+
+  /** @type {Omit<PasoDelPedido, 'siguiente'>[]} */
+  const posibles = [
+    {
+      id: 'registrado',
+      etiqueta: tipo === 'mesa' ? 'Pedido abierto' : 'Pedido registrado',
+      icono: 'i-lucide-notebook-pen',
+      en: pedido.abiertoEn,
+    },
+  ];
+  if (pedido.enviadoACocinaEn || (esDomicilio && !anulado)) {
+    posibles.push({
+      id: 'cocina',
+      etiqueta: 'Enviado a cocina',
+      icono: 'i-lucide-chef-hat',
+      en: pedido.enviadoACocinaEn ?? null,
+    });
+  }
+  if (anulado) {
+    posibles.push({
+      id: 'anulado',
+      etiqueta: 'Anulado',
+      icono: 'i-lucide-ban',
+      en: pedido.cerradoEn,
+    });
+  } else {
+    posibles.push({
+      id: 'cobrado',
+      etiqueta: 'Cobrado',
+      icono: 'i-lucide-banknote',
+      en: pedido.estado === 'pagado' ? pedido.cerradoEn : null,
+    });
+  }
+  if (esDomicilio && !anulado) {
+    posibles.push(
+      {
+        id: 'despachado',
+        etiqueta: 'Salió con el domiciliario',
+        icono: 'i-lucide-bike',
+        en: pedido.entrega?.despachadoEn ?? null,
+      },
+      {
+        id: 'entregado',
+        etiqueta: 'Entregado',
+        icono: 'i-lucide-check-check',
+        en: pedido.entrega?.entregadoEn ?? null,
+      },
+    );
+  }
+
+  const hechos = posibles
+    .filter((paso) => paso.en)
+    .sort((a, b) => String(a.en).localeCompare(String(b.en)));
+  const faltan = posibles.filter((paso) => !paso.en);
+  return [
+    ...hechos.map((paso) => ({ ...paso, siguiente: false })),
+    ...faltan.map((paso, posicion) => ({ ...paso, en: null, siguiente: posicion === 0 })),
+  ];
+}

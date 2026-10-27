@@ -46,6 +46,12 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
   }
   watch(pedidoId, cargarPedido, { immediate: true });
 
+  // Si el pedido se cierra mientras está en pantalla (se cobró o se anuló aquí o en otro
+  // dispositivo), se trae de nuevo para mostrar cómo quedó.
+  watch(pedido, (actual, anterior) => {
+    if (anterior && !actual && pedidoId.value) cargarPedido();
+  });
+
   // Pedido nuevo en una mesa que ya tiene uno abierto (por ejemplo, otro mesero lo abrió):
   // se abre ese en lugar de crear otro.
   watchEffect(() => {

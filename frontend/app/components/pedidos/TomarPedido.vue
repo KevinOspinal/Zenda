@@ -88,56 +88,6 @@ async function entregarListos() {
   }
 }
 
-// Pedido que ya se cobró o se anuló: se ve qué tenía y, si se cobró sin pasar por la
-// cocina (por ejemplo, un domicilio pagado por adelantado), se puede enviar ahora.
-const faltaEnviarACocina = computed(
-  () =>
-    pedidoCerrado.value?.estado === 'pagado' &&
-    !pedidoCerrado.value.enviadoACocinaEn &&
-    (pedidoCerrado.value.items?.length ?? 0) > 0,
-);
-const TITULOS_CERRADO = Object.freeze({
-  pagado: 'Este pedido ya se cobró',
-  anulado: 'Este pedido se anuló',
-});
-const tituloCerrado = computed(
-  () => TITULOS_CERRADO[pedidoCerrado.value?.estado] ?? 'Este pedido ya se cerró',
-);
-const descripcionCerrado = computed(() => {
-  if (pedidoCerrado.value?.estado === 'anulado') return 'Ya no se le pueden hacer cambios.';
-  return faltaEnviarACocina.value
-    ? 'Ya no se le pueden agregar productos, pero falta enviarlo a la cocina para que lo preparen.'
-    : 'Ya no se le pueden agregar productos.';
-});
-async function enviarCerradoACocina() {
-  try {
-    await pedidos.enviarACocina(pedidoCerrado.value.id);
-    toast.add({
-      title: `${nombreDelPedido(pedidoCerrado.value)} enviado a la cocina`,
-      icon: 'i-lucide-chef-hat',
-      color: 'success',
-    });
-    await navigateTo(volverA.value);
-  } catch (error) {
-    toast.add({
-      title: error instanceof ErrorApi ? error.message : MENSAJE_ERROR_GENERICO,
-      icon: 'i-lucide-circle-alert',
-      color: 'error',
-    });
-  }
-}
-const accionesCerrado = computed(() => [
-  ...(faltaEnviarACocina.value
-    ? [{ label: 'Enviar a cocina', icon: 'i-lucide-chef-hat', onClick: enviarCerradoACocina }]
-    : []),
-  {
-    label: 'Volver',
-    color: /** @type {const} */ ('neutral'),
-    variant: /** @type {const} */ (faltaEnviarACocina.value ? 'outline' : 'solid'),
-    to: volverA.value,
-  },
-]);
-
 // Producto con cantidad y notas.
 const personalizando = ref(false);
 const productoElegido = ref(/** @type {any} */ (null));
@@ -204,20 +154,13 @@ function personalizar(producto) {
         { label: 'Volver', color: 'neutral', variant: 'outline', to: volverA },
       ]"
     />
-    <div v-else-if="pedidoCerrado || (props.pedidoId && !pedido)" class="space-y-4">
-      <UEmpty
-        :icon="pedidoCerrado?.estado === 'anulado' ? 'i-lucide-ban' : 'i-lucide-circle-check'"
-        :title="tituloCerrado"
-        :description="descripcionCerrado"
-        :actions="accionesCerrado"
-      />
-      <div
-        v-if="pedidoCerrado?.items?.length"
-        class="mx-auto max-w-xl rounded-xl bg-default p-4 ring-1 ring-default"
-      >
-        <ResumenCuenta :items="pedidoCerrado.items" solo-lectura />
-      </div>
-    </div>
+    <PedidoCerrado v-else-if="pedidoCerrado" :pedido="pedidoCerrado" :volver-a="volverA" />
+    <UEmpty
+      v-else-if="props.pedidoId && !pedido"
+      icon="i-lucide-circle-check"
+      title="Este pedido ya no está abierto"
+      :actions="[{ label: 'Volver', to: volverA }]"
+    />
 
     <div v-else class="grid gap-6 lg:grid-cols-3">
       <MenuParaPedir
