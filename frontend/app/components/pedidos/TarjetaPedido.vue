@@ -42,7 +42,7 @@ const resumenCocina = computed(() =>
           {{ duracionCorta(minutos) }}
         </span>
       </span>
-      <ChipEstado :apariencia="ESTADOS_PEDIDO[pedido.estado]" />
+      <ChipEstado :apariencia="aparienciaDelPedido(pedido)" />
     </span>
 
     <span class="flex flex-wrap gap-2">

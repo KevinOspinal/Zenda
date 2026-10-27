@@ -2,11 +2,13 @@
 // Pruebas de la apariencia de los estados: mesas, cocina, urgencia y arqueo.
 import { describe, expect, it } from 'vitest';
 import {
+  AVANCE_EN_COCINA,
   ESTADOS_COCINA,
   ESTADOS_MESA,
   ESTADOS_PEDIDO,
   METODOS_PAGO,
   aparienciaDeArqueo,
+  aparienciaDelPedido,
   estadoVisualDeMesa,
   urgenciaDeEspera,
 } from '../../app/utils/estados.js';
@@ -26,13 +28,53 @@ describe('tablas de estados', () => {
   });
 
   it('todo estado tiene etiqueta e ícono además del color (accesibilidad)', () => {
-    const todas = [ESTADOS_MESA, ESTADOS_COCINA, ESTADOS_PEDIDO, METODOS_PAGO].flatMap((tabla) =>
-      Object.values(tabla),
-    );
+    const todas = [
+      ESTADOS_MESA,
+      ESTADOS_COCINA,
+      ESTADOS_PEDIDO,
+      AVANCE_EN_COCINA,
+      METODOS_PAGO,
+    ].flatMap((tabla) => Object.values(tabla));
     for (const apariencia of todas) {
       expect(apariencia.etiqueta).not.toBe('');
       expect(apariencia.icono).toMatch(/^i-lucide-/);
     }
+  });
+});
+
+describe('aparienciaDelPedido', () => {
+  /**
+   * Pedido enviado a cocina con platos en esos estados.
+   * @param {string[]} estados
+   * @param {boolean} [enMesa] Sin mesa, es de mostrador.
+   */
+  const enCocina = (estados, enMesa = true) => ({
+    estado: /** @type {const} */ ('enviado_a_cocina'),
+    mesa: enMesa ? { id: 'm1', nombre: 'Mesa 1' } : null,
+    items: estados.map((estadoCocina) => ({ estadoCocina })),
+  });
+  const etiqueta = (/** @type {any} */ pedido) => aparienciaDelPedido(pedido).etiqueta;
+
+  it('con algún plato pendiente o preparándose, está en cocina', () => {
+    expect(etiqueta(enCocina(['entregado', 'preparando']))).toBe('En cocina');
+    expect(etiqueta(enCocina(['pendiente']))).toBe('En cocina');
+  });
+
+  it('con platos listos y nada en preparación, está listo para llevar', () => {
+    expect(etiqueta(enCocina(['listo', 'entregado']))).toBe('Listo para llevar');
+    expect(etiqueta(enCocina(['listo'], false))).toBe('Listo para entregar');
+  });
+
+  it('con todo entregado ya no dice "En cocina": está servido', () => {
+    expect(etiqueta(enCocina(['entregado', 'entregado']))).toBe('Servido');
+    expect(etiqueta(enCocina(['entregado'], false))).toBe('Entregado');
+  });
+
+  it('los demás estados se muestran tal como vienen del API', () => {
+    expect(aparienciaDelPedido({ estado: 'abierto', items: [] })).toBe(ESTADOS_PEDIDO.abierto);
+    expect(aparienciaDelPedido({ estado: 'pagado', items: [{ estadoCocina: 'entregado' }] })).toBe(
+      ESTADOS_PEDIDO.pagado,
+    );
   });
 });
 

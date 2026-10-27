@@ -25,7 +25,7 @@ const sePuedeDividir = computed(() =>
         </h2>
         <p class="text-sm text-muted">Abierto {{ haceCuanto(pedido.abiertoEn) }}</p>
       </div>
-      <ChipEstado :apariencia="ESTADOS_PEDIDO[pedido.estado]" />
+      <ChipEstado :apariencia="aparienciaDelPedido(pedido)" />
     </div>
 
     <ResumenCuenta :items="pedido.items ?? []" solo-lectura />

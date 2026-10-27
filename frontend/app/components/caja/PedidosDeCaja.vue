@@ -74,7 +74,7 @@ const visibles = computed(() => {
           </span>
           <span class="flex flex-col items-end gap-1">
             <span class="cifra font-bold text-highlighted">{{ formatearPesos(pedido.total) }}</span>
-            <ChipEstado :apariencia="ESTADOS_PEDIDO[pedido.estado]" tamano="sm" />
+            <ChipEstado :apariencia="aparienciaDelPedido(pedido)" tamano="sm" />
           </span>
         </button>
       </li>

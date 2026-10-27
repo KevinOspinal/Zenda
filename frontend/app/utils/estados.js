@@ -47,6 +47,43 @@ export const ESTADOS_PEDIDO = Object.freeze({
 });
 
 /**
+ * Cómo va en la cocina un pedido que ya se envió, según sus platos (ver aparienciaDelPedido).
+ * @type {Readonly<Record<'listoMesa' | 'listoMostrador' | 'servido' | 'entregado', Apariencia>>}
+ */
+export const AVANCE_EN_COCINA = Object.freeze({
+  listoMesa: { etiqueta: 'Listo para llevar', color: 'info', icono: 'i-lucide-bell-ring' },
+  listoMostrador: { etiqueta: 'Listo para entregar', color: 'info', icono: 'i-lucide-bell-ring' },
+  servido: { etiqueta: 'Servido', color: 'secondary', icono: 'i-lucide-check-check' },
+  entregado: { etiqueta: 'Entregado', color: 'secondary', icono: 'i-lucide-check-check' },
+});
+
+/**
+ * Lo que se muestra del estado de un pedido. El API lo deja en "enviado_a_cocina" hasta que
+ * se cobra, aunque ya se hayan entregado todos sus platos; por eso, mientras tanto, se mira
+ * cómo van sus platos:
+ * - Alguno pendiente o preparándose: "En cocina".
+ * - Ninguno en preparación y alguno listo: "Listo para llevar" (en mostrador, "para entregar").
+ * - Todos entregados: "Servido" (en mostrador, "Entregado").
+ * @param {{ estado: keyof typeof ESTADOS_PEDIDO, mesa?: object | null,
+ *   items?: { estadoCocina: string }[] }} pedido
+ * @returns {Apariencia}
+ */
+export function aparienciaDelPedido(pedido) {
+  if (pedido.estado !== 'enviado_a_cocina') return ESTADOS_PEDIDO[pedido.estado];
+
+  const items = pedido.items ?? [];
+  /** @param {string} estado */
+  const hay = (estado) => items.some((item) => item.estadoCocina === estado);
+  if (!items.length || hay('pendiente') || hay('preparando')) {
+    return ESTADOS_PEDIDO.enviado_a_cocina;
+  }
+
+  const enMesa = Boolean(pedido.mesa);
+  if (hay('listo')) return enMesa ? AVANCE_EN_COCINA.listoMesa : AVANCE_EN_COCINA.listoMostrador;
+  return enMesa ? AVANCE_EN_COCINA.servido : AVANCE_EN_COCINA.entregado;
+}
+
+/**
  * Métodos de pago. Transferencia incluye Nequi, Daviplata y bancos.
  * @type {Readonly<Record<'efectivo' | 'tarjeta' | 'transferencia' | 'otro', Apariencia>>}
  */

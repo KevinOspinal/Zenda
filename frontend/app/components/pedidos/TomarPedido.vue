@@ -94,7 +94,7 @@ function personalizar(producto) {
         <h2 class="truncate text-xl font-bold text-highlighted">{{ titulo }}</h2>
         <p class="truncate text-sm text-muted">{{ subtitulo }}</p>
       </div>
-      <ChipEstado v-if="pedido" :apariencia="ESTADOS_PEDIDO[pedido.estado]" />
+      <ChipEstado v-if="pedido" :apariencia="aparienciaDelPedido(pedido)" />
     </div>
 
     <!-- Cargando, error o pedido que ya se cerró. -->
