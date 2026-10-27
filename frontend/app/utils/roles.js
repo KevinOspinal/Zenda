@@ -99,14 +99,14 @@ export const SECCIONES = Object.freeze([
     icono: 'i-lucide-shopping-bag',
     // Ruta propia (no /caja/mostrador) para que la navegación no marque Caja también.
     ruta: '/mostrador',
-    roles: ['cajero'],
+    roles: CAJA,
   },
   {
     id: 'clientes',
     etiqueta: 'Clientes',
     icono: 'i-lucide-contact',
     ruta: '/clientes',
-    roles: ['cajero'],
+    roles: CAJA,
   },
   {
     id: 'menu',

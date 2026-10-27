@@ -114,3 +114,13 @@ export function formatearPorcentaje(valor) {
 export function esMontoValido(texto) {
   return /^\d{1,12}(\.\d{1,2})?$/.test(texto);
 }
+
+/**
+ * Texto de un monto para los campos y para el API: sin decimales si es entero ("42000") y
+ * con dos si tiene centavos ("42000.50").
+ * @param {ValorDinero} valor
+ */
+export function montoComoTexto(valor) {
+  const decimal = aDecimal(valor);
+  return decimal.toFixed(decimal.isInteger() ? 0 : 2);
+}

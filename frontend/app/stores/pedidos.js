@@ -144,6 +144,43 @@ export const usePedidosStore = defineStore('pedidos', () => {
     }
   }
 
+  /**
+   * Cobra un pedido. Los pagos deben sumar exactamente el total más la propina.
+   * Devuelve la respuesta del API: el pedido pagado, el cambio y las advertencias de stock.
+   * @param {string} pedidoId
+   * @param {{ pagos: object[], propina?: string, clienteId?: string }} datos
+   * @returns {Promise<{ pedido: any, cambio: string, advertencias: any[] }>}
+   */
+  async function cobrar(pedidoId, datos) {
+    const respuesta = await useApi().post(`/pedidos/${pedidoId}/cobrar`, datos);
+    guardar(respuesta.pedido);
+    return respuesta;
+  }
+
+  /**
+   * Anula un pedido (dueño y administrador). Exige el motivo; queda en la auditoría.
+   * @param {string} pedidoId
+   * @param {string} motivo
+   */
+  async function anular(pedidoId, motivo) {
+    const pedido = await useApi().post(`/pedidos/${pedidoId}/anular`, { motivo });
+    guardar(pedido);
+    return pedido;
+  }
+
+  /**
+   * Pasa productos (o parte de sus unidades) a una cuenta nueva.
+   * @param {string} pedidoId
+   * @param {{ itemId: string, cantidad: string | number }[]} items
+   * @returns {Promise<{ original: any, nuevo: any }>}
+   */
+  async function dividir(pedidoId, items) {
+    const respuesta = await useApi().post(`/pedidos/${pedidoId}/dividir`, { items });
+    guardar(respuesta.original);
+    guardar(respuesta.nuevo);
+    return respuesta;
+  }
+
   // ───────────────────────────── Eventos en vivo ─────────────────────────────
 
   /**
@@ -192,6 +229,9 @@ export const usePedidosStore = defineStore('pedidos', () => {
     quitarItem,
     enviarACocina,
     cambiarEstadoCocina,
+    cobrar,
+    anular,
+    dividir,
     alCambiarPedido,
     alCambiarEstadoCocina,
     alCerrarPedido,

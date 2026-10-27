@@ -21,12 +21,14 @@ const props = defineProps({
   },
   procesando: { type: Boolean, default: false },
   enviando: { type: Boolean, default: false },
+  puedeCobrar: { type: Boolean, default: false },
 });
 
 const emit = defineEmits({
   /** @param {object} _item */
   quitar: (_item) => true,
   enviar: () => true,
+  cobrar: () => true,
 });
 
 const pantallaGrande = useMediaQuery('(min-width: 1024px)');
@@ -48,8 +50,10 @@ const totalProductos = computed(() => sumar(props.items.map((i) => i.cantidad)).
         :estado-pedido="estadoPedido"
         :procesando="procesando"
         :enviando="enviando"
+        :puede-cobrar="puedeCobrar"
         @quitar="emit('quitar', $event)"
         @enviar="emit('enviar')"
+        @cobrar="emit('cobrar')"
       />
     </div>
   </aside>
@@ -90,8 +94,10 @@ const totalProductos = computed(() => sumar(props.items.map((i) => i.cantidad)).
           :estado-pedido="estadoPedido"
           :procesando="procesando"
           :enviando="enviando"
+          :puede-cobrar="puedeCobrar"
           @quitar="emit('quitar', $event)"
           @enviar="emit('enviar')"
+          @cobrar="emit('cobrar')"
         />
       </template>
     </UDrawer>

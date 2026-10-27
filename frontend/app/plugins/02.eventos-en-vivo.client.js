@@ -59,8 +59,14 @@ export default defineNuxtPlugin(() => {
     pedidos.alCambiarEstadoCocina(datos);
     if (datos.estadoCocina === 'listo') avisarPlatoListo(datos);
   });
-  socket.on(E.PEDIDO_PAGADO, (datos) => pedidos.alCerrarPedido(datos));
-  socket.on(E.PEDIDO_ANULADO, (datos) => pedidos.alCerrarPedido(datos));
+  socket.on(E.PEDIDO_PAGADO, (datos) => {
+    pedidos.alCerrarPedido(datos);
+    caja.alCambiarVentas();
+  });
+  socket.on(E.PEDIDO_ANULADO, (datos) => {
+    pedidos.alCerrarPedido(datos);
+    caja.alCambiarVentas();
+  });
 
   // Al conectar (y al reconectar) se recarga lo necesario: mientras estuvo desconectado se
   // pudieron perder eventos. Los pedidos y la caja se cargan siempre, para que los avisos

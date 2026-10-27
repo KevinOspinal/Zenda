@@ -7,6 +7,7 @@ import {
   formatearCantidad,
   formatearPesos,
   formatearPorcentaje,
+  montoComoTexto,
   sumar,
 } from '../../app/utils/dinero.js';
 
@@ -89,5 +90,12 @@ describe('esMontoValido', () => {
     expect(esMontoValido('-500')).toBe(false);
     expect(esMontoValido('10.123')).toBe(false);
     expect(esMontoValido('')).toBe(false);
+  });
+});
+
+describe('montoComoTexto', () => {
+  it('sin decimales si es entero; con dos si tiene centavos', () => {
+    expect(montoComoTexto('42000.00')).toBe('42000');
+    expect(montoComoTexto('42000.5')).toBe('42000.50');
   });
 });

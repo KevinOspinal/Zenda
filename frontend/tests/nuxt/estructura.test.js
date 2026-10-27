@@ -45,7 +45,7 @@ describe('navegación inferior (celular)', () => {
       props: { secciones: seccionesDe('dueno') },
     });
 
-    expect(botones(navegacion)).toEqual(['Reportes', 'Caja', 'Mesas', 'Menú', 'Más']);
+    expect(botones(navegacion)).toEqual(['Reportes', 'Caja', 'Mesas', 'Mostrador', 'Más']);
   });
 });
 

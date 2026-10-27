@@ -1,14 +1,25 @@
 <!--
-  Venta de mostrador (sin mesa). Llega en la Fase 4; mientras tanto, un aviso.
+  Venta de mostrador: un pedido sin mesa, pensado para cobrar al instante (también se puede
+  enviar a la cocina). Al cobrar, empieza una venta nueva.
 -->
 <script setup>
 definePageMeta({ seccion: 'mostrador' });
+
+const pedidoId = ref('');
+/** Cambia en cada venta nueva para que la pantalla empiece limpia. */
+const venta = ref(0);
+
+function ventaNueva() {
+  pedidoId.value = '';
+  venta.value += 1;
+}
 </script>
 
 <template>
-  <PantallaEnConstruccion
-    seccion="mostrador"
-    :fase="4"
-    descripcion="Ventas rápidas sin mesa, para cobrar al instante."
+  <TomarPedido
+    :key="venta"
+    :pedido-id="pedidoId"
+    @creado="(id) => (pedidoId = id)"
+    @cobrado="ventaNueva"
   />
 </template>

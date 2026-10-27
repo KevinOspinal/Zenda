@@ -63,8 +63,8 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
       ? `Abierto ${haceCuanto(pedido.value.abiertoEn)}`
       : 'Pedido nuevo: toca un producto para empezar',
   );
-  /** A dónde vuelve el botón de atrás y a dónde se va al enviar a cocina. */
-  const volverA = computed(() => (mesa.value || mesaId.value ? '/mesas' : '/mostrador'));
+  /** A dónde vuelve el botón de atrás y a dónde se va al terminar: al mapa o a la caja. */
+  const volverA = computed(() => (mesa.value || mesaId.value ? '/mesas' : '/caja'));
 
   // 2. Fila de operaciones.
   /** @type {Promise<unknown>} */

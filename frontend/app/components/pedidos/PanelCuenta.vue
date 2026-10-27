@@ -23,12 +23,15 @@ defineProps({
   procesando: { type: Boolean, default: false },
   /** Se está enviando a la cocina. */
   enviando: { type: Boolean, default: false },
+  /** Quien toma el pedido también puede cobrarlo (cajero, administrador o dueño). */
+  puedeCobrar: { type: Boolean, default: false },
 });
 
 const emit = defineEmits({
   /** @param {object} _item Ítem del pedido que se quiere quitar. */
   quitar: (_item) => true,
   enviar: () => true,
+  cobrar: () => true,
 });
 </script>
 
@@ -55,6 +58,15 @@ const emit = defineEmits({
         />
       </div>
 
+      <UButton
+        v-if="puedeCobrar"
+        block
+        size="xl"
+        icon="i-lucide-banknote"
+        :label="`Cobrar ${formatearPesos(total)}`"
+        :disabled="!items.length || procesando"
+        @click="emit('cobrar')"
+      />
       <UAlert
         v-if="estadoPedido === 'enviado_a_cocina'"
         color="info"
@@ -66,7 +78,9 @@ const emit = defineEmits({
       <UButton
         v-else
         block
-        size="xl"
+        :size="puedeCobrar ? 'lg' : 'xl'"
+        :variant="puedeCobrar ? 'outline' : 'solid'"
+        :color="puedeCobrar ? 'neutral' : 'primary'"
         icon="i-lucide-chef-hat"
         label="Enviar a cocina"
         :loading="enviando"

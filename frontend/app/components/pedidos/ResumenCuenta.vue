@@ -13,6 +13,8 @@
 
 defineProps({
   items: { type: /** @type {import('vue').PropType<ItemPedido[]>} */ (Array), required: true },
+  /** Sin el botón de quitar (por ejemplo, en el detalle de la caja). */
+  soloLectura: { type: Boolean, default: false },
 });
 
 const emit = defineEmits({
@@ -59,7 +61,7 @@ function valorDeLinea(item) {
           {{ formatearPesos(valorDeLinea(item)) }}
         </span>
         <UButton
-          v-if="item.estadoCocina === 'pendiente'"
+          v-if="!soloLectura && item.estadoCocina === 'pendiente'"
           icon="i-lucide-trash-2"
           color="error"
           variant="ghost"

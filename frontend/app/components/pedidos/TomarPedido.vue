@@ -16,7 +16,12 @@ const props = defineProps({
 const emit = defineEmits({
   /** Se creó el pedido nuevo con su primer producto. @param {string} _id */
   creado: (_id) => true,
+  /** Se cobró el pedido y se cerró el resumen del cobro. @param {string} _volverA */
+  cobrado: (_volverA) => true,
 });
+
+const sesion = useSesionStore();
+const puedeCobrar = computed(() => puede(sesion.rol, 'cobrar'));
 
 const {
   pedido,
@@ -48,6 +53,20 @@ async function enviar() {
   cuentaAbierta.value = false;
   await navigateTo(volverA.value);
 }
+
+// Cobrar desde la cuenta. Al cerrar el resumen del cobro (con el cambio), se avisa a la
+// página: el mostrador empieza una venta nueva; en una mesa se vuelve al mapa.
+const cobrando = ref(false);
+const cobrado = ref(false);
+function abrirCobro() {
+  cuentaAbierta.value = false;
+  cobrando.value = true;
+}
+watch(cobrando, (abierto) => {
+  if (abierto || !cobrado.value) return;
+  cobrado.value = false;
+  emit('cobrado', volverA.value);
+});
 
 // Producto con cantidad y notas.
 const personalizando = ref(false);
@@ -115,10 +134,19 @@ function personalizar(producto) {
         :estado-pedido="estadoPedido"
         :procesando="enCurso > 0"
         :enviando="enviando"
+        :puede-cobrar="puedeCobrar"
         @quitar="quitar"
         @enviar="enviar"
+        @cobrar="abrirCobro"
       />
     </div>
+
+    <ModalCobro
+      v-if="puedeCobrar"
+      v-model:abierto="cobrando"
+      :pedido-id="pedido?.id ?? ''"
+      @cobrado="cobrado = true"
+    />
 
     <PersonalizarProducto
       v-model:abierto="personalizando"

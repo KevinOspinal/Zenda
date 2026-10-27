@@ -16,8 +16,11 @@ const mesaId = computed(() => String(ruta.query.mesa ?? ''));
 function alCrear(id) {
   router.replace(`/pedidos/${id}`);
 }
+
+/** Después de cobrar: al mapa si era una mesa, a la caja si era de mostrador. */
+const alCobrar = (/** @type {string} */ volverA) => navigateTo(volverA);
 </script>
 
 <template>
-  <TomarPedido :pedido-id="pedidoId" :mesa-id="mesaId" @creado="alCrear" />
+  <TomarPedido :pedido-id="pedidoId" :mesa-id="mesaId" @creado="alCrear" @cobrado="alCobrar" />
 </template>
