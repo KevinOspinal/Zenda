@@ -2,7 +2,7 @@
 // Documentación de /caja.
 import { esquemaParamsId } from '../../lib/esquemas.js';
 import { esquemaAbrirCaja, esquemaCerrarCaja } from '../../modules/caja/caja.schemas.js';
-import { cuerpo, operacion, parametros, respuesta } from '../ayudantes.js';
+import { TODOS, cuerpo, operacion, parametros, respuesta } from '../ayudantes.js';
 import { ID } from '../ejemplos.js';
 
 const MANEJAN_CAJA = /** @type {const} */ (['dueno', 'administrador', 'cajero']);
@@ -64,6 +64,27 @@ Si ya hay uno, responde 409 \`TURNO_YA_ABIERTO\`.
       }),
       respuestas: { 201: respuesta('Turno abierto.', TURNO_ABIERTO) },
       errores: ['400', '409'],
+    }),
+  },
+
+  '/caja/estado': {
+    get: operacion({
+      etiqueta: 'Caja',
+      resumen: 'Saber si la caja está abierta',
+      roles: TODOS,
+      descripcion: `
+Dice si hay un turno de caja abierto, **sin montos**. Lo usan todos los roles: el mesero lo
+necesita para saber si puede tomar pedidos (sin caja abierta, crear un pedido responde 409
+\`CAJA_CERRADA\`).
+
+📡 Los cambios llegan en tiempo real con \`caja:abierta\` y \`caja:cerrada\`.`,
+      respuestas: {
+        200: respuesta('Estado de la caja.', {
+          abierta: true,
+          turnoId: ID.turno,
+          abiertoEn: '2026-10-26T13:00:00.000Z',
+        }),
+      },
     }),
   },
 

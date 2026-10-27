@@ -20,6 +20,14 @@ export async function abrir(_req, res) {
 }
 
 /**
+ * GET /caja/estado (todos los roles, sin montos)
+ * @type {import('express').RequestHandler}
+ */
+export async function estado(_req, res) {
+  res.json(await servicio.obtenerEstadoCaja(obtenerSesion(res)));
+}
+
+/**
  * GET /caja/actual
  * @type {import('express').RequestHandler}
  */

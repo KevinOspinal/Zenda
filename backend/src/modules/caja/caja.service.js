@@ -79,6 +79,26 @@ export function obtenerTurnoActual(sesion) {
 }
 
 /**
+ * Dice si la caja está abierta, sin montos: lo pueden consultar todos los roles (el mesero
+ * lo necesita para saber si puede tomar pedidos).
+ * @param {DatosSesion} sesion
+ * @returns {Promise<{ abierta: boolean, turnoId: string | null, abiertoEn: Date | null }>}
+ */
+export function obtenerEstadoCaja(sesion) {
+  return conNegocio(sesion.tenantId, async (tx) => {
+    const turno = await tx.turnoCaja.findFirst({
+      where: { cerradoEn: null },
+      select: { id: true, abiertoEn: true },
+    });
+    return {
+      abierta: Boolean(turno),
+      turnoId: turno?.id ?? null,
+      abiertoEn: turno?.abiertoEn ?? null,
+    };
+  });
+}
+
+/**
  * Cierra el turno abierto con el arqueo del efectivo y lo registra en la auditoría.
  * @param {DatosSesion} sesion
  * @param {{ montoContado: string }} datos

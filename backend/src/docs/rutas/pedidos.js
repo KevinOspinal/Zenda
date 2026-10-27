@@ -134,17 +134,29 @@ generó. Si el mismo pedido llega dos veces, la segunda vez **no se duplica**: r
       etiqueta: 'Pedidos',
       resumen: 'Listar pedidos',
       roles: TODOS,
-      descripcion:
-        'Los últimos 100 pedidos, del más reciente al más antiguo. Se pueden filtrar por estado y por mesa.',
+      descripcion: `
+Los últimos 100 pedidos, del más reciente al más antiguo. Se pueden filtrar por estado y por mesa.
+
+**Para el mapa de mesas y la cocina:** \`?activos=true&incluirItems=true\` trae en una sola
+petición los pedidos que aún no se cobran ni se anulan, cada uno con sus ítems y el estado
+de cocina de cada ítem. No se puede combinar \`activos\` con \`estado\` (400).`,
       parametros: parametros('query', esquemaFiltrosPedidos, {
         estado: {
           descripcion: '`abierto`, `enviado_a_cocina`, `pagado` o `anulado`.',
           ejemplo: 'abierto',
         },
         mesaId: { descripcion: 'Solo los pedidos de esta mesa.', ejemplo: ID.mesa },
+        activos: {
+          descripcion: '`true`: solo los abiertos y los que están en cocina.',
+          ejemplo: 'true',
+        },
+        incluirItems: {
+          descripcion: '`true`: incluye los ítems de cada pedido (con el nombre del producto).',
+          ejemplo: 'true',
+        },
       }),
       respuestas: {
-        200: respuesta('Lista de pedidos (sin ítems; para verlos usa GET /pedidos/{id}).', [
+        200: respuesta('Lista de pedidos (sin ítems, salvo con `incluirItems=true`).', [
           {
             ...Object.fromEntries(
               Object.entries(PEDIDO).filter(

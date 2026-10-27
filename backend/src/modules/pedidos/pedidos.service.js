@@ -107,17 +107,24 @@ export async function crearPedido(sesion, { mesaId, uuidOffline, items }) {
 }
 
 /**
- * Lista pedidos, del más reciente al más antiguo.
+ * Lista pedidos, del más reciente al más antiguo (máximo 100).
+ * - `activos`: solo los que aún no se cobran ni se anulan (abiertos y en cocina).
+ * - `incluirItems`: agrega los ítems de cada pedido, para que el mapa de mesas y la cocina
+ *   no tengan que pedir el detalle de cada uno.
  * @param {DatosSesion} sesion
- * @param {{ estado?: 'abierto' | 'enviado_a_cocina' | 'pagado' | 'anulado', mesaId?: string }} filtros
+ * @param {{ estado?: 'abierto' | 'enviado_a_cocina' | 'pagado' | 'anulado', mesaId?: string,
+ *   activos?: boolean, incluirItems?: boolean }} filtros
  */
-export function listarPedidos(sesion, filtros) {
+export function listarPedidos(sesion, { estado, mesaId, activos = false, incluirItems = false }) {
   return conNegocio(sesion.tenantId, (tx) =>
     tx.pedido.findMany({
-      where: filtros,
+      where: { mesaId, estado: activos ? { in: [...ESTADOS_ABIERTOS] } : estado },
       orderBy: { abiertoEn: 'desc' },
       take: 100,
-      include: { mesa: { select: { id: true, nombre: true } } },
+      include: {
+        mesa: { select: { id: true, nombre: true } },
+        ...(incluirItems ? { items: DETALLE_PEDIDO.items } : {}),
+      },
     }),
   );
 }

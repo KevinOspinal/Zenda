@@ -2,7 +2,12 @@
 // Esquemas Zod de pedidos, ítems y pagos.
 import { z } from 'zod';
 import { aDecimal } from '../../lib/dinero.js';
-import { esquemaId, esquemaMonto, textoObligatorio } from '../../lib/esquemas.js';
+import {
+  esquemaBooleanoEnUrl,
+  esquemaId,
+  esquemaMonto,
+  textoObligatorio,
+} from '../../lib/esquemas.js';
 
 /**
  * Cantidad de un ítem: mayor que cero y con máximo 3 decimales (por ejemplo 0.5 porción).
@@ -35,11 +40,20 @@ export const esquemaCrearPedido = z.object({
   items: z.array(esquemaItem).max(100).default([]),
 });
 
-/** GET /pedidos?estado=abierto&mesaId=... */
-export const esquemaFiltrosPedidos = z.object({
-  estado: z.enum(['abierto', 'enviado_a_cocina', 'pagado', 'anulado']).optional(),
-  mesaId: esquemaId.optional(),
-});
+/** GET /pedidos?estado=abierto&mesaId=...&activos=true&incluirItems=true */
+export const esquemaFiltrosPedidos = z
+  .object({
+    estado: z.enum(['abierto', 'enviado_a_cocina', 'pagado', 'anulado']).optional(),
+    mesaId: esquemaId.optional(),
+    // Solo los que aún no se cobran ni se anulan (abiertos y en cocina): mapa de mesas y cocina.
+    activos: esquemaBooleanoEnUrl.optional(),
+    // Incluye los ítems de cada pedido: evita pedir el detalle de cada uno por separado.
+    incluirItems: esquemaBooleanoEnUrl.optional(),
+  })
+  .refine((filtros) => !(filtros.activos && filtros.estado), {
+    message: 'use estado o activos, no ambos',
+    path: ['activos'],
+  });
 
 /** Rutas /pedidos/:id/items/:itemId */
 export const esquemaParamsItem = z.object({ id: esquemaId, itemId: esquemaId });
