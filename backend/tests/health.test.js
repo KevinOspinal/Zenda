@@ -39,6 +39,7 @@ describe('parseEnv', () => {
   const base = {
     DATABASE_URL: 'postgresql://u:p@localhost:5432/db',
     REDIS_URL: 'redis://localhost:6379',
+    JWT_SECRET: 'x'.repeat(32),
   };
 
   it('aplica valores por defecto', () => {
@@ -50,6 +51,10 @@ describe('parseEnv', () => {
 
   it('falla si falta DATABASE_URL, sin mostrar valores', () => {
     expect(() => parseEnv({ REDIS_URL: base.REDIS_URL })).toThrow(/DATABASE_URL/);
+  });
+
+  it('rechaza una clave JWT corta', () => {
+    expect(() => parseEnv({ ...base, JWT_SECRET: 'corta' })).toThrow(/JWT_SECRET/);
   });
 
   it('rechaza una URL de base de datos que no sea PostgreSQL', () => {

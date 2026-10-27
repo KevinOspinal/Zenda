@@ -24,8 +24,10 @@ export default function prepararBaseDePruebas() {
     throw new Error('Las pruebas solo pueden usar la base zenda_test');
   }
 
-  // 1. Crear o actualizar las tablas.
+  // 1. Crear o actualizar las tablas y regenerar el cliente de Prisma
+  //    (Prisma 7 no lo regenera solo al migrar).
   ejecutarPrisma(['migrate', 'deploy']);
+  ejecutarPrisma(['generate']);
 
   // 2. Aplicar Row-Level Security.
   ejecutarPrisma(['db', 'execute', '--file', 'prisma/rls.sql']);

@@ -9,6 +9,13 @@ const envSchema = z.object({
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   REDIS_URL: z.url({ protocol: /^rediss?$/ }),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+
+  // Clave para firmar los tokens de acceso (JWT). Debe ser larga y aleatoria; nunca va en el repositorio.
+  JWT_SECRET: z.string().min(32, 'debe tener al menos 32 caracteres'),
+  // Vida del token de acceso. Corta a propósito: si alguien lo roba, sirve por poco tiempo.
+  JWT_MINUTOS: z.coerce.number().int().min(1).max(60).default(15),
+  // Vida del refresh token, con el que la app pide un token de acceso nuevo sin volver a iniciar sesión.
+  REFRESH_TOKEN_DIAS: z.coerce.number().int().min(1).max(90).default(30),
 });
 
 /** @typedef {z.infer<typeof envSchema>} Env */

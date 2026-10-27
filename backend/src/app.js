@@ -2,6 +2,7 @@
 // Arma la aplicación Express: middlewares, rutas y manejo de errores.
 import express from 'express';
 import { errorHandler, notFound } from './middlewares/errorHandler.js';
+import { rutasAuth } from './modules/auth/auth.routes.js';
 
 /**
  * Crea la app Express sin abrir el puerto, para poder probarla con Supertest.
@@ -19,6 +20,9 @@ export function createApp() {
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok' });
   });
+
+  // Rutas de cada módulo.
+  app.use('/auth', rutasAuth);
 
   // Estos dos van al final: atrapan rutas inexistentes y cualquier error de las rutas anteriores.
   app.use(notFound);

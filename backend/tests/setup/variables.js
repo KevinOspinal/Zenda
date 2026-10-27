@@ -9,4 +9,6 @@ export const variablesDePrueba = {
   // El dueño de las tablas solo se usa para migrar y limpiar la base de pruebas.
   DATABASE_URL_MIGRACIONES: 'postgresql://zenda:zenda@localhost:5433/zenda_test',
   REDIS_URL: 'redis://localhost:6379',
+  // Clave solo para pruebas; no sirve fuera de ellas.
+  JWT_SECRET: 'clave-de-pruebas-que-no-se-usa-en-ningun-otro-lugar',
 };

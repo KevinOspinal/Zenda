@@ -16,7 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "postinstall": "prisma generate",
-    "db:migrate": "prisma migrate dev && npm run db:rls",
+    "db:migrate": "prisma migrate dev && prisma generate && npm run db:rls",
     "db:deploy": "prisma migrate deploy && npm run db:rls",
     "db:studio": "prisma studio",
     "db:rls": "prisma db execute --file prisma/rls.sql"
@@ -24,7 +24,9 @@
   "dependencies": {
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
+    "argon2": "^0.45.1",
     "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
     "pg": "8.23.1",
     "pino": "^10.4.0",
     "zod": "^4.6.7"
