@@ -1,0 +1,193 @@
+// @ts-check
+// Roles: qué secciones ve cada uno, dónde empieza y qué acciones puede hacer.
+//
+// Es el único lugar que decide qué se muestra según el rol. Los permisos copian los del
+// backend (ver la skill, contrato-api.md). Ocultar un botón mejora la experiencia, pero la
+// seguridad la pone el backend: toda pantalla debe manejar el error 403 igual.
+
+/** @typedef {'dueno' | 'administrador' | 'cajero' | 'mesero'} Rol */
+
+/** @type {Readonly<Record<Rol, { etiqueta: string, icono: string }>>} */
+export const ROLES = Object.freeze({
+  dueno: { etiqueta: 'Dueño', icono: 'i-lucide-crown' },
+  administrador: { etiqueta: 'Administrador', icono: 'i-lucide-briefcase' },
+  cajero: { etiqueta: 'Cajero', icono: 'i-lucide-calculator' },
+  mesero: { etiqueta: 'Mesero', icono: 'i-lucide-hand-platter' },
+});
+
+const TODOS = /** @type {Rol[]} */ (['dueno', 'administrador', 'cajero', 'mesero']);
+const GERENCIA = /** @type {Rol[]} */ (['dueno', 'administrador']);
+const CAJA = /** @type {Rol[]} */ (['dueno', 'administrador', 'cajero']);
+const SOLO_DUENO = /** @type {Rol[]} */ (['dueno']);
+
+/**
+ * Acciones y los roles que el backend permite para cada una.
+ * @type {Readonly<Record<string, Rol[]>>}
+ */
+export const PERMISOS = Object.freeze({
+  tomarPedidos: TODOS,
+  cobrar: CAJA,
+  anularPedidos: GERENCIA,
+  manejarCaja: CAJA, // abrir, ver y cerrar el turno
+  verHistorialDeCaja: GERENCIA,
+  gestionarClientes: CAJA,
+  gestionarMenu: GERENCIA,
+  gestionarMesas: GERENCIA,
+  verInventario: CAJA,
+  registrarInventario: GERENCIA, // compras y ajustes
+  verUsuarios: GERENCIA,
+  gestionarUsuarios: SOLO_DUENO,
+  configurarNegocio: SOLO_DUENO, // propina sugerida
+  verAuditoria: SOLO_DUENO,
+  verReportes: GERENCIA,
+});
+
+/** @typedef {keyof typeof PERMISOS} Accion */
+
+/**
+ * @typedef {object} Seccion
+ * @property {string} id
+ * @property {string} etiqueta Texto en la navegación.
+ * @property {string} icono
+ * @property {string} ruta
+ * @property {Rol[]} roles Quién la ve.
+ */
+
+/**
+ * Secciones de la app en el orden en que aparecen en la navegación.
+ * @type {ReadonlyArray<Seccion>}
+ */
+export const SECCIONES = Object.freeze([
+  {
+    id: 'reportes',
+    etiqueta: 'Reportes',
+    icono: 'i-lucide-chart-column',
+    ruta: '/reportes',
+    roles: GERENCIA,
+  },
+  {
+    id: 'caja',
+    etiqueta: 'Caja',
+    icono: 'i-lucide-calculator',
+    ruta: '/caja',
+    roles: CAJA,
+  },
+  {
+    id: 'mesas',
+    etiqueta: 'Mesas',
+    icono: 'i-lucide-layout-grid',
+    ruta: '/mesas',
+    roles: TODOS,
+  },
+  {
+    id: 'pedidos',
+    etiqueta: 'Pedidos',
+    icono: 'i-lucide-notebook-pen',
+    ruta: '/pedidos',
+    roles: ['mesero'],
+  },
+  {
+    id: 'avisos',
+    etiqueta: 'Avisos',
+    icono: 'i-lucide-bell',
+    ruta: '/avisos',
+    roles: ['mesero'],
+  },
+  {
+    id: 'mostrador',
+    etiqueta: 'Mostrador',
+    icono: 'i-lucide-shopping-bag',
+    ruta: '/caja/mostrador',
+    roles: ['cajero'],
+  },
+  {
+    id: 'clientes',
+    etiqueta: 'Clientes',
+    icono: 'i-lucide-contact',
+    ruta: '/clientes',
+    roles: ['cajero'],
+  },
+  {
+    id: 'menu',
+    etiqueta: 'Menú',
+    icono: 'i-lucide-book-open-text',
+    ruta: '/admin/menu',
+    roles: GERENCIA,
+  },
+  {
+    id: 'inventario',
+    etiqueta: 'Inventario',
+    icono: 'i-lucide-package',
+    ruta: '/admin/inventario',
+    roles: GERENCIA,
+  },
+  {
+    id: 'usuarios',
+    etiqueta: 'Usuarios',
+    icono: 'i-lucide-users',
+    ruta: '/admin/usuarios',
+    roles: GERENCIA,
+  },
+  {
+    id: 'turnos',
+    etiqueta: 'Turnos',
+    icono: 'i-lucide-history',
+    ruta: '/admin/turnos',
+    roles: GERENCIA,
+  },
+  {
+    id: 'configuracion',
+    etiqueta: 'Configuración',
+    icono: 'i-lucide-settings',
+    ruta: '/admin/configuracion',
+    roles: SOLO_DUENO,
+  },
+  {
+    id: 'auditoria',
+    etiqueta: 'Auditoría',
+    icono: 'i-lucide-shield-check',
+    ruta: '/admin/auditoria',
+    roles: SOLO_DUENO,
+  },
+  {
+    id: 'perfil',
+    etiqueta: 'Perfil',
+    icono: 'i-lucide-circle-user',
+    ruta: '/perfil',
+    roles: TODOS,
+  },
+]);
+
+/** Pantalla con la que empieza cada rol al ingresar. */
+export const INICIO_POR_ROL = Object.freeze({
+  dueno: '/reportes',
+  administrador: '/reportes',
+  cajero: '/caja',
+  mesero: '/mesas',
+});
+
+/**
+ * Indica si un rol puede hacer una acción.
+ * @param {Rol | null | undefined} rol
+ * @param {Accion} accion
+ */
+export function puede(rol, accion) {
+  return Boolean(rol) && PERMISOS[accion].includes(/** @type {Rol} */ (rol));
+}
+
+/**
+ * Secciones que ve un rol, en orden.
+ * @param {Rol} rol
+ * @returns {Seccion[]}
+ */
+export function seccionesDe(rol) {
+  return SECCIONES.filter((seccion) => seccion.roles.includes(rol));
+}
+
+/**
+ * Ruta de inicio de un rol.
+ * @param {Rol} rol
+ */
+export function inicioDe(rol) {
+  return INICIO_POR_ROL[rol];
+}
