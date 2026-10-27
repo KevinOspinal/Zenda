@@ -27,10 +27,12 @@ const emit = defineEmits({
 });
 
 // Vibración muy corta al agregar: confirma el toque sin mirar la pantalla.
+// Se puede apagar desde el perfil.
+const preferencias = usePreferenciasStore();
 const { vibrate, isSupported } = useVibrate({ pattern: [12] });
 
 function agregar() {
-  if (isSupported.value) vibrate();
+  if (preferencias.vibracion && isSupported.value) vibrate();
   emit('agregar', props.producto);
 }
 </script>

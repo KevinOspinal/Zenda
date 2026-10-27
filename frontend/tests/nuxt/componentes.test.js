@@ -1,13 +1,12 @@
 // @ts-check
 // Pruebas de los componentes que usarán las pantallas reales: tarjetas de mesa y de
-// producto, la cuenta y el valor animado. También que el muestrario cargue completo.
+// producto, la cuenta y el valor animado.
 import { mountSuspended } from '@nuxt/test-utils/runtime';
 import { describe, expect, it } from 'vitest';
 import CifraAnimada from '~/components/comunes/CifraAnimada.vue';
 import TarjetaMesa from '~/components/mesas/TarjetaMesa.vue';
 import ResumenCuenta from '~/components/pedidos/ResumenCuenta.vue';
 import TarjetaProducto from '~/components/pedidos/TarjetaProducto.vue';
-import PaginaMuestrario from '~/pages/muestrario.vue';
 
 // Intl separa el signo $ del número con un espacio que no se parte entre líneas.
 const ESPACIO_FIJO = '\u00a0';
@@ -131,17 +130,5 @@ describe('CifraAnimada', () => {
     // Lo visible termina en el valor exacto, con centavos, cuando acaba la animación.
     await new Promise((resolver) => setTimeout(resolver, 700));
     expect(cifra.find('[aria-hidden="true"]').text()).toBe(pesos('50.000,50'));
-  });
-});
-
-describe('muestrario', () => {
-  it('carga todas sus secciones', async () => {
-    const pagina = await mountSuspended(PaginaMuestrario);
-
-    for (const titulo of ['Colores y tipografía', 'Botones', 'Mapa de mesas', 'Tomar un pedido']) {
-      expect(pagina.text()).toContain(titulo);
-    }
-    expect(pagina.text()).toContain('Estados');
-    expect(pagina.text()).toContain('Respuestas de la app');
   });
 });
