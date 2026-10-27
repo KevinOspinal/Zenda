@@ -1,0 +1,23 @@
+# Archivos que nunca entran a la imagen de Docker.
+
+# Se instalan dentro de la imagen con npm ci.
+node_modules
+
+# Secretos: la configuración llega por variables de entorno al correr el contenedor.
+.env
+.env.*
+
+# No hacen falta para correr el API.
+tests
+docs
+coverage
+docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+vitest.config.js
+eslint.config.js
+jsconfig.json
+.prettierrc.json
+.prettierignore
+*.log

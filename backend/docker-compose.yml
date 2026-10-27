@@ -1,4 +1,11 @@
-# Servicios de desarrollo. `api` y `worker` se agregan en fases posteriores.
+# Servicios de desarrollo.
+#
+#   docker compose up -d                    → solo PostgreSQL y Redis (el API corre con npm run dev).
+#   docker compose --profile api up -d --build
+#                                           → además migra la base y levanta el API desde su
+#                                             imagen de Docker, para probarla en local.
+#
+# El `worker` de facturación se agrega en la Fase 2.
 name: zenda
 
 services:
@@ -36,6 +43,45 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # Aplica las migraciones y las políticas de RLS, y termina. El API espera a que acabe bien.
+  migraciones:
+    profiles: ['api']
+    build:
+      context: .
+      target: migraciones
+    environment:
+      DATABASE_URL_MIGRACIONES: postgresql://${POSTGRES_USER:-zenda}:${POSTGRES_PASSWORD:-zenda}@postgres:5432/${POSTGRES_DB:-zenda}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # El API desde su imagen de producción. Usa otro puerto del host para no chocar con
+  # `npm run dev` (3000).
+  api:
+    profiles: ['api']
+    build:
+      context: .
+      target: produccion
+    environment:
+      # Dentro de Docker los servicios se encuentran por su nombre (postgres, redis).
+      DATABASE_URL: postgresql://${APP_DB_USER:-zenda_app}:${APP_DB_PASSWORD:-zenda_app}@postgres:5432/${POSTGRES_DB:-zenda}
+      REDIS_URL: redis://redis:6379
+      # Se lee del .env; sin él el API no arranca.
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en el archivo .env}
+      CORS_ORIGENES: ${CORS_ORIGENES:-http://localhost:3001}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Prueba local: deja ver Swagger aunque la imagen corra en modo producción.
+      DOCS_HABILITADA: 'true'
+    ports:
+      - '127.0.0.1:${API_DOCKER_PORT:-3100}:3000'
+    depends_on:
+      migraciones:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres-data:
