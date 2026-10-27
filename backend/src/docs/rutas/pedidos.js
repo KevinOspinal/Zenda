@@ -358,6 +358,10 @@ cambiaron, para que el mesero reciba un solo aviso por mesa.`,
 Cambia el pedido a \`enviado_a_cocina\`. Sin cuerpo. El pedido debe tener al menos un
 producto (si no, 409 \`PEDIDO_VACIO\`). Repetirlo no es un error.
 
+Un pedido **ya cobrado** también se puede enviar (por ejemplo, un domicilio pagado por
+transferencia antes de mandarlo a cocina): sigue \`pagado\` y la cocina lo ve igual. Uno
+anulado, no (409 \`PEDIDO_ANULADO\`).
+
 La primera vez guarda la hora en \`enviadoACocinaEn\`; reenviar no la cambia. Con ella la
 cocina sigue viendo el pedido aunque se cobre antes de que salgan sus platos.
 
@@ -600,12 +604,14 @@ es lejos). Envía solo lo que cambia; \`null\` en \`indicaciones\` o \`pagaCon\`
       roles: [...COBRAN],
       descripcion: `
 El domicilio sale del local con el domiciliario: queda la hora (\`entrega.despachadoEn\`) y
-quién lo lleva. Sus platos salen de la cocina (quedan \`entregado\`), aunque nadie los haya
-marcado listos: la caja es quien ve salir la bolsa.
+quién lo lleva. Sus platos quedan \`entregado\` y la comanda sale del tablero de cocina.
 
 **Reglas**
 - Domicilio sin anular, sin entregar y que no haya salido (409), con productos (409
   \`PEDIDO_VACIO\`).
+- **Solo sale cuando la cocina lo tiene listo:** enviado a cocina (si no, 409
+  \`DOMICILIO_SIN_ENVIAR\`) y sin platos pendientes ni en preparación (si no, 409
+  \`DOMICILIO_EN_PREPARACION\`).
 - El domiciliario debe existir (404) y estar activo (409 \`DOMICILIARIO_INACTIVO\`).
 - Se puede despachar antes de cobrar (contra entrega) o después (pago por adelantado).
 

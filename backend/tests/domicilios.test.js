@@ -57,6 +57,20 @@ async function crearDomicilio(cambios = {}) {
 }
 
 /**
+ * Un domicilio enviado a cocina que la cocina ya tiene listo: el único que se puede despachar.
+ * @param {Record<string, unknown>} [cambios]
+ */
+async function domicilioListoParaSalir(cambios = {}) {
+  const pedido = await crearDomicilio(cambios);
+  await llamar('post', `/pedidos/${pedido.id}/enviar-cocina`, negocio.encabezados.cajero);
+  const listo = await llamar('patch', `/pedidos/${pedido.id}/cocina`, negocio.encabezados.cocina, {
+    estadoCocina: 'listo',
+  });
+  expect(listo.status).toBe(200);
+  return pedido;
+}
+
+/**
  * @param {string} pedidoId
  * @param {string} monto
  */
@@ -252,8 +266,7 @@ describe('domicilios', () => {
   });
 
   it('al despacharlo sale con el domiciliario y sus platos salen de la cocina', async () => {
-    const pedido = await crearDomicilio();
-    await llamar('post', `/pedidos/${pedido.id}/enviar-cocina`, negocio.encabezados.cajero);
+    const pedido = await domicilioListoParaSalir();
 
     const res = await llamar(
       'post',
@@ -295,7 +308,7 @@ describe('domicilios', () => {
       nombre: 'Ajeno',
       telefono: '3020000000',
     });
-    const pedido = await crearDomicilio();
+    const pedido = await domicilioListoParaSalir();
 
     const conInactivo = await llamar(
       'post',
@@ -329,6 +342,10 @@ describe('domicilios', () => {
     expect(antes.status).toBe(409);
     expect(antes.body.error.code).toBe('DOMICILIO_SIN_DESPACHAR');
 
+    await llamar('post', `/pedidos/${pedido.id}/enviar-cocina`, negocio.encabezados.cajero);
+    await llamar('patch', `/pedidos/${pedido.id}/cocina`, negocio.encabezados.cocina, {
+      estadoCocina: 'listo',
+    });
     await llamar('post', `/pedidos/${pedido.id}/despachar`, negocio.encabezados.cajero, {
       domiciliarioId: ids.domiciliario,
     });
@@ -340,6 +357,45 @@ describe('domicilios', () => {
     expect(entregado.status).toBe(200);
     expect(entregado.body.entrega.entregadoEn).toEqual(expect.any(String));
     expect(await enCurso()).not.toContain(pedido.id);
+  });
+
+  it('solo sale cuando la cocina lo tiene listo', async () => {
+    const pedido = await crearDomicilio();
+    const despachar = () =>
+      llamar('post', `/pedidos/${pedido.id}/despachar`, negocio.encabezados.cajero, {
+        domiciliarioId: ids.domiciliario,
+      });
+
+    const sinEnviar = await despachar();
+    expect(sinEnviar.status).toBe(409);
+    expect(sinEnviar.body.error.code).toBe('DOMICILIO_SIN_ENVIAR');
+
+    await llamar('post', `/pedidos/${pedido.id}/enviar-cocina`, negocio.encabezados.cajero);
+    const enPreparacion = await despachar();
+    expect(enPreparacion.status).toBe(409);
+    expect(enPreparacion.body.error.code).toBe('DOMICILIO_EN_PREPARACION');
+
+    await llamar('patch', `/pedidos/${pedido.id}/cocina`, negocio.encabezados.cocina, {
+      estadoCocina: 'listo',
+    });
+    expect((await despachar()).status).toBe(200);
+  });
+
+  it('uno cobrado antes de mandarlo a cocina se puede enviar después', async () => {
+    const pedido = await crearDomicilio();
+    await cobrar(pedido.id, '15000');
+
+    const res = await llamar(
+      'post',
+      `/pedidos/${pedido.id}/enviar-cocina`,
+      negocio.encabezados.cajero,
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.estado).toBe('pagado');
+    expect(res.body.enviadoACocinaEn).toEqual(expect.any(String));
+    const cocina = await llamar('get', '/pedidos?cocina=true', negocio.encabezados.cocina);
+    expect(cocina.body.map((/** @type {any} */ p) => p.id)).toContain(pedido.id);
   });
 
   it('la cocina no lo marca entregado: sale cuando la caja lo despacha', async () => {

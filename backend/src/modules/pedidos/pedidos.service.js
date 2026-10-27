@@ -353,17 +353,28 @@ export function cambiarEstadoCocinaDelPedido(sesion, pedidoId, estadoCocina) {
  */
 export function enviarACocina(sesion, pedidoId) {
   return conNegocio(sesion.tenantId, async (tx) => {
-    const pedido = await buscarPedidoAbierto(tx, pedidoId);
+    // 1. Cualquier pedido sin anular. También uno ya cobrado: por ejemplo, un domicilio que
+    //    se pagó por transferencia antes de mandarlo a cocina. Ese sigue "pagado".
+    const pedido = await tx.pedido.findUnique({ where: { id: pedidoId } });
+    if (!pedido) throw errorPedidoNoEncontrado();
+    if (pedido.estado === 'anulado') {
+      throw new AppError(409, 'PEDIDO_ANULADO', 'El pedido está anulado');
+    }
 
     const cantidadItems = await tx.itemPedido.count({ where: { pedidoId } });
     if (cantidadItems === 0) {
       throw new AppError(409, 'PEDIDO_VACIO', 'Agregue productos antes de enviar a cocina');
     }
 
+    // 2. Se guarda la hora del primer envío; reenviar (tras agregar ítems) no la cambia.
     await tx.pedido.update({
       where: { id: pedidoId },
-      // Se guarda la hora del primer envío; reenviar (tras agregar ítems) no la cambia.
-      data: { estado: 'enviado_a_cocina', enviadoACocinaEn: pedido.enviadoACocinaEn ?? new Date() },
+      data: {
+        ...(pedido.estado === 'pagado'
+          ? {}
+          : { estado: /** @type {const} */ ('enviado_a_cocina') }),
+        enviadoACocinaEn: pedido.enviadoACocinaEn ?? new Date(),
+      },
     });
     return cargarPedido(tx, pedidoId, sesion.rol);
   });
@@ -669,13 +680,15 @@ export function actualizarDomicilio(
 }
 
 /**
- * Despacha un domicilio: sale del local con un domiciliario. Sus platos salen de la cocina
- * (quedan "entregado") aunque nadie los haya marcado listos: la caja es quien ve salir la bolsa.
+ * Despacha un domicilio: sale del local con un domiciliario. Solo cuando la cocina lo tiene
+ * listo: enviado a cocina y sin platos pendientes ni en preparación. Al salir, sus platos
+ * quedan "entregado" y la comanda sale del tablero.
  * @param {DatosSesion} sesion
  * @param {string} pedidoId
  * @param {{ domiciliarioId: string }} datos
- * @throws {AppError} 404 si el domiciliario no existe; 409 si ya salió, si no tiene productos
- *   o si el domiciliario está inactivo.
+ * @throws {AppError} 404 si el domiciliario no existe; 409 si ya salió, si no tiene productos,
+ *   si no se ha enviado a cocina, si la cocina no lo tiene listo o si el domiciliario está
+ *   inactivo.
  */
 export function despacharDomicilio(sesion, pedidoId, { domiciliarioId }) {
   return conNegocio(sesion.tenantId, async (tx) => {
@@ -684,12 +697,34 @@ export function despacharDomicilio(sesion, pedidoId, { domiciliarioId }) {
     if (pedido.entrega?.despachadoEn) {
       throw new AppError(409, 'DOMICILIO_DESPACHADO', 'Este domicilio ya salió');
     }
-    const cantidadItems = await tx.itemPedido.count({ where: { pedidoId } });
-    if (cantidadItems === 0) {
+    const platos = await tx.itemPedido.findMany({
+      where: { pedidoId },
+      select: { estadoCocina: true },
+    });
+    if (platos.length === 0) {
       throw new AppError(409, 'PEDIDO_VACIO', 'El domicilio no tiene productos');
     }
 
-    // 2. El domiciliario debe ser del negocio (RLS) y estar activo.
+    // 2. Solo sale cuando la cocina lo tiene listo.
+    if (!pedido.enviadoACocinaEn) {
+      throw new AppError(
+        409,
+        'DOMICILIO_SIN_ENVIAR',
+        'Envíe el domicilio a cocina antes de despacharlo',
+      );
+    }
+    const enPreparacion = platos.some(
+      (plato) => plato.estadoCocina === 'pendiente' || plato.estadoCocina === 'preparando',
+    );
+    if (enPreparacion) {
+      throw new AppError(
+        409,
+        'DOMICILIO_EN_PREPARACION',
+        'La cocina todavía no tiene listo este domicilio',
+      );
+    }
+
+    // 3. El domiciliario debe ser del negocio (RLS) y estar activo.
     const domiciliario = await tx.domiciliario.findUnique({ where: { id: domiciliarioId } });
     if (!domiciliario) {
       throw new AppError(404, 'DOMICILIARIO_NO_ENCONTRADO', 'El domiciliario no existe');
@@ -698,7 +733,7 @@ export function despacharDomicilio(sesion, pedidoId, { domiciliarioId }) {
       throw new AppError(409, 'DOMICILIARIO_INACTIVO', 'El domiciliario está inactivo');
     }
 
-    // 3. Sale todo de la cocina y queda registrado quién lo lleva y a qué hora salió.
+    // 4. Sale de la cocina y queda registrado quién lo lleva y a qué hora salió.
     await tx.itemPedido.updateMany({
       where: { pedidoId, estadoCocina: { not: 'entregado' } },
       data: { estadoCocina: 'entregado' },
