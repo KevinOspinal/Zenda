@@ -4,6 +4,7 @@
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, ref, toRef } from 'vue';
+import TomarPedido from '~/components/pedidos/TomarPedido.vue';
 import { usePedidoEnCurso } from '~/composables/usePedidoEnCurso.js';
 import PaginaAvisos from '~/pages/avisos.vue';
 import PaginaMesas from '~/pages/mesas/index.vue';
@@ -178,11 +179,20 @@ describe('mapa de mesas', () => {
   });
 });
 
+/** La Mesa 4 con sus dos platos listos, con los precios que trae el API. */
+function mesa4ConDosListos() {
+  const pedido = structuredClone(PEDIDO_MESA_4);
+  pedido.items[1].estadoCocina = 'listo';
+  pedido.items[0].precioUnitario = '15000';
+  pedido.items[1].precioUnitario = '8000';
+  return pedido;
+}
+
 describe('avisos de platos listos', () => {
-  it('muestra los platos listos del mesero y los marca como entregados', async () => {
+  it('una tarjeta por mesa; con un solo plato listo, "Entregado" lo entrega', async () => {
     simularBackend(fetchFalso, {
       'GET /pedidos': () => [structuredClone(PEDIDO_MESA_4)],
-      'PATCH /pedidos/p4/items/i1/cocina': () => ({
+      'PATCH /pedidos/p4/cocina': () => ({
         ...PEDIDO_MESA_4,
         items: [{ ...PEDIDO_MESA_4.items[0], estadoCocina: 'entregado' }, PEDIDO_MESA_4.items[1]],
       }),
@@ -190,15 +200,67 @@ describe('avisos de platos listos', () => {
 
     const pagina = await mountSuspended(PaginaAvisos);
     await vi.waitFor(() => expect(pagina.text()).toContain('IND Classic Artesanal'));
-    expect(pagina.text()).toContain('1 plato listo para llevar');
+    expect(pagina.text()).toContain('1 mesa con platos listos');
     expect(pagina.text()).toContain('Sin cebolla');
+    // La gaseosa sigue en la cocina: se avisará cuando esté lista.
+    expect(pagina.text()).toContain('1 aún en la cocina');
 
     const entregado = pagina.findAll('button').find((boton) => boton.text().includes('Entregado'));
     await entregado?.trigger('click');
 
     await vi.waitFor(() => expect(pagina.text()).toContain('No hay platos listos por ahora'));
     const [, opciones] =
-      fetchFalso.mock.calls.find(([ruta]) => ruta === '/pedidos/p4/items/i1/cocina') ?? [];
+      fetchFalso.mock.calls.find(([ruta]) => ruta === '/pedidos/p4/cocina') ?? [];
+    expect(opciones.body).toEqual({ estadoCocina: 'entregado' });
+  });
+
+  it('varios platos de una mesa: "Entregar todo" o uno por uno', async () => {
+    const pedido = mesa4ConDosListos();
+    simularBackend(fetchFalso, {
+      'GET /pedidos': () => [structuredClone(pedido)],
+      'PATCH /pedidos/p4/items/i2/cocina': () => ({
+        ...pedido,
+        items: [pedido.items[0], { ...pedido.items[1], estadoCocina: 'entregado' }],
+      }),
+    });
+
+    const pagina = await mountSuspended(PaginaAvisos);
+    await vi.waitFor(() => expect(pagina.text()).toContain('Entregar todo (2)'));
+    // Una sola tarjeta para los dos platos.
+    expect(pagina.findAll('article')).toHaveLength(1);
+
+    // Se lleva solo la gaseosa: la mesa queda con un plato listo.
+    await pagina.find('button[aria-label="Entregado: Gaseosa personal"]').trigger('click');
+
+    await vi.waitFor(() => expect(pagina.text()).not.toContain('Entregar todo (2)'));
+    expect(pagina.text()).toContain('1 plato listo');
+  });
+});
+
+describe('cuenta de la mesa', () => {
+  it('con platos listos, "Entregar todo" los entrega de una vez', async () => {
+    const pedido = mesa4ConDosListos();
+    simularBackend(fetchFalso, {
+      'GET /pedidos/p4': () => structuredClone(pedido),
+      'GET /menu': () => [],
+      'GET /mesas': () => [{ id: 'm4', nombre: 'Mesa 4', zona: 'Salón', capacidad: 4 }],
+      'GET /caja/estado': () => ({ abierta: true }),
+      'PATCH /pedidos/p4/cocina': () => ({
+        ...pedido,
+        items: pedido.items.map((item) => ({ ...item, estadoCocina: 'entregado' })),
+      }),
+    });
+
+    const pantalla = await mountSuspended(TomarPedido, { props: { pedidoId: 'p4' } });
+    await vi.waitFor(() => expect(pantalla.text()).toContain('2 platos listos para llevar'));
+    await pantalla
+      .findAll('button')
+      .find((boton) => boton.text().includes('Entregar todo'))
+      ?.trigger('click');
+
+    await vi.waitFor(() => expect(pantalla.text()).not.toContain('platos listos para llevar'));
+    const [, opciones] =
+      fetchFalso.mock.calls.find(([ruta]) => ruta === '/pedidos/p4/cocina') ?? [];
     expect(opciones.body).toEqual({ estadoCocina: 'entregado' });
   });
 });

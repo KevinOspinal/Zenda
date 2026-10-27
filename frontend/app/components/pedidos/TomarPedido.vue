@@ -21,6 +21,8 @@ const emit = defineEmits({
 });
 
 const sesion = useSesionStore();
+const pedidos = usePedidosStore();
+const toast = useToast();
 const puedeCobrar = computed(() => puede(sesion.rol, 'cobrar'));
 
 const {
@@ -68,6 +70,24 @@ watch(cobrando, (abierto) => {
   emit('cobrado', volverA.value);
 });
 
+// Platos de esta mesa que la cocina ya terminó: el mesero los entrega todos de una vez.
+const platosListos = computed(() =>
+  pedido.value && tipoDelPedido(pedido.value) === 'mesa'
+    ? (pedido.value.items ?? []).filter((/** @type {any} */ item) => item.estadoCocina === 'listo')
+    : [],
+);
+async function entregarListos() {
+  try {
+    await pedidos.cambiarEstadoCocinaDelPedido(pedido.value.id, 'entregado');
+  } catch (error) {
+    toast.add({
+      title: error instanceof ErrorApi ? error.message : MENSAJE_ERROR_GENERICO,
+      icon: 'i-lucide-circle-alert',
+      color: 'error',
+    });
+  }
+}
+
 // Producto con cantidad y notas.
 const personalizando = ref(false);
 const productoElegido = ref(/** @type {any} */ (null));
@@ -95,6 +115,29 @@ function personalizar(producto) {
         <p class="truncate text-sm text-muted">{{ subtitulo }}</p>
       </div>
       <ChipEstado v-if="pedido" :apariencia="aparienciaDelPedido(pedido)" />
+    </div>
+
+    <!-- Platos listos de la mesa: se entregan todos de una vez. -->
+    <div
+      v-if="platosListos.length"
+      class="flex flex-wrap items-center gap-3 rounded-xl bg-info/10 p-3 ring-1 ring-info/40"
+      role="status"
+    >
+      <UIcon name="i-lucide-bell-ring" class="size-5 text-info" />
+      <p class="min-w-0 flex-1 font-medium text-highlighted">
+        {{
+          platosListos.length === 1
+            ? '1 plato listo para llevar'
+            : `${platosListos.length} platos listos para llevar`
+        }}
+      </p>
+      <UButton
+        color="info"
+        icon="i-lucide-check-check"
+        :label="platosListos.length === 1 ? 'Entregado' : 'Entregar todo'"
+        loading-auto
+        @click="entregarListos"
+      />
     </div>
 
     <!-- Cargando, error o pedido que ya se cerró. -->

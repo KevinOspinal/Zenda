@@ -75,15 +75,17 @@ describe('pedidos activos', () => {
     expect(pedidos.errorCarga).toBe('Algo salió mal de nuestro lado. Intenta de nuevo.');
   });
 
-  it('los platos listos se pueden filtrar por mesero', async () => {
+  it('los platos listos se agrupan por mesa y se pueden filtrar por mesero', async () => {
     simularBackend(fetchFalso, {
       'GET /pedidos': () => [pedidoDelApi('1'), pedidoDelApi('2', { meseroId: 'juan' })],
     });
     const pedidos = usePedidosStore();
     await pedidos.cargarActivos();
 
-    expect(pedidos.platosListos()).toHaveLength(2);
-    expect(pedidos.platosListos('laura').map(({ pedido }) => pedido.id)).toEqual(['1']);
+    expect(pedidos.pedidosConPlatosListos()).toHaveLength(2);
+    expect(
+      pedidos.pedidosConPlatosListos('laura').map(({ pedido, items }) => [pedido.id, items.length]),
+    ).toEqual([['1', 1]]);
   });
 });
 
@@ -122,6 +124,48 @@ describe('acciones', () => {
   });
 });
 
+describe('todos los platos de un pedido a la vez', () => {
+  it('se ven al instante y van en una sola petición', async () => {
+    simularBackend(fetchFalso, {
+      'GET /pedidos': () => [pedidoDelApi('1')],
+      'PATCH /pedidos/1/cocina': () => {
+        const pedido = pedidoDelApi('1');
+        pedido.items = pedido.items.map((item) =>
+          item.estadoCocina === 'listo' ? { ...item, estadoCocina: 'entregado' } : item,
+        );
+        return pedido;
+      },
+    });
+    const pedidos = usePedidosStore();
+    await pedidos.cargarActivos();
+
+    const cambio = pedidos.cambiarEstadoCocinaDelPedido('1', 'entregado');
+    // Se ve al instante, antes de que responda el API.
+    expect(pedidos.pedidosConPlatosListos()).toEqual([]);
+    await cambio;
+
+    const llamadas = fetchFalso.mock.calls.filter(([ruta]) => ruta === '/pedidos/1/cocina');
+    expect(llamadas).toHaveLength(1);
+    expect(llamadas[0]?.[1].body).toEqual({ estadoCocina: 'entregado' });
+  });
+
+  it('si el API lo rechaza, los platos vuelven a como estaban', async () => {
+    simularBackend(fetchFalso, {
+      'GET /pedidos': () => [pedidoDelApi('1')],
+      'PATCH /pedidos/1/cocina': () => {
+        throw errorDelApi(403, 'SIN_PERMISO');
+      },
+    });
+    const pedidos = usePedidosStore();
+    await pedidos.cargarActivos();
+
+    await expect(pedidos.cambiarEstadoCocinaDelPedido('1', 'entregado')).rejects.toMatchObject({
+      codigo: 'SIN_PERMISO',
+    });
+    expect(pedidos.pedidosConPlatosListos()[0]?.items).toHaveLength(1);
+  });
+});
+
 describe('eventos en vivo', () => {
   it('un plato que cambia en la cocina se actualiza sin pedir nada al API', async () => {
     simularBackend(fetchFalso, { 'GET /pedidos': () => [pedidoDelApi('1')] });
@@ -131,7 +175,23 @@ describe('eventos en vivo', () => {
 
     pedidos.alCambiarEstadoCocina({ pedidoId: '1', itemId: '1-b', estadoCocina: 'listo' });
 
-    expect(pedidos.platosListos()).toHaveLength(2);
+    expect(pedidos.pedidosConPlatosListos()[0]?.items).toHaveLength(2);
+    expect(fetchFalso).not.toHaveBeenCalled();
+  });
+
+  it('varios platos que cambian a la vez se actualizan con un solo evento', async () => {
+    simularBackend(fetchFalso, { 'GET /pedidos': () => [pedidoDelApi('1')] });
+    const pedidos = usePedidosStore();
+    await pedidos.cargarActivos();
+    fetchFalso.mockClear();
+
+    pedidos.alCambiarEstadoCocinaDelPedido({
+      pedidoId: '1',
+      estadoCocina: 'entregado',
+      items: [{ id: '1-a' }],
+    });
+
+    expect(pedidos.pedidosConPlatosListos()).toEqual([]);
     expect(fetchFalso).not.toHaveBeenCalled();
   });
 

@@ -61,21 +61,23 @@ export const usePedidosStore = defineStore('pedidos', () => {
   }
 
   /**
-   * Platos listos para llevar, con su pedido. Si se indica un mesero, solo los de sus pedidos.
+   * Pedidos de mesa con platos listos para llevar, cada uno con esos platos. Si se indica un
+   * mesero, solo los de sus pedidos. Los avisos se agrupan así: uno por mesa, no por plato.
+   * Solo los de mesa: los de mostrador y los domicilios los entrega la caja.
    * @param {string} [meseroId]
+   * @returns {{ pedido: any, items: any[] }[]}
    */
-  function platosListos(meseroId) {
-    return (
-      comandas.value
-        // Solo los de mesa: los de mostrador y los domicilios los entrega la caja.
-        .filter((pedido) => tipoDelPedido(pedido) === 'mesa')
-        .filter((pedido) => !meseroId || pedido.meseroId === meseroId)
-        .flatMap((pedido) =>
-          (pedido.items ?? [])
-            .filter((/** @type {any} */ item) => item.estadoCocina === 'listo')
-            .map((/** @type {any} */ item) => ({ item, pedido })),
-        )
-    );
+  function pedidosConPlatosListos(meseroId) {
+    return comandas.value
+      .filter((pedido) => tipoDelPedido(pedido) === 'mesa')
+      .filter((pedido) => !meseroId || pedido.meseroId === meseroId)
+      .map((pedido) => ({
+        pedido,
+        items: (pedido.items ?? []).filter(
+          (/** @type {any} */ item) => item.estadoCocina === 'listo',
+        ),
+      }))
+      .filter(({ items }) => items.length > 0);
   }
 
   /**
@@ -197,6 +199,30 @@ export const usePedidosStore = defineStore('pedidos', () => {
   }
 
   /**
+   * Avanza todos los platos de un pedido a la vez: "listo" (lo pendiente y lo que se prepara)
+   * o "entregado" (lo que está listo). Se ve al instante; si el API lo rechaza, vuelve a como
+   * estaba y lanza el error.
+   * @param {string} pedidoId
+   * @param {'listo' | 'entregado'} estadoCocina
+   */
+  async function cambiarEstadoCocinaDelPedido(pedidoId, estadoCocina) {
+    const avanzan = estadoCocina === 'listo' ? ['pendiente', 'preparando'] : ['listo'];
+    const cambiados = (buscar(pedidoId)?.items ?? []).filter((/** @type {any} */ item) =>
+      avanzan.includes(item.estadoCocina),
+    );
+    const anteriores = cambiados.map((/** @type {any} */ item) => item.estadoCocina);
+    for (const item of cambiados) item.estadoCocina = estadoCocina;
+    try {
+      const pedido = await useApi().patch(`/pedidos/${pedidoId}/cocina`, { estadoCocina });
+      guardar(pedido);
+      return pedido;
+    } catch (error) {
+      cambiados.forEach((/** @type {any} */ item, i) => (item.estadoCocina = anteriores[i]));
+      throw error;
+    }
+  }
+
+  /**
    * Cobra un pedido. Los pagos deben sumar exactamente el total más la propina.
    * Devuelve la respuesta del API: el pedido pagado, el cambio y las advertencias de stock.
    * @param {string} pedidoId
@@ -266,6 +292,24 @@ export const usePedidosStore = defineStore('pedidos', () => {
   }
 
   /**
+   * Varios platos de un pedido cambiaron a la vez (pedido:estado_cocina).
+   * @param {{ pedidoId: string, estadoCocina: string, items: { id: string }[] }} datos
+   */
+  function alCambiarEstadoCocinaDelPedido({ pedidoId, estadoCocina, items }) {
+    const pedido = buscar(pedidoId);
+    const ids = new Set(items.map((item) => item.id));
+    const locales = (pedido?.items ?? []).filter((/** @type {any} */ item) => ids.has(item.id));
+    // Si no se tienen todos esos platos, se trae el pedido completo.
+    if (!pedido || locales.length < ids.size) {
+      alCambiarPedido({ id: pedidoId });
+      return;
+    }
+    for (const item of locales) item.estadoCocina = estadoCocina;
+    // Un pedido cobrado sale de la cocina cuando se entrega su último plato.
+    guardar(pedido);
+  }
+
+  /**
    * Un pedido se cobró o se anuló (pedido:pagado, pedido:anulado): deja de estar activo.
    * Si se cobró con platos en la cocina, la cocina lo sigue viendo hasta que salgan.
    * @param {{ id: string, estado?: string }} datos
@@ -283,7 +327,7 @@ export const usePedidosStore = defineStore('pedidos', () => {
     estadoCarga,
     errorCarga,
     pedidoDeMesa,
-    platosListos,
+    pedidosConPlatosListos,
     cargarActivos,
     cargarDetalle,
     crear,
@@ -291,11 +335,13 @@ export const usePedidosStore = defineStore('pedidos', () => {
     quitarItem,
     enviarACocina,
     cambiarEstadoCocina,
+    cambiarEstadoCocinaDelPedido,
     cobrar,
     anular,
     dividir,
     alCambiarPedido,
     alCambiarEstadoCocina,
+    alCambiarEstadoCocinaDelPedido,
     alCerrarPedido,
   };
 });

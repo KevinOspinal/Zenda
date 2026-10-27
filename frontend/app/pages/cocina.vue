@@ -75,6 +75,29 @@ function avanzar(comanda, item) {
 }
 
 /**
+ * Cambia todos los platos de una comanda en una sola petición ("Todo listo", "Ya salió"):
+ * así el mesero recibe un solo aviso y no uno por plato.
+ * @param {import('~/utils/cocina.js').ComandaDelTablero} comanda
+ * @param {any[]} platos Los platos que cambian (no se pueden tocar mientras tanto).
+ * @param {'listo' | 'entregado'} estado
+ */
+async function cambiarTodos(comanda, platos, estado) {
+  for (const item of platos) ocupados.value.add(item.id);
+  try {
+    await pedidos.cambiarEstadoCocinaDelPedido(comanda.pedido.id, estado);
+  } catch (error) {
+    toast.add({
+      title: error instanceof ErrorApi ? error.message : MENSAJE_ERROR_GENERICO,
+      icon: 'i-lucide-circle-alert',
+      color: 'error',
+    });
+    pedidos.alCambiarPedido({ id: comanda.pedido.id });
+  } finally {
+    for (const item of platos) ocupados.value.delete(item.id);
+  }
+}
+
+/**
  * Marca como listo todo lo que falta de una comanda.
  * @param {import('~/utils/cocina.js').ComandaDelTablero} comanda
  */
@@ -82,7 +105,7 @@ async function todoListo(comanda) {
   const faltan = comanda.items.filter((item) =>
     ['pendiente', 'preparando'].includes(item.estadoCocina),
   );
-  for (const item of faltan) await cambiar(comanda.pedido.id, item, 'listo');
+  await cambiarTodos(comanda, faltan, 'listo');
 }
 
 /**
@@ -91,7 +114,7 @@ async function todoListo(comanda) {
  */
 async function entregar(comanda) {
   const listos = comanda.items.filter((item) => item.estadoCocina === 'listo');
-  for (const item of listos) await cambiar(comanda.pedido.id, item, 'entregado');
+  await cambiarTodos(comanda, listos, 'entregado');
 }
 
 // Anuncio para lectores de pantalla cuando llega una comanda nueva.

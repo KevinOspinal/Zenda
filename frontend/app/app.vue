@@ -19,7 +19,7 @@ watch(
 
 <template>
   <!-- Toasts arriba al centro: en el celular la navegación va abajo y no deben taparla. -->
-  <UApp :locale="es" :toaster="{ position: 'top-center' }">
+  <UApp :locale="es" :toaster="{ position: 'top-center', max: 3 }">
     <NuxtLayout>
       <NuxtPage />
     </NuxtLayout>

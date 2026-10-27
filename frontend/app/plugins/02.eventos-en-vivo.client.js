@@ -1,9 +1,10 @@
 // @ts-check
 // Eventos en vivo del backend → stores. Es el único lugar donde se escuchan los eventos de
 // pedidos, mesas y caja, para que cada uno se atienda una sola vez en toda la app.
-// También avisa cuando un plato está listo (sonido, vibración y aviso): en mesa, al mesero
-// del pedido; en mostrador y domicilio, a la caja, que es quien lo entrega. Y suena en la
-// cocina cuando llega una comanda nueva.
+// También avisa cuando hay platos listos (sonido, vibración y aviso): en mesa, al mesero
+// del pedido; en mostrador y domicilio, a la caja, que es quien los entrega. Los avisos no
+// saturan: uno por mesa, que se actualiza, y el sonido como máximo una vez cada pocos
+// segundos (utils/avisos.js). Y suena en la cocina cuando llega una comanda nueva.
 export default defineNuxtPlugin(() => {
   const socket = useTiempoReal();
   const sesion = useSesionStore();
@@ -31,17 +32,21 @@ export default defineNuxtPlugin(() => {
     domicilio: '¡Listo para salir!',
   });
 
+  const agrupador = crearAgrupadorDeAvisos();
+
   /**
-   * Avisa que un plato está listo a quien lo entrega: en mesa, al mesero del pedido; en
+   * Avisa que hay platos listos a quien los entrega: en mesa, al mesero del pedido; en
    * mostrador y domicilio, a la caja (si está atendiendo la caja o el mostrador).
-   * @param {{ pedidoId: string, mesa: { id: string, nombre: string } | null, producto: string }} datos
+   * Un solo aviso por pedido: si ya está en pantalla, se actualiza en lugar de sumar otro.
+   * @param {{ pedidoId: string, mesa: { id: string, nombre: string } | null,
+   *   productos: string[] }} datos
    */
-  function avisarPlatoListo({ pedidoId, mesa, producto }) {
+  function avisarPlatosListos({ pedidoId, mesa, productos }) {
     if (mesa) mesas.resaltar(mesa.id);
     // También si el pedido ya se cobró: el cliente pudo pagar antes de que saliera el plato.
     const pedido = pedidos.buscar(pedidoId);
     // La cocina no se avisa a sí misma.
-    if (!pedido || enLaCocina()) return;
+    if (!pedido || enLaCocina() || !productos.length) return;
     const tipo = tipoDelPedido(pedido);
     const leToca =
       tipo === 'mesa'
@@ -49,19 +54,35 @@ export default defineNuxtPlugin(() => {
         : puede(sesion.rol, 'cobrar') && enLaCaja();
     if (!leToca) return;
 
-    sonidos.platoListo();
-    if (preferencias.vibracion) navigator.vibrate?.([40, 60, 40]);
+    const { cantidad, sonar } = agrupador.registrar(pedidoId, productos.length);
+    if (sonar) {
+      sonidos.platoListo();
+      if (preferencias.vibracion) navigator.vibrate?.([40, 60, 40]);
+    }
     toast.add({
+      id: `listo-${pedidoId}`,
       title: TITULO_LISTO[tipo],
-      description: `${nombreDelPedido(pedido)} · ${producto}`,
+      description: textoDeAvisoListo(nombreDelPedido(pedido), cantidad, productos.at(-1) ?? ''),
       icon: 'i-lucide-bell-ring',
       color: 'info',
+      duration: VENTANA_AVISO_MS,
       actions: [
         tipo === 'mesa'
           ? { label: 'Ver avisos', to: '/avisos', color: 'info', variant: 'outline' }
           : { label: 'Ir a la caja', to: '/caja', color: 'info', variant: 'outline' },
       ],
     });
+  }
+
+  /**
+   * Si a un pedido ya no le quedan platos listos (se entregaron), su aviso sobra.
+   * @param {string} pedidoId
+   */
+  function quitarAvisoSiYaSeEntrego(pedidoId) {
+    const pedido = pedidos.buscar(pedidoId);
+    if (pedido?.items?.some((/** @type {any} */ item) => item.estadoCocina === 'listo')) return;
+    agrupador.olvidar(pedidoId);
+    toast.remove(`listo-${pedidoId}`);
   }
 
   /**
@@ -91,7 +112,22 @@ export default defineNuxtPlugin(() => {
   socket.on(E.ITEM_ESTADO_COCINA, (datos) => {
     pedidos.alCambiarEstadoCocina(datos);
     domicilios.alCambiarEstadoCocina(datos);
-    if (datos.estadoCocina === 'listo') avisarPlatoListo(datos);
+    if (datos.estadoCocina === 'listo') {
+      avisarPlatosListos({ ...datos, productos: [datos.producto] });
+    }
+    if (datos.estadoCocina === 'entregado') quitarAvisoSiYaSeEntrego(datos.pedidoId);
+  });
+  socket.on(E.PEDIDO_ESTADO_COCINA, (datos) => {
+    pedidos.alCambiarEstadoCocinaDelPedido(datos);
+    domicilios.alCambiarEstadoCocinaDelPedido(datos);
+    if (datos.estadoCocina === 'listo') {
+      avisarPlatosListos({
+        pedidoId: datos.pedidoId,
+        mesa: datos.mesa,
+        productos: datos.items.map((/** @type {any} */ item) => item.producto),
+      });
+    }
+    if (datos.estadoCocina === 'entregado') quitarAvisoSiYaSeEntrego(datos.pedidoId);
   });
   socket.on(E.PEDIDO_PAGADO, (datos) => {
     pedidos.alCerrarPedido(datos);

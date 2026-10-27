@@ -177,6 +177,33 @@ describe('tablero de cocina', () => {
     expect(pagina.text()).not.toContain('No enviado');
   });
 
+  it('"Todo listo" termina la comanda en una sola petición', async () => {
+    const comanda = pedido('a', 'Mesa 1', [
+      { estadoCocina: 'pendiente', nombre: 'Perro Clasic', minutos: 4 },
+      { estadoCocina: 'preparando', nombre: 'Salchipapa', minutos: 4 },
+    ]);
+    simularBackend(fetchFalso, {
+      'GET /pedidos': () => [structuredClone(comanda)],
+      'PATCH /pedidos/a/cocina': () => ({
+        ...structuredClone(comanda),
+        items: comanda.items.map((item) => ({ ...item, estadoCocina: 'listo' })),
+      }),
+    });
+
+    const pagina = await mountSuspended(PaginaCocina);
+    await vi.waitFor(() => expect(pagina.text()).toContain('Perro Clasic'));
+    await pagina
+      .findAll('button')
+      .find((boton) => boton.text().includes('Todo listo'))
+      ?.trigger('click');
+
+    await vi.waitFor(() => expect(pagina.findAll('section')[2]?.text()).toContain('Mesa 1'));
+    const cambios = fetchFalso.mock.calls.filter(([ruta]) => String(ruta).endsWith('/cocina'));
+    expect(cambios).toHaveLength(1);
+    expect(cambios[0]?.[0]).toBe('/pedidos/a/cocina');
+    expect(cambios[0]?.[1].body).toEqual({ estadoCocina: 'listo' });
+  });
+
   it('tocar un plato pendiente lo pasa a preparando en el API', async () => {
     const comanda = pedido('a', 'Mesa 1', [
       { estadoCocina: 'pendiente', nombre: 'Perro Clasic', minutos: 4 },

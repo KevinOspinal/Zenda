@@ -112,6 +112,17 @@ export const useDomiciliosStore = defineStore('domicilios', () => {
     if (item) item.estadoCocina = estadoCocina;
   }
 
+  /**
+   * Varios platos de un domicilio cambiaron a la vez (pedido:estado_cocina).
+   * @param {{ pedidoId: string, estadoCocina: string, items: { id: string }[] }} datos
+   */
+  function alCambiarEstadoCocinaDelPedido({ pedidoId, estadoCocina, items }) {
+    const ids = new Set(items.map((item) => item.id));
+    for (const item of porId.value[pedidoId]?.items ?? []) {
+      if (ids.has(item.id)) item.estadoCocina = estadoCocina;
+    }
+  }
+
   return {
     porId,
     lista,
@@ -125,5 +136,6 @@ export const useDomiciliosStore = defineStore('domicilios', () => {
     entregar,
     alCambiarPedido,
     alCambiarEstadoCocina,
+    alCambiarEstadoCocinaDelPedido,
   };
 });

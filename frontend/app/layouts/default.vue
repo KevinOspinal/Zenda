@@ -22,7 +22,10 @@ const titulo = computed(
 
 /** Platos listos del mesero, sobre la sección Avisos. */
 const insignias = computed(() =>
-  sesion.rol === 'mesero' ? { avisos: pedidos.platosListos(sesion.usuario?.id).length } : {},
+  // Avisos cuenta mesas con platos listos, no platos: así el número no se dispara.
+  sesion.rol === 'mesero'
+    ? { avisos: pedidos.pedidosConPlatosListos(sesion.usuario?.id).length }
+    : {},
 );
 
 useHead(() => ({ title: titulo.value === 'Zenda' ? 'Zenda' : `${titulo.value} · Zenda` }));
