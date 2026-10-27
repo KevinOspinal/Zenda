@@ -30,9 +30,21 @@ function llamar(metodo, ruta, encabezado, cuerpo) {
   return cuerpo ? peticion.send(cuerpo) : peticion;
 }
 
-/** Crea un pedido de mostrador con un producto de $10.800 y devuelve su id. */
+let mesasCreadas = 0;
+
+/**
+ * Crea un pedido de mesa (la propina se sugiere en mesa) con un producto de $10.800 y
+ * devuelve su id. Cada pedido va en una mesa nueva: una mesa ocupada no admite otro.
+ */
 async function crearPedido() {
+  mesasCreadas += 1;
+  const mesa = await conNegocio(negocio.tenantId, (tx) =>
+    tx.mesa.create({
+      data: { tenantId: negocio.tenantId, nombre: `Mesa ${mesasCreadas}`, capacidad: 4 },
+    }),
+  );
   const res = await llamar('post', '/pedidos', negocio.encabezados.mesero, {
+    mesaId: mesa.id,
     items: [{ productoId, cantidad: 1 }],
   });
   return /** @type {string} */ (res.body.id);
@@ -97,6 +109,15 @@ describe('propina en el pedido y en el cobro', () => {
     });
     // No se filtran datos internos del negocio.
     expect(res.body).not.toHaveProperty('tenant');
+  });
+
+  it('en mostrador no se sugiere propina: es por el servicio a la mesa', async () => {
+    const res = await llamar('post', '/pedidos', negocio.encabezados.cajero, {
+      items: [{ productoId, cantidad: 1 }],
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.propinaSugerida).toBe('0.00');
   });
 
   it('sin propina, el cobro funciona igual que antes: los pagos suman el total', async () => {

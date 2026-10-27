@@ -159,6 +159,8 @@ Totales del periodo y su distribución en el tiempo.
 | \`anulaciones\` | Ventas anuladas (no suman al total) |
 | \`porHora\` | Ventas por hora (0 a 23): muestra la **hora pico** |
 | \`porDia\` | Ventas de cada día del rango |
+| \`porTipo\` | Ventas por tipo de pedido: mesa, mostrador y domicilio (siempre los 3) |
+| \`porOrigen\` | Ventas por origen: local, WhatsApp, teléfono y otro (siempre los 4) |
 ${REGLAS_REPORTES}`,
       parametros: parametrosRango,
       respuestas: {
@@ -178,6 +180,17 @@ ${REGLAS_REPORTES}`,
             { hora: 23, ventas: 1, total: '12000.00' },
           ],
           porDia: [{ fecha: '2026-10-20', ventas: 3, total: '58000.00' }],
+          porTipo: [
+            { tipo: 'mesa', ventas: 2, total: '46000.00' },
+            { tipo: 'mostrador', ventas: 0, total: '0.00' },
+            { tipo: 'domicilio', ventas: 1, total: '12000.00' },
+          ],
+          porOrigen: [
+            { origen: 'local', ventas: 2, total: '46000.00' },
+            { origen: 'whatsapp', ventas: 1, total: '12000.00' },
+            { origen: 'telefono', ventas: 0, total: '0.00' },
+            { origen: 'otro', ventas: 0, total: '0.00' },
+          ],
         }),
       },
       errores: ['400'],

@@ -17,6 +17,7 @@ const NEGOCIO_ACTUAL = {
   ciudad: 'Cali',
   regimenImpuesto: 'responsable_inc',
   propinaSugerida: '10',
+  valorDomicilio: '3000',
 };
 
 export const documentacionNegocios = {
@@ -111,23 +112,33 @@ régimen de impuesto y **porcentaje de propina sugerida**.`,
       resumen: 'Cambiar la propina sugerida',
       roles: ['dueno'],
       descripcion: `
-Cambia el **porcentaje de propina** que se le sugiere al cliente al cobrar.
+Cambia la configuración del negocio. Envía uno o los dos valores.
 
-**Reglas** (Ley 1935 de 2018)
+**Valor del domicilio** (\`valorDomicilio\`): el que se propone en cada pedido a domicilio;
+en cada pedido se puede cambiar (por ejemplo, si es lejos). Por defecto, $3.000. El cambio queda
+en la **auditoría** (\`cambiar_valor_domicilio\`).
+
+**Propina sugerida** (\`propinaSugerida\`, Ley 1935 de 2018). Solo se sugiere en los pedidos de
+mesa (es por el servicio a la mesa).
 - Entre **0 y 10 %**. La ley no permite sugerir más del 10 % (si no, 400).
 - En **0** el negocio no sugiere propina; el cliente igual puede darla si quiere.
 - La propina sugerida de cada pedido se calcula sobre el **subtotal antes de impuestos**.
   ⚠️ Confírmalo con un contador.
 - El cambio queda en la **auditoría** con el valor anterior (\`cambiar_propina_sugerida\`).`,
       cuerpo: cuerpo(esquemaConfiguracionNegocio, {
-        ejemplo: { propinaSugerida: 8 },
+        ejemplo: { propinaSugerida: 8, valorDomicilio: 3500 },
         descripciones: {
           propinaSugerida:
             'Porcentaje de 0 a 10, con máximo 2 decimales. 0 desactiva la sugerencia.',
+          valorDomicilio: 'Valor del domicilio por defecto, en pesos.',
         },
       }),
       respuestas: {
-        200: respuesta('Configuración actualizada.', { ...NEGOCIO_ACTUAL, propinaSugerida: '8' }),
+        200: respuesta('Configuración actualizada.', {
+          ...NEGOCIO_ACTUAL,
+          propinaSugerida: '8',
+          valorDomicilio: '3500',
+        }),
       },
       errores: ['400'],
     }),

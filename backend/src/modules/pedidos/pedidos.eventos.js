@@ -12,6 +12,8 @@ import { EVENTOS, emitirANegocio } from '../../sockets/eventos.js';
  * @property {string} id
  * @property {string} tenantId
  * @property {string} estado
+ * @property {string} tipo
+ * @property {number} numero
  * @property {string} meseroId
  * @property {import('@prisma/client').Prisma.Decimal} total
  * @property {Date} abiertoEn
@@ -28,6 +30,8 @@ function resumen(pedido) {
   return {
     id: pedido.id,
     estado: pedido.estado,
+    tipo: pedido.tipo,
+    numero: pedido.numero,
     mesa: pedido.mesa ? { id: pedido.mesa.id, nombre: pedido.mesa.nombre } : null,
     meseroId: pedido.meseroId,
     total: pedido.total,

@@ -38,7 +38,10 @@ BEGIN
     'resoluciones_facturacion',
     'documentos_fiscales',
     'credenciales_proveedor',
-    'auditoria'
+    'auditoria',
+    'domiciliarios',
+    'entregas_domicilio',
+    'contadores_pedidos'
   ]
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', tabla);

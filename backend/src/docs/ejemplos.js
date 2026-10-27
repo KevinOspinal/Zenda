@@ -19,6 +19,8 @@ export const ID = Object.freeze({
   itemGaseosa: '72c51c90-9b51-43ae-a798-2da59a6868c0',
   pago: 'a1b2c3d4-e5f6-4789-8abc-def012345678',
   uuidOffline: '492f0a8c-3856-4c64-886e-2b7a74373677',
+  domiciliario: '5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e',
+  entrega: '0a1b2c3d-4e5f-4a6b-9c8d-7e6f5a4b3c2d',
 });
 
 /** Un token de ejemplo (recortado). Usa el que te entrega POST /auth/login. */
@@ -72,6 +74,11 @@ export const PEDIDO = Object.freeze({
   meseroId: ID.mesero,
   clienteId: null,
   estado: 'abierto',
+  tipo: 'mesa',
+  origen: 'local',
+  numero: 15,
+  nombreCliente: null,
+  valorDomicilio: '0',
   subtotal: '25925.92',
   impuestos: '2074.08',
   total: '28000',
@@ -118,3 +125,43 @@ export const PEDIDO = Object.freeze({
 
 /** Rango de fechas de ejemplo para los reportes. */
 export const RANGO = Object.freeze({ desde: '2026-10-20', hasta: '2026-10-20' });
+
+/** Domiciliario de ejemplo. */
+export const DOMICILIARIO = Object.freeze({
+  id: ID.domiciliario,
+  tenantId: ID.negocio,
+  nombre: 'Pedro Gómez',
+  telefono: '3001234567',
+  activo: true,
+  creadoEn: '2026-10-20T14:00:00.000Z',
+});
+
+/**
+ * Domicilio de ejemplo: el mismo pedido llevado a una dirección, con $3.000 de domicilio.
+ * Los datos de entrega solo los ven el cajero, el administrador y el dueño.
+ */
+export const PEDIDO_DOMICILIO = Object.freeze({
+  ...PEDIDO,
+  mesaId: null,
+  mesa: null,
+  tipo: 'domicilio',
+  origen: 'whatsapp',
+  nombreCliente: 'Juan',
+  valorDomicilio: '3000',
+  subtotal: '28925.92',
+  total: '31000',
+  propinaSugerida: '0.00',
+  entrega: {
+    id: ID.entrega,
+    tenantId: ID.negocio,
+    pedidoId: ID.pedido,
+    telefono: '3109876543',
+    direccion: 'Calle 10 # 5-20, barrio San Antonio',
+    indicaciones: 'Apto 302, timbre dañado',
+    pagaCon: '50000',
+    domiciliarioId: null,
+    despachadoEn: null,
+    entregadoEn: null,
+    domiciliario: null,
+  },
+});

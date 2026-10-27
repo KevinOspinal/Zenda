@@ -4,6 +4,8 @@
 // - Ver los pedidos y avanzar los platos: todos. Cada paso tiene su regla en el servicio: la
 //   cocina marca "preparando" y "listo"; el mesero, "entregado".
 // - Cobrar: cajero, administrador y dueño (el mesero no cobra).
+// - Domicilios (corregir sus datos y despacharlos) y entregar pedidos sin mesa: cajero,
+//   administrador y dueño. Registrar un domicilio también (lo revisa el servicio).
 // - Anular: administrador y dueño.
 import { Router } from 'express';
 import { esquemaParamsId } from '../../lib/esquemas.js';
@@ -11,9 +13,11 @@ import { autenticar, permitirRoles } from '../../middlewares/auth.js';
 import { validar } from '../../middlewares/validar.js';
 import * as controlador from './pedidos.controller.js';
 import {
+  esquemaActualizarDomicilio,
   esquemaAnular,
   esquemaCobrar,
   esquemaCrearPedido,
+  esquemaDespachar,
   esquemaDividir,
   esquemaEstadoCocina,
   esquemaFiltrosPedidos,
@@ -75,4 +79,23 @@ rutasPedidos.post(
   anulan,
   validar({ params: esquemaParamsId, body: esquemaAnular }),
   controlador.anular,
+);
+
+rutasPedidos.patch(
+  '/:id/domicilio',
+  cobran,
+  validar({ params: esquemaParamsId, body: esquemaActualizarDomicilio }),
+  controlador.actualizarDomicilio,
+);
+rutasPedidos.post(
+  '/:id/despachar',
+  cobran,
+  validar({ params: esquemaParamsId, body: esquemaDespachar }),
+  controlador.despachar,
+);
+rutasPedidos.post(
+  '/:id/entregar',
+  cobran,
+  validar({ params: esquemaParamsId }),
+  controlador.entregar,
 );

@@ -2,7 +2,8 @@
 // Datos de ejemplo para desarrollo y para el demo.
 //
 // Crea dos negocios:
-// - "La Industria": comidas rápidas con su menú real, usuarios de los 5 roles y 10 mesas.
+// - "La Industria": comidas rápidas con su menú real, usuarios de los 5 roles, 10 mesas y
+//   dos domiciliarios.
 // - "Cafetería El Trigal": negocio pequeño que sirve para comprobar el aislamiento entre negocios.
 //
 // Uso: npm run db:seed   (necesita SEED_CONTRASENA en el .env)
@@ -28,6 +29,7 @@ import { menuLaIndustria } from './datos/menuLaIndustria.js';
  * @property {string} ciudad
  * @property {{ nombre: string, email: string, rol: Rol }[]} usuarios
  * @property {{ nombre: string, zona: string, capacidad: number }[]} mesas
+ * @property {{ nombre: string, telefono: string }[]} [domiciliarios]
  * @property {CategoriaMenu[]} menu
  */
 
@@ -53,6 +55,10 @@ const LA_INDUSTRIA = {
     })),
     { nombre: 'Terraza 1', zona: 'Terraza', capacidad: 6 },
     { nombre: 'Terraza 2', zona: 'Terraza', capacidad: 6 },
+  ],
+  domiciliarios: [
+    { nombre: 'Pedro Gómez', telefono: '3001234567' },
+    { nombre: 'Sofía Herrera', telefono: '3157654321' },
   ],
   menu: menuLaIndustria,
 };
@@ -139,6 +145,9 @@ async function crearNegocio(datos, passwordHash) {
       data: datos.usuarios.map((usuario) => ({ ...usuario, tenantId, passwordHash })),
     });
     await tx.mesa.createMany({ data: datos.mesas.map((mesa) => ({ ...mesa, tenantId })) });
+    await tx.domiciliario.createMany({
+      data: (datos.domiciliarios ?? []).map((domiciliario) => ({ ...domiciliario, tenantId })),
+    });
     await tx.cliente.createMany({
       data: CLIENTES_DE_PRUEBA.map((cliente) => ({ ...cliente, tenantId })),
     });

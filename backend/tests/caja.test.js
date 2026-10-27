@@ -27,6 +27,9 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
+/** Pedidos creados directo en la base: cada uno lleva su número del día. */
+let pedidosCreados = 0;
+
 /**
  * Crea un pedido con sus pagos directamente en la base.
  * Los totales cumplen la regla subtotal + impuestos + ajuste = total.
@@ -35,10 +38,12 @@ afterAll(async () => {
  * @param {{ metodo: 'efectivo' | 'tarjeta' | 'transferencia' | 'otro', monto: string }[]} pagos
  */
 function crearPedidoConPagos(turnoId, estado, pagos) {
+  pedidosCreados += 1;
   return conNegocio(negocio.tenantId, (tx) =>
     tx.pedido.create({
       data: {
         tenantId: negocio.tenantId,
+        numero: pedidosCreados,
         turnoId,
         meseroId: negocio.usuarios.mesero,
         estado,

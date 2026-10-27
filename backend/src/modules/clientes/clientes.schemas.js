@@ -3,7 +3,7 @@
 //
 // Por la Ley 1581 de 2012 (habeas data) solo se piden los datos necesarios para facturar.
 import { z } from 'zod';
-import { alMenosUnCampo, textoObligatorio } from '../../lib/esquemas.js';
+import { alMenosUnCampo, esquemaTelefono, textoObligatorio } from '../../lib/esquemas.js';
 
 const TIPOS_DOCUMENTO = /** @type {const} */ (['cc', 'nit', 'ce', 'pasaporte', 'otro']);
 
@@ -17,11 +17,7 @@ const camposCliente = {
   nombre: textoObligatorio(120),
   // Correo al que Factus envía la factura electrónica.
   email: z.string().trim().toLowerCase().pipe(z.email('correo inválido')).nullable(),
-  telefono: z
-    .string()
-    .trim()
-    .regex(/^\+?[0-9 ]{7,20}$/, 'teléfono inválido')
-    .nullable(),
+  telefono: esquemaTelefono.nullable(),
 };
 
 /**

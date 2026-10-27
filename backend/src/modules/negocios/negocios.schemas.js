@@ -2,7 +2,12 @@
 // Esquemas del registro de un negocio nuevo y de su configuración.
 import { z } from 'zod';
 import { aDecimal } from '../../lib/dinero.js';
-import { esquemaContrasenaNueva, esquemaMonto, textoObligatorio } from '../../lib/esquemas.js';
+import {
+  alMenosUnCampo,
+  esquemaContrasenaNueva,
+  esquemaMonto,
+  textoObligatorio,
+} from '../../lib/esquemas.js';
 import { PROPINA_MAXIMA_SUGERIDA } from '../pedidos/propina.js';
 
 /** POST /negocios/registro */
@@ -27,13 +32,17 @@ export const esquemaRegistroNegocio = z.object({
   }),
 });
 
-/**
- * PATCH /negocios/actual
- * Porcentaje de propina que se sugiere al cliente: de 0 (no sugerir) a 10 % (Ley 1935 de 2018).
- */
-export const esquemaConfiguracionNegocio = z.object({
-  propinaSugerida: esquemaMonto.refine(
-    (valor) => aDecimal(valor).lessThanOrEqualTo(PROPINA_MAXIMA_SUGERIDA),
-    `no puede superar el ${PROPINA_MAXIMA_SUGERIDA} % (Ley 1935 de 2018)`,
-  ),
-});
+/** PATCH /negocios/actual: al menos uno de los dos valores. */
+export const esquemaConfiguracionNegocio = alMenosUnCampo(
+  z
+    .object({
+      // Porcentaje de propina que se sugiere en mesa: de 0 (no sugerir) a 10 % (Ley 1935 de 2018).
+      propinaSugerida: esquemaMonto.refine(
+        (valor) => aDecimal(valor).lessThanOrEqualTo(PROPINA_MAXIMA_SUGERIDA),
+        `no puede superar el ${PROPINA_MAXIMA_SUGERIDA} % (Ley 1935 de 2018)`,
+      ),
+      // Valor del domicilio que se propone en cada pedido a domicilio (editable en cada uno).
+      valorDomicilio: esquemaMonto,
+    })
+    .partial(),
+);

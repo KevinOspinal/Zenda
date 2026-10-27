@@ -7,6 +7,7 @@
 // - rutas/*.js: un archivo por módulo con sus endpoints.
 import { documentacionAuth } from './rutas/auth.js';
 import { documentacionCaja } from './rutas/caja.js';
+import { documentacionDomiciliarios } from './rutas/domiciliarios.js';
 import { documentacionInventarioReportesAuditoria } from './rutas/inventarioReportesAuditoria.js';
 import { documentacionMenu } from './rutas/menu.js';
 import { documentacionMesasYClientes } from './rutas/mesasYClientes.js';
@@ -284,6 +285,10 @@ export const documentoOpenApi = {
       description: 'El ciclo de una venta: crear, agregar productos, cocina, cobrar y anular.',
     },
     {
+      name: 'Domiciliarios',
+      description: 'Quienes llevan los domicilios. La caja los asigna al despachar cada pedido.',
+    },
+    {
       name: 'Inventario',
       description: 'Stock de los productos que lo controlan, compras y ajustes.',
     },
@@ -298,6 +303,7 @@ export const documentoOpenApi = {
     ...documentacionMesasYClientes,
     ...documentacionCaja,
     ...documentacionPedidos,
+    ...documentacionDomiciliarios,
     ...documentacionInventarioReportesAuditoria,
   },
   components: {

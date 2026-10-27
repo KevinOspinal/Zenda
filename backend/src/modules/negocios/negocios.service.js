@@ -19,6 +19,7 @@ const DATOS_NEGOCIO = /** @type {const} */ ({
   ciudad: true,
   regimenImpuesto: true,
   propinaSugerida: true,
+  valorDomicilio: true,
 });
 
 /**
@@ -95,33 +96,41 @@ export function obtenerNegocioActual(sesion) {
   );
 }
 
+/** Cada valor configurable y la acción con la que su cambio queda en la auditoría. */
+const CAMBIOS_AUDITADOS = /** @type {const} */ ([
+  ['propinaSugerida', ACCIONES.CAMBIAR_PROPINA_SUGERIDA],
+  ['valorDomicilio', ACCIONES.CAMBIAR_VALOR_DOMICILIO],
+]);
+
 /**
- * Cambia el porcentaje de propina sugerida. Queda en la auditoría con el valor anterior.
+ * Cambia la propina sugerida y el valor del domicilio por defecto. Cada cambio queda en la
+ * auditoría con el valor anterior.
  * @param {DatosSesion} sesion
- * @param {{ propinaSugerida: string }} datos
+ * @param {{ propinaSugerida?: string, valorDomicilio?: string }} datos
  */
-export function actualizarNegocioActual(sesion, { propinaSugerida }) {
+export function actualizarNegocioActual(sesion, datos) {
   return conNegocio(sesion.tenantId, async (tx) => {
-    // 1. Leer el valor anterior para la auditoría.
+    // 1. Leer los valores anteriores para la auditoría.
     const anterior = await tx.tenant.findUniqueOrThrow({
       where: { id: sesion.tenantId },
-      select: { propinaSugerida: true },
+      select: { propinaSugerida: true, valorDomicilio: true },
     });
 
     // 2. Guardar el cambio.
     const negocio = await tx.tenant.update({
       where: { id: sesion.tenantId },
-      data: { propinaSugerida },
+      data: datos,
       select: DATOS_NEGOCIO,
     });
 
-    // 3. Registrar en la auditoría solo si el valor cambió.
-    if (!anterior.propinaSugerida.equals(negocio.propinaSugerida)) {
+    // 3. Registrar en la auditoría solo los valores que cambiaron.
+    for (const [campo, accion] of CAMBIOS_AUDITADOS) {
+      if (anterior[campo].equals(negocio[campo])) continue;
       await registrarAuditoria(tx, sesion, {
-        accion: ACCIONES.CAMBIAR_PROPINA_SUGERIDA,
+        accion,
         entidad: 'tenants',
         entidadId: sesion.tenantId,
-        detalle: { anterior: anterior.propinaSugerida, nuevo: negocio.propinaSugerida },
+        detalle: { anterior: anterior[campo], nuevo: negocio[campo] },
       });
     }
     return negocio;

@@ -2,9 +2,11 @@
 // Documentación de /pedidos.
 import { esquemaParamsId } from '../../lib/esquemas.js';
 import {
+  esquemaActualizarDomicilio,
   esquemaAnular,
   esquemaCobrar,
   esquemaCrearPedido,
+  esquemaDespachar,
   esquemaDividir,
   esquemaEstadoCocina,
   esquemaFiltrosPedidos,
@@ -12,7 +14,7 @@ import {
   esquemaParamsItem,
 } from '../../modules/pedidos/pedidos.schemas.js';
 import { ATIENDEN, TODOS, cuerpo, operacion, parametros, respuesta } from '../ayudantes.js';
-import { ID, PEDIDO } from '../ejemplos.js';
+import { ID, PEDIDO, PEDIDO_DOMICILIO } from '../ejemplos.js';
 
 const COBRAN = /** @type {const} */ (['dueno', 'administrador', 'cajero']);
 const ANULAN = /** @type {const} */ (['dueno', 'administrador']);
@@ -66,16 +68,27 @@ export const documentacionPedidos = {
   '/pedidos': {
     post: operacion({
       etiqueta: 'Pedidos',
-      resumen: 'Crear un pedido (en mesa o de mostrador)',
+      resumen: 'Crear un pedido (en mesa, de mostrador o a domicilio)',
       roles: ATIENDEN,
       descripcion: `
-Crea un pedido, con o sin productos iniciales.
+Crea un pedido, con o sin productos iniciales. Cada pedido recibe un **número del día**
+(\`numero\`: #1, #2...; vuelve a 1 cada día, en hora de Colombia) con el que se identifican los
+que no tienen mesa.
+
+**Tipos** (\`tipo\`; si no llega, \`mesa\` con \`mesaId\` y \`mostrador\` sin él)
+- **mesa**: necesita \`mesaId\`; la mesa pasa a **ocupada**. Una mesa admite un solo pedido
+  abierto (si ya tiene uno, 409 \`MESA_OCUPADA\`).
+- **mostrador**: comer en el local sin mesa o recoger. \`nombreCliente\` sirve para llamarlo.
+- **domicilio**: necesita \`nombreCliente\` y \`entrega\` (teléfono y dirección). Suma
+  \`valorDomicilio\` al total (si no llega, el del negocio: $3.000 por defecto), por ahora sin
+  impuesto: ⚠️ el contador debe confirmar cuál lleva. Solo lo registran **cajero,
+  administrador y dueño** (si no, 403): los datos de entrega son personales (Ley 1581).
+
+\`origen\` dice por dónde llegó (\`local\`, \`whatsapp\`, \`telefono\`, \`otro\`); sirve para
+los reportes por canal. La propina solo se sugiere en mesa (\`propinaSugerida\` es 0 en los demás).
 
 **Reglas**
 - Requiere la **caja abierta** (si no, 409 \`CAJA_CERRADA\`).
-- **Con \`mesaId\`**: la mesa pasa a **ocupada**. Una mesa admite un solo pedido abierto
-  (si ya tiene uno, 409 \`MESA_OCUPADA\`).
-- **Sin \`mesaId\`**: venta de **mostrador**.
 - Cada ítem **copia el precio y el impuesto del momento**: si después cambia el menú,
   este pedido no se altera.
 - Los totales se calculan solos (ver "Cómo se calculan los impuestos" al inicio).
@@ -101,6 +114,24 @@ generó. Si el mismo pedido llega dos veces, la segunda vez **no se duplica**: r
             summary: 'Venta de mostrador (sin mesa)',
             value: { items: [{ productoId: ID.gaseosa, cantidad: 2 }] },
           },
+          domicilio: {
+            summary: 'Domicilio que llegó por WhatsApp',
+            value: {
+              tipo: 'domicilio',
+              origen: 'whatsapp',
+              nombreCliente: 'Juan',
+              entrega: {
+                telefono: '3109876543',
+                direccion: 'Calle 10 # 5-20, barrio San Antonio',
+                indicaciones: 'Apto 302, timbre dañado',
+                pagaCon: 50000,
+              },
+              items: [
+                { productoId: ID.hamburguesa, cantidad: 2 },
+                { productoId: ID.gaseosa, cantidad: 1 },
+              ],
+            },
+          },
           offline: {
             summary: 'Pedido hecho sin internet',
             value: {
@@ -110,7 +141,13 @@ generó. Si el mismo pedido llega dos veces, la segunda vez **no se duplica**: r
           },
         },
         descripciones: {
-          mesaId: 'Mesa del pedido. Si no se envía, es una venta de mostrador.',
+          tipo: '`mesa`, `mostrador` o `domicilio`.',
+          mesaId: 'Mesa del pedido (solo tipo `mesa`).',
+          origen: 'Por dónde llegó: `local` (por defecto), `whatsapp`, `telefono` u `otro`.',
+          nombreCliente: 'Nombre para llamar al cliente (obligatorio en domicilios).',
+          entrega: 'Solo domicilios: teléfono, dirección, indicaciones y con cuánto paga.',
+          'entrega.pagaCon': 'Con cuánto paga en efectivo, para llevarle el cambio.',
+          valorDomicilio: 'Solo domicilios. Si no llega, el valor por defecto del negocio.',
           uuidOffline: 'UUID generado por la app al vender sin internet. Evita duplicados.',
           items: 'Productos iniciales. Se pueden agregar más después.',
           ...Object.fromEntries(
@@ -147,7 +184,14 @@ pagar antes de que salieran sus platos). Los cobrados se incluyen durante 12 hor
 se acumulen los platos que nadie marcó como entregados. Las ventas que se cobraron sin pasar por
 la cocina no aparecen.
 
-Solo se puede usar uno de estos filtros: \`estado\`, \`activos\` o \`cocina\` (si no, 400).`,
+**Para la caja:** \`?domicilios=true\` trae los domicilios que no se han entregado (de las
+últimas 24 horas), con sus ítems y sus datos de entrega. Solo para cajero, administrador y
+dueño (si no, 403).
+
+Los datos de entrega (\`entrega\`) solo llegan al cajero, al administrador y al dueño.
+
+Solo se puede usar uno de estos filtros: \`estado\`, \`activos\`, \`cocina\` o \`domicilios\`
+(si no, 400).`,
       parametros: parametros('query', esquemaFiltrosPedidos, {
         estado: {
           descripcion: '`abierto`, `enviado_a_cocina`, `pagado` o `anulado`.',
@@ -161,6 +205,11 @@ Solo se puede usar uno de estos filtros: \`estado\`, \`activos\` o \`cocina\` (s
         cocina: {
           descripcion:
             '`true`: las comandas de la cocina, incluidas las ya cobradas con platos por entregar.',
+          ejemplo: 'true',
+        },
+        domicilios: {
+          descripcion:
+            '`true`: los domicilios sin entregar, con ítems y datos de entrega (solo la caja).',
           ejemplo: 'true',
         },
         incluirItems: {
@@ -180,7 +229,7 @@ Solo se puede usar uno de estos filtros: \`estado\`, \`activos\` o \`cocina\` (s
           },
         ]),
       },
-      errores: ['400'],
+      errores: ['400', '403'],
     }),
   },
 
@@ -480,6 +529,101 @@ Anula un pedido abierto o cobrado. Exige un **motivo** y queda en la **auditorí
           estado: 'anulado',
           cerradoEn: '2026-10-26T22:20:00.000Z',
           mesa: { ...PEDIDO.mesa, estado: 'libre' },
+        }),
+      },
+      errores: ['400', '404', '409'],
+    }),
+  },
+
+  '/pedidos/{id}/domicilio': {
+    patch: operacion({
+      etiqueta: 'Pedidos',
+      resumen: 'Corregir los datos de un domicilio',
+      roles: [...COBRAN],
+      descripcion: `
+Corrige a quién y a dónde se lleva, con cuánto paga y el **valor del domicilio** (se ajusta si
+es lejos). Envía solo lo que cambia; \`null\` en \`indicaciones\` o \`pagaCon\` los borra.
+
+**Reglas**
+- Solo domicilios (si no, 409 \`NO_ES_DOMICILIO\`), sin anular ni entregar (409).
+- \`valorDomicilio\` cambia el total: solo antes de cobrar (si no, 409 \`PEDIDO_CERRADO\`).
+
+📡 Avisa en tiempo real con \`pedido:actualizado\`.`,
+      parametros: idPedido,
+      cuerpo: cuerpo(esquemaActualizarDomicilio, {
+        ejemplo: { valorDomicilio: 5000, indicaciones: 'Portería del conjunto, torre 3' },
+      }),
+      respuestas: {
+        200: respuesta('Domicilio actualizado.', {
+          ...PEDIDO_DOMICILIO,
+          valorDomicilio: '5000',
+          subtotal: '30925.92',
+          total: '33000',
+        }),
+      },
+      errores: ['400', '404', '409'],
+    }),
+  },
+
+  '/pedidos/{id}/despachar': {
+    post: operacion({
+      etiqueta: 'Pedidos',
+      resumen: 'Despachar un domicilio con un domiciliario',
+      roles: [...COBRAN],
+      descripcion: `
+El domicilio sale del local con el domiciliario: queda la hora (\`entrega.despachadoEn\`) y
+quién lo lleva. Sus platos salen de la cocina (quedan \`entregado\`), aunque nadie los haya
+marcado listos: la caja es quien ve salir la bolsa.
+
+**Reglas**
+- Domicilio sin anular, sin entregar y que no haya salido (409), con productos (409
+  \`PEDIDO_VACIO\`).
+- El domiciliario debe existir (404) y estar activo (409 \`DOMICILIARIO_INACTIVO\`).
+- Se puede despachar antes de cobrar (contra entrega) o después (pago por adelantado).
+
+📡 Avisa en tiempo real con \`pedido:actualizado\`.`,
+      parametros: idPedido,
+      cuerpo: cuerpo(esquemaDespachar, { ejemplo: { domiciliarioId: ID.domiciliario } }),
+      respuestas: {
+        200: respuesta('Domicilio en camino.', {
+          ...PEDIDO_DOMICILIO,
+          entrega: {
+            ...PEDIDO_DOMICILIO.entrega,
+            domiciliarioId: ID.domiciliario,
+            despachadoEn: '2026-10-26T22:40:00.000Z',
+            domiciliario: { id: ID.domiciliario, nombre: 'Pedro Gómez', telefono: '3001234567' },
+          },
+        }),
+      },
+      errores: ['400', '404', '409'],
+    }),
+  },
+
+  '/pedidos/{id}/entregar': {
+    post: operacion({
+      etiqueta: 'Pedidos',
+      resumen: 'Marcar entregado un pedido sin mesa',
+      roles: [...COBRAN],
+      descripcion: `
+- **Domicilio:** el cliente lo recibió (\`entrega.entregadoEn\`). Debe haber salido antes con un
+  domiciliario (si no, 409 \`DOMICILIO_SIN_DESPACHAR\`). Si es contra entrega, cóbralo
+  primero con \`POST /pedidos/{id}/cobrar\`.
+- **Mostrador:** el cliente lo recogió; lo que quedara en la cocina sale con él.
+- **Mesa:** no aplica (409 \`ENTREGA_EN_MESA\`): el mesero marca cada plato como entregado.
+
+Sin cuerpo.
+
+📡 Avisa en tiempo real con \`pedido:actualizado\`.`,
+      parametros: idPedido,
+      respuestas: {
+        200: respuesta('Pedido entregado.', {
+          ...PEDIDO_DOMICILIO,
+          estado: 'pagado',
+          entrega: {
+            ...PEDIDO_DOMICILIO.entrega,
+            despachadoEn: '2026-10-26T22:40:00.000Z',
+            entregadoEn: '2026-10-26T23:05:00.000Z',
+          },
         }),
       },
       errores: ['400', '404', '409'],

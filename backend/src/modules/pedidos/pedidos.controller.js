@@ -119,3 +119,35 @@ export async function anular(_req, res) {
   eventos.avisarPedidoAnulado(pedido);
   res.json(pedido);
 }
+
+/**
+ * PATCH /pedidos/:id/domicilio
+ * @type {import('express').RequestHandler}
+ */
+export async function actualizarDomicilio(_req, res) {
+  const { params, body } = res.locals.entrada;
+  const pedido = await servicio.actualizarDomicilio(obtenerSesion(res), params.id, body);
+  eventos.avisarPedidoActualizado(pedido);
+  res.json(pedido);
+}
+
+/**
+ * POST /pedidos/:id/despachar
+ * @type {import('express').RequestHandler}
+ */
+export async function despachar(_req, res) {
+  const { params, body } = res.locals.entrada;
+  const pedido = await servicio.despacharDomicilio(obtenerSesion(res), params.id, body);
+  eventos.avisarPedidoActualizado(pedido);
+  res.json(pedido);
+}
+
+/**
+ * POST /pedidos/:id/entregar
+ * @type {import('express').RequestHandler}
+ */
+export async function entregar(_req, res) {
+  const pedido = await servicio.entregarPedido(obtenerSesion(res), res.locals.entrada.params.id);
+  eventos.avisarPedidoActualizado(pedido);
+  res.json(pedido);
+}

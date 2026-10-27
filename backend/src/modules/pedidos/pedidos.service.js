@@ -1,5 +1,9 @@
 // @ts-check
 // Lógica de los pedidos: crear, agregar y quitar ítems, enviar a cocina, cobrar y anular.
+// También los domicilios: corregir sus datos, despacharlos con un domiciliario y entregarlos.
+//
+// Tipos de pedido: de mesa, de mostrador (comer ahí o recoger) y a domicilio. Cada pedido
+// lleva un número del día (#1, #2...) que identifica los que no tienen mesa.
 //
 // Ciclo de un pedido:
 //   abierto → enviado_a_cocina → pagado
@@ -15,6 +19,7 @@ import { Prisma } from '@prisma/client';
 import { ACCIONES, registrarAuditoria } from '../../lib/auditoria.js';
 import { aDecimal, sumar } from '../../lib/dinero.js';
 import { AppError } from '../../lib/errors.js';
+import { ZONA_HORARIA } from '../../lib/fechas.js';
 import { conNegocio } from '../../lib/negocio.js';
 import {
   descontarInventarioPorVenta,
@@ -29,6 +34,25 @@ import { calcularPropinaSugerida } from './propina.js';
 /** @typedef {'efectivo' | 'tarjeta' | 'transferencia' | 'otro'} MetodoPago */
 /** @typedef {{ metodo: MetodoPago, monto: string, referencia?: string, recibido?: string }} DatosPago */
 /** @typedef {'pendiente' | 'preparando' | 'listo' | 'entregado'} EstadoCocina */
+/** @typedef {'mesa' | 'mostrador' | 'domicilio'} TipoPedido */
+/**
+ * @typedef {object} DatosEntrega
+ * @property {string} telefono
+ * @property {string} direccion
+ * @property {string} [indicaciones]
+ * @property {string} [pagaCon] Con cuánto paga el cliente en efectivo.
+ */
+/**
+ * @typedef {object} DatosNuevoPedido
+ * @property {TipoPedido} tipo
+ * @property {string} [mesaId] Solo pedidos de mesa.
+ * @property {'local' | 'whatsapp' | 'telefono' | 'otro'} origen
+ * @property {string} [nombreCliente]
+ * @property {DatosEntrega} [entrega] Solo domicilios.
+ * @property {string} [valorDomicilio] Solo domicilios; si no llega, el del negocio.
+ * @property {string} [uuidOffline]
+ * @property {DatosItem[]} items
+ */
 
 /** Estados en los que el pedido todavía se puede modificar o cobrar. */
 const ESTADOS_ABIERTOS = /** @type {const} */ (['abierto', 'enviado_a_cocina']);
@@ -43,6 +67,20 @@ const PREPARAN = /** @type {const} */ (['cocina', 'cajero', 'administrador', 'du
 const HORAS_COBRADO_EN_COCINA = 12;
 
 /**
+ * Roles que registran domicilios y ven sus datos de entrega. Son datos personales (Ley 1581):
+ * el mesero y la cocina no los necesitan.
+ */
+const MANEJAN_DOMICILIOS = /** @type {const} */ (['cajero', 'administrador', 'dueno']);
+
+/** Horas que un domicilio sin entregar sigue en la lista de la caja. */
+const HORAS_DOMICILIO_EN_CURSO = 24;
+
+/** La entrega de un domicilio con el domiciliario que la lleva. */
+const DETALLE_ENTREGA = /** @type {const} */ ({
+  include: { domiciliario: { select: { id: true, nombre: true, telefono: true } } },
+});
+
+/**
  * Lo que se devuelve de un pedido: sus ítems con el nombre del producto, sus pagos y la mesa.
  * El porcentaje de propina del negocio se usa para calcular la propina sugerida (ver `presentarPedido`).
  */
@@ -55,27 +93,34 @@ const DETALLE_PEDIDO = /** @type {const} */ ({
   pagos: { orderBy: { creadoEn: 'asc' } },
   mesa: { select: { id: true, nombre: true, estado: true } },
   cliente: { select: { id: true, nombre: true, tipoDocumento: true, numeroDocumento: true } },
+  entrega: DETALLE_ENTREGA,
   tenant: { select: { propinaSugerida: true } },
 });
 
 // ───────────────────────────── Crear y consultar ─────────────────────────────
 
 /**
- * Crea un pedido en una mesa o de mostrador, opcionalmente con sus primeros ítems.
+ * Crea un pedido de mesa, de mostrador o a domicilio, opcionalmente con sus primeros ítems.
+ * Un domicilio lo registra la caja (maneja datos personales) y suma su valor al total.
  *
  * Si llega un `uuidOffline` que ya existe, devuelve el pedido existente sin crear otro:
  * así una venta hecha sin internet no se duplica cuando la app la reenvía.
  *
  * @param {DatosSesion} sesion
- * @param {{ mesaId?: string, uuidOffline?: string, items: DatosItem[] }} datos
+ * @param {DatosNuevoPedido} datos
  * @returns {Promise<{ pedido: object, creado: boolean }>} `creado` es false si ya existía.
+ * @throws {AppError} 403 si quien registra un domicilio no es de la caja.
  */
-export async function crearPedido(sesion, { mesaId, uuidOffline, items }) {
+export async function crearPedido(sesion, datos) {
+  const { tipo, mesaId, origen, nombreCliente, entrega, valorDomicilio, uuidOffline, items } =
+    datos;
+  if (tipo === 'domicilio') exigirQueManejeDomicilios(sesion.rol);
+
   try {
     return await conNegocio(sesion.tenantId, async (tx) => {
       // 1. Idempotencia: si el pedido ya llegó antes, se devuelve tal cual.
       if (uuidOffline) {
-        const existente = await buscarPorUuidOffline(tx, sesion.tenantId, uuidOffline);
+        const existente = await buscarPorUuidOffline(tx, sesion.tenantId, uuidOffline, sesion.rol);
         if (existente) return { pedido: existente, creado: false };
       }
 
@@ -88,7 +133,14 @@ export async function crearPedido(sesion, { mesaId, uuidOffline, items }) {
       // 3. La mesa debe ser del negocio y no tener otro pedido abierto.
       if (mesaId) await ocuparMesa(tx, mesaId);
 
-      // 4. Crear el pedido y agregar sus ítems.
+      // 4. Número del día y, en domicilios, su valor (el del negocio si no llega otro).
+      const numero = await siguienteNumeroDelDia(tx, sesion.tenantId);
+      const valor =
+        tipo === 'domicilio'
+          ? (valorDomicilio ?? (await valorDomicilioDelNegocio(tx, sesion.tenantId)))
+          : '0';
+
+      // 5. Crear el pedido (con sus datos de entrega si es domicilio) y agregar sus ítems.
       const pedido = await tx.pedido.create({
         data: {
           tenantId: sesion.tenantId,
@@ -96,17 +148,25 @@ export async function crearPedido(sesion, { mesaId, uuidOffline, items }) {
           meseroId: sesion.usuarioId,
           mesaId,
           uuidOffline,
+          tipo,
+          origen,
+          numero,
+          nombreCliente,
+          valorDomicilio: valor,
+          ...(entrega ? { entrega: { create: { tenantId: sesion.tenantId, ...entrega } } } : {}),
         },
       });
       await agregarItems(tx, sesion.tenantId, pedido.id, items);
+      // El domicilio suma al total aunque todavía no haya productos.
+      if (tipo === 'domicilio') await recalcularTotales(tx, pedido.id);
 
-      return { pedido: await cargarPedido(tx, pedido.id), creado: true };
+      return { pedido: await cargarPedido(tx, pedido.id, sesion.rol), creado: true };
     });
   } catch (error) {
     // Dos envíos simultáneos del mismo pedido offline: el índice único frena al segundo.
     if (uuidOffline && esViolacionDeUnicidad(error)) {
       const existente = await conNegocio(sesion.tenantId, (tx) =>
-        buscarPorUuidOffline(tx, sesion.tenantId, uuidOffline),
+        buscarPorUuidOffline(tx, sesion.tenantId, uuidOffline, sesion.rol),
       );
       if (existente) return { pedido: existente, creado: false };
     }
@@ -118,19 +178,24 @@ export async function crearPedido(sesion, { mesaId, uuidOffline, items }) {
  * Lista pedidos, del más reciente al más antiguo (máximo 100).
  * - `activos`: solo los que aún no se cobran ni se anulan (abiertos y en cocina).
  * - `cocina`: las comandas del tablero de cocina (ver filtroComandasDeCocina).
+ * - `domicilios`: los domicilios en curso, sin entregar, con sus ítems (solo la caja).
  * - `incluirItems`: agrega los ítems de cada pedido, para que el mapa de mesas y la cocina
  *   no tengan que pedir el detalle de cada uno.
  * @param {DatosSesion} sesion
  * @param {{ estado?: 'abierto' | 'enviado_a_cocina' | 'pagado' | 'anulado', mesaId?: string,
- *   activos?: boolean, cocina?: boolean, incluirItems?: boolean }} filtros
+ *   activos?: boolean, cocina?: boolean, domicilios?: boolean, incluirItems?: boolean }} filtros
+ * @throws {AppError} 403 si pide los domicilios alguien que no es de la caja.
  */
 export function listarPedidos(
   sesion,
-  { estado, mesaId, activos = false, cocina = false, incluirItems = false },
+  { estado, mesaId, activos = false, cocina = false, domicilios = false, incluirItems = false },
 ) {
-  const filtroDeEstado = cocina
-    ? filtroComandasDeCocina()
-    : { estado: activos ? { in: [...ESTADOS_ABIERTOS] } : estado };
+  if (domicilios) exigirQueManejeDomicilios(sesion.rol);
+  let filtroDeEstado;
+  if (domicilios) filtroDeEstado = filtroDomiciliosEnCurso();
+  else if (cocina) filtroDeEstado = filtroComandasDeCocina();
+  else filtroDeEstado = { estado: activos ? { in: [...ESTADOS_ABIERTOS] } : estado };
+  const veEntregas = MANEJAN_DOMICILIOS.some((rol) => rol === sesion.rol);
   return conNegocio(sesion.tenantId, (tx) =>
     tx.pedido.findMany({
       where: { mesaId, ...filtroDeEstado },
@@ -138,7 +203,9 @@ export function listarPedidos(
       take: 100,
       include: {
         mesa: { select: { id: true, nombre: true } },
-        ...(incluirItems ? { items: DETALLE_PEDIDO.items } : {}),
+        ...(incluirItems || domicilios ? { items: DETALLE_PEDIDO.items } : {}),
+        // Los datos de entrega, solo para la caja (ver MANEJAN_DOMICILIOS).
+        ...(veEntregas ? { entrega: DETALLE_ENTREGA } : {}),
       },
     }),
   );
@@ -152,7 +219,7 @@ export function obtenerPedido(sesion, id) {
   return conNegocio(sesion.tenantId, async (tx) => {
     const pedido = await tx.pedido.findUnique({ where: { id }, include: DETALLE_PEDIDO });
     if (!pedido) throw errorPedidoNoEncontrado();
-    return presentarPedido(pedido);
+    return presentarPedido(pedido, sesion.rol);
   });
 }
 
@@ -168,7 +235,7 @@ export function agregarItem(sesion, pedidoId, item) {
   return conNegocio(sesion.tenantId, async (tx) => {
     await buscarPedidoAbierto(tx, pedidoId);
     await agregarItems(tx, sesion.tenantId, pedidoId, [item]);
-    return cargarPedido(tx, pedidoId);
+    return cargarPedido(tx, pedidoId, sesion.rol);
   });
 }
 
@@ -193,7 +260,7 @@ export function quitarItem(sesion, pedidoId, itemId) {
 
     await tx.itemPedido.delete({ where: { id: itemId } });
     await recalcularTotales(tx, pedidoId);
-    return cargarPedido(tx, pedidoId);
+    return cargarPedido(tx, pedidoId, sesion.rol);
   });
 }
 
@@ -224,7 +291,7 @@ export function cambiarEstadoCocina(sesion, pedidoId, itemId, estadoCocina) {
     }
 
     await tx.itemPedido.update({ where: { id: itemId }, data: { estadoCocina } });
-    return cargarPedido(tx, pedidoId);
+    return cargarPedido(tx, pedidoId, sesion.rol);
   });
 }
 
@@ -247,7 +314,7 @@ export function enviarACocina(sesion, pedidoId) {
       // Se guarda la hora del primer envío; reenviar (tras agregar ítems) no la cambia.
       data: { estado: 'enviado_a_cocina', enviadoACocinaEn: pedido.enviadoACocinaEn ?? new Date() },
     });
-    return cargarPedido(tx, pedidoId);
+    return cargarPedido(tx, pedidoId, sesion.rol);
   });
 }
 
@@ -267,8 +334,11 @@ export function enviarACocina(sesion, pedidoId) {
  */
 export function dividirPedido(sesion, pedidoId, { items }) {
   return conNegocio(sesion.tenantId, async (tx) => {
-    // 1. El pedido debe estar abierto.
+    // 1. El pedido debe estar abierto. Un domicilio no se divide: tiene una sola entrega.
     const original = await buscarPedidoAbierto(tx, pedidoId);
+    if (original.tipo === 'domicilio') {
+      throw new AppError(409, 'DOMICILIO_NO_SE_DIVIDE', 'Un domicilio se cobra completo');
+    }
     const itemsDelPedido = await tx.itemPedido.findMany({ where: { pedidoId } });
 
     // 2. Validar cada ítem y las unidades que se mueven.
@@ -308,6 +378,12 @@ export function dividirPedido(sesion, pedidoId, { items }) {
         meseroId: original.meseroId,
         mesaId: original.mesaId,
         estado: original.estado,
+        tipo: original.tipo,
+        origen: original.origen,
+        nombreCliente: original.nombreCliente,
+        // Los platos que pasan ya estaban en la cocina: la cuenta nueva también se ve allá.
+        enviadoACocinaEn: original.enviadoACocinaEn,
+        numero: await siguienteNumeroDelDia(tx, sesion.tenantId),
       },
     });
 
@@ -339,7 +415,10 @@ export function dividirPedido(sesion, pedidoId, { items }) {
     await recalcularTotales(tx, pedidoId);
     await recalcularTotales(tx, nuevo.id);
 
-    return { original: await cargarPedido(tx, pedidoId), nuevo: await cargarPedido(tx, nuevo.id) };
+    return {
+      original: await cargarPedido(tx, pedidoId, sesion.rol),
+      nuevo: await cargarPedido(tx, nuevo.id, sesion.rol),
+    };
   });
 }
 
@@ -427,7 +506,7 @@ export function cobrarPedido(sesion, pedidoId, { pagos, propina = '0', clienteId
     );
 
     return {
-      pedido: await cargarPedido(tx, pedidoId),
+      pedido: await cargarPedido(tx, pedidoId, sesion.rol),
       cambio: cambio.toFixed(2),
       advertencias,
     };
@@ -486,7 +565,150 @@ export function anularPedido(sesion, pedidoId, { motivo }) {
       detalle: { motivo, estadoAnterior: pedido.estado, total: pedido.total.toFixed(2) },
     });
 
-    return cargarPedido(tx, pedidoId);
+    return cargarPedido(tx, pedidoId, sesion.rol);
+  });
+}
+
+// ───────────────────────────── Domicilios ─────────────────────────────
+
+/**
+ * @typedef {object} DatosActualizarDomicilio
+ * @property {string} [nombreCliente]
+ * @property {string} [telefono]
+ * @property {string} [direccion]
+ * @property {string | null} [indicaciones] null lo borra.
+ * @property {string | null} [pagaCon] null lo borra.
+ * @property {string} [valorDomicilio]
+ */
+
+/**
+ * Corrige los datos de un domicilio: a quién y a dónde se lleva, con cuánto paga y su valor
+ * (se ajusta si es lejos). El valor cambia el total, por eso solo se puede mientras el pedido
+ * no se haya cobrado.
+ * @param {DatosSesion} sesion
+ * @param {string} pedidoId
+ * @param {DatosActualizarDomicilio} datos
+ * @throws {AppError} 409 si no es domicilio, si ya se entregó o si se cambia el valor de uno cobrado.
+ */
+export function actualizarDomicilio(
+  sesion,
+  pedidoId,
+  { nombreCliente, valorDomicilio, ...entrega },
+) {
+  return conNegocio(sesion.tenantId, async (tx) => {
+    const pedido = await buscarDomicilioPendiente(tx, pedidoId);
+
+    // 1. El valor del domicilio cambia el total: solo antes de cobrar.
+    if (valorDomicilio !== undefined) {
+      if (!ESTADOS_ABIERTOS.some((estado) => estado === pedido.estado)) throw errorPedidoCerrado();
+      await tx.pedido.update({ where: { id: pedidoId }, data: { valorDomicilio } });
+      await recalcularTotales(tx, pedidoId);
+    }
+
+    // 2. El nombre y los datos de entrega se pueden corregir hasta que se entregue.
+    if (nombreCliente !== undefined) {
+      await tx.pedido.update({ where: { id: pedidoId }, data: { nombreCliente } });
+    }
+    if (Object.keys(entrega).length > 0) {
+      await tx.entregaDomicilio.update({ where: { pedidoId }, data: entrega });
+    }
+
+    return cargarPedido(tx, pedidoId, sesion.rol);
+  });
+}
+
+/**
+ * Despacha un domicilio: sale del local con un domiciliario. Sus platos salen de la cocina
+ * (quedan "entregado") aunque nadie los haya marcado listos: la caja es quien ve salir la bolsa.
+ * @param {DatosSesion} sesion
+ * @param {string} pedidoId
+ * @param {{ domiciliarioId: string }} datos
+ * @throws {AppError} 404 si el domiciliario no existe; 409 si ya salió, si no tiene productos
+ *   o si el domiciliario está inactivo.
+ */
+export function despacharDomicilio(sesion, pedidoId, { domiciliarioId }) {
+  return conNegocio(sesion.tenantId, async (tx) => {
+    // 1. Un domicilio sin entregar, que no haya salido y con algo para llevar.
+    const pedido = await buscarDomicilioPendiente(tx, pedidoId);
+    if (pedido.entrega?.despachadoEn) {
+      throw new AppError(409, 'DOMICILIO_DESPACHADO', 'Este domicilio ya salió');
+    }
+    const cantidadItems = await tx.itemPedido.count({ where: { pedidoId } });
+    if (cantidadItems === 0) {
+      throw new AppError(409, 'PEDIDO_VACIO', 'El domicilio no tiene productos');
+    }
+
+    // 2. El domiciliario debe ser del negocio (RLS) y estar activo.
+    const domiciliario = await tx.domiciliario.findUnique({ where: { id: domiciliarioId } });
+    if (!domiciliario) {
+      throw new AppError(404, 'DOMICILIARIO_NO_ENCONTRADO', 'El domiciliario no existe');
+    }
+    if (!domiciliario.activo) {
+      throw new AppError(409, 'DOMICILIARIO_INACTIVO', 'El domiciliario está inactivo');
+    }
+
+    // 3. Sale todo de la cocina y queda registrado quién lo lleva y a qué hora salió.
+    await tx.itemPedido.updateMany({
+      where: { pedidoId, estadoCocina: { not: 'entregado' } },
+      data: { estadoCocina: 'entregado' },
+    });
+    await tx.entregaDomicilio.update({
+      where: { pedidoId },
+      data: { domiciliarioId, despachadoEn: new Date() },
+    });
+
+    return cargarPedido(tx, pedidoId, sesion.rol);
+  });
+}
+
+/**
+ * Marca como entregado un pedido sin mesa:
+ * - Domicilio: el cliente lo recibió (debe haber salido antes con un domiciliario).
+ * - Mostrador: el cliente lo recogió; lo que quedara en la cocina sale con él.
+ * En una mesa no aplica: ahí el mesero marca cada plato como entregado.
+ * @param {DatosSesion} sesion
+ * @param {string} pedidoId
+ * @throws {AppError} 409 si es de mesa, si está anulado o si el domicilio no ha salido.
+ */
+export function entregarPedido(sesion, pedidoId) {
+  return conNegocio(sesion.tenantId, async (tx) => {
+    const pedido = await tx.pedido.findUnique({
+      where: { id: pedidoId },
+      include: { entrega: true },
+    });
+    if (!pedido) throw errorPedidoNoEncontrado();
+    if (pedido.estado === 'anulado') {
+      throw new AppError(409, 'PEDIDO_ANULADO', 'El pedido está anulado');
+    }
+
+    if (pedido.tipo === 'mesa') {
+      throw new AppError(
+        409,
+        'ENTREGA_EN_MESA',
+        'En una mesa, el mesero marca cada plato como entregado',
+      );
+    }
+
+    if (pedido.tipo === 'domicilio') {
+      if (pedido.entrega?.entregadoEn) {
+        throw new AppError(409, 'DOMICILIO_ENTREGADO', 'Este domicilio ya se entregó');
+      }
+      if (!pedido.entrega?.despachadoEn) {
+        throw new AppError(
+          409,
+          'DOMICILIO_SIN_DESPACHAR',
+          'Despache el domicilio antes de marcarlo como entregado',
+        );
+      }
+      await tx.entregaDomicilio.update({ where: { pedidoId }, data: { entregadoEn: new Date() } });
+    } else {
+      await tx.itemPedido.updateMany({
+        where: { pedidoId, estadoCocina: { not: 'entregado' } },
+        data: { estadoCocina: 'entregado' },
+      });
+    }
+
+    return cargarPedido(tx, pedidoId, sesion.rol);
   });
 }
 
@@ -544,15 +766,23 @@ async function agregarItems(tx, tenantId, pedidoId, items) {
  */
 async function recalcularTotales(tx, pedidoId) {
   const items = await tx.itemPedido.findMany({ where: { pedidoId } });
-  const totales = calcularTotalesPedido(
-    items.map((item) =>
-      calcularLinea({
-        precioConImpuesto: item.precioUnitario,
-        cantidad: item.cantidad,
-        tasaImpuesto: item.tasaImpuesto,
-      }),
-    ),
+  const { valorDomicilio } = await tx.pedido.findUniqueOrThrow({
+    where: { id: pedidoId },
+    select: { valorDomicilio: true },
+  });
+  const lineas = items.map((item) =>
+    calcularLinea({
+      precioConImpuesto: item.precioUnitario,
+      cantidad: item.cantidad,
+      tasaImpuesto: item.tasaImpuesto,
+    }),
   );
+  // El domicilio suma como una línea más, por ahora sin impuesto: el contador debe confirmar
+  // cuál lleva. Así subtotal + impuestos + ajuste sigue dando el total.
+  if (valorDomicilio.greaterThan(0)) {
+    lineas.push(calcularLinea({ precioConImpuesto: valorDomicilio, cantidad: 1, tasaImpuesto: 0 }));
+  }
+  const totales = calcularTotalesPedido(lineas);
 
   await tx.pedido.update({
     where: { id: pedidoId },
@@ -621,20 +851,23 @@ function filtroComandasDeCocina() {
  * Revisa que el rol pueda marcar ese paso de la cocina.
  * - Preparando y listo: la cocina, el cajero (en cafeterías el cajero también prepara), el
  *   administrador y el dueño. El mesero no.
- * - Entregado: todos, menos la cocina en una mesa: ahí el mesero confirma que el plato llegó.
- *   En mostrador la cocina sí puede ("Ya salió"), porque lo entrega ella misma.
+ * - Entregado: todos, menos la cocina fuera del mostrador. En una mesa el mesero confirma que
+ *   el plato llegó; un domicilio sale cuando la caja lo despacha. En mostrador la cocina sí
+ *   puede ("Ya salió"), porque lo entrega ella misma.
  * @param {DatosSesion['rol']} rol
  * @param {Exclude<EstadoCocina, 'pendiente'>} estadoCocina
- * @param {{ mesaId: string | null }} pedido
+ * @param {{ tipo: TipoPedido }} pedido
  * @throws {AppError} 403 SIN_PERMISO
  */
 function revisarPermisoCocina(rol, estadoCocina, pedido) {
   if (estadoCocina === 'entregado') {
-    if (rol === 'cocina' && pedido.mesaId) {
+    if (rol === 'cocina' && pedido.tipo !== 'mostrador') {
       throw new AppError(
         403,
         'SIN_PERMISO',
-        'En las mesas, el mesero marca el plato como entregado',
+        pedido.tipo === 'mesa'
+          ? 'En las mesas, el mesero marca el plato como entregado'
+          : 'Los domicilios salen cuando la caja los despacha',
       );
     }
     return;
@@ -646,6 +879,84 @@ function revisarPermisoCocina(rol, estadoCocina, pedido) {
       'Solo la cocina marca los platos como preparando o listos',
     );
   }
+}
+
+/**
+ * Da el siguiente número de pedido del día (hora de Colombia) del negocio, desde 1. Una sola
+ * instrucción lo incrementa y lo devuelve, así dos cajas al tiempo nunca reciben el mismo.
+ * @param {TransaccionPrisma} tx
+ * @param {string} tenantId
+ * @returns {Promise<number>}
+ */
+async function siguienteNumeroDelDia(tx, tenantId) {
+  /** @type {{ ultimo: number }[]} */
+  const [contador] = await tx.$queryRaw`
+    INSERT INTO contadores_pedidos (tenant_id, fecha, ultimo)
+    VALUES (${tenantId}::uuid, (now() AT TIME ZONE ${ZONA_HORARIA})::date, 1)
+    ON CONFLICT (tenant_id, fecha) DO UPDATE SET ultimo = contadores_pedidos.ultimo + 1
+    RETURNING ultimo`;
+  return contador.ultimo;
+}
+
+/**
+ * Valor del domicilio que el negocio propone por defecto.
+ * @param {TransaccionPrisma} tx
+ * @param {string} tenantId
+ */
+async function valorDomicilioDelNegocio(tx, tenantId) {
+  const negocio = await tx.tenant.findUniqueOrThrow({
+    where: { id: tenantId },
+    select: { valorDomicilio: true },
+  });
+  return negocio.valorDomicilio;
+}
+
+/**
+ * Los domicilios los registra y los ve la caja: tienen datos personales y dinero en la calle.
+ * @param {DatosSesion['rol']} rol
+ * @throws {AppError} 403 SIN_PERMISO
+ */
+function exigirQueManejeDomicilios(rol) {
+  if (!MANEJAN_DOMICILIOS.some((permitido) => permitido === rol)) {
+    throw new AppError(403, 'SIN_PERMISO', 'Los domicilios los maneja la caja');
+  }
+}
+
+/**
+ * Filtro de los domicilios en curso: sin entregar ni anular, abiertos en las últimas
+ * HORAS_DOMICILIO_EN_CURSO (para que no se acumulen los que nadie marcó como entregados).
+ */
+function filtroDomiciliosEnCurso() {
+  const abiertoDesde = new Date(Date.now() - HORAS_DOMICILIO_EN_CURSO * 60 * 60 * 1000);
+  return {
+    tipo: /** @type {const} */ ('domicilio'),
+    estado: { not: /** @type {const} */ ('anulado') },
+    abiertoEn: { gte: abiertoDesde },
+    entrega: { is: { entregadoEn: null } },
+  };
+}
+
+/**
+ * Busca un domicilio que todavía se pueda despachar o corregir: no anulado ni entregado.
+ * @param {TransaccionPrisma} tx
+ * @param {string} pedidoId
+ */
+async function buscarDomicilioPendiente(tx, pedidoId) {
+  const pedido = await tx.pedido.findUnique({
+    where: { id: pedidoId },
+    include: { entrega: true },
+  });
+  if (!pedido) throw errorPedidoNoEncontrado();
+  if (pedido.tipo !== 'domicilio') {
+    throw new AppError(409, 'NO_ES_DOMICILIO', 'Este pedido no es un domicilio');
+  }
+  if (pedido.estado === 'anulado') {
+    throw new AppError(409, 'PEDIDO_ANULADO', 'El pedido está anulado');
+  }
+  if (pedido.entrega?.entregadoEn) {
+    throw new AppError(409, 'DOMICILIO_ENTREGADO', 'Este domicilio ya se entregó');
+  }
+  return pedido;
 }
 
 /**
@@ -674,38 +985,50 @@ async function buscarItem(tx, pedidoId, itemId) {
 /**
  * @param {TransaccionPrisma} tx
  * @param {string} pedidoId
+ * @param {DatosSesion['rol']} rol Decide si se incluyen los datos de entrega.
  */
-async function cargarPedido(tx, pedidoId) {
+async function cargarPedido(tx, pedidoId, rol) {
   const pedido = await tx.pedido.findUniqueOrThrow({
     where: { id: pedidoId },
     include: DETALLE_PEDIDO,
   });
-  return presentarPedido(pedido);
+  return presentarPedido(pedido, rol);
 }
 
 /**
  * @param {TransaccionPrisma} tx
  * @param {string} tenantId
  * @param {string} uuidOffline
+ * @param {DatosSesion['rol']} rol
  */
-async function buscarPorUuidOffline(tx, tenantId, uuidOffline) {
+async function buscarPorUuidOffline(tx, tenantId, uuidOffline, rol) {
   const pedido = await tx.pedido.findUnique({
     where: { tenantId_uuidOffline: { tenantId, uuidOffline } },
     include: DETALLE_PEDIDO,
   });
-  return pedido && presentarPedido(pedido);
+  return pedido && presentarPedido(pedido, rol);
 }
 
 /**
- * Da forma al pedido que se entrega: quita los datos internos del negocio y agrega la
- * propina que se le sugiere al cliente, para que el mesero se la muestre antes de cobrar.
- * @template {{ subtotal: Prisma.Decimal, tenant: { propinaSugerida: Prisma.Decimal } }} T
+ * Da forma al pedido que se entrega:
+ * - Quita los datos internos del negocio.
+ * - Agrega la propina que se le sugiere al cliente. Solo en mesa: es por el servicio a la
+ *   mesa; en mostrador y domicilio el cliente igual puede dar una, pero no se le sugiere.
+ * - Deja los datos de entrega solo a quienes manejan los domicilios (ver MANEJAN_DOMICILIOS).
+ * @template {{ tipo: TipoPedido, subtotal: Prisma.Decimal, entrega?: unknown,
+ *   tenant: { propinaSugerida: Prisma.Decimal } }} T
  * @param {T} pedido
+ * @param {DatosSesion['rol']} rol
  */
-function presentarPedido({ tenant, ...pedido }) {
+function presentarPedido({ tenant, entrega, ...pedido }, rol) {
+  const propinaSugerida =
+    pedido.tipo === 'mesa'
+      ? calcularPropinaSugerida(pedido.subtotal, tenant.propinaSugerida)
+      : new Prisma.Decimal(0);
   return {
     ...pedido,
-    propinaSugerida: calcularPropinaSugerida(pedido.subtotal, tenant.propinaSugerida).toFixed(2),
+    ...(MANEJAN_DOMICILIOS.some((permitido) => permitido === rol) ? { entrega } : {}),
+    propinaSugerida: propinaSugerida.toFixed(2),
   };
 }
 

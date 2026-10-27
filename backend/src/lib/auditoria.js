@@ -20,6 +20,7 @@ export const ACCIONES = Object.freeze({
   RESTABLECER_CONTRASENA: 'restablecer_contrasena',
   CAMBIAR_CREDENCIALES_FACTURACION: 'cambiar_credenciales_facturacion',
   CAMBIAR_PROPINA_SUGERIDA: 'cambiar_propina_sugerida',
+  CAMBIAR_VALOR_DOMICILIO: 'cambiar_valor_domicilio',
 });
 
 /**

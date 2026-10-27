@@ -79,6 +79,25 @@ enum EstadoPedido {
   @@map("estado_pedido")
 }
 
+/// Dónde se entrega el pedido: en una mesa, en el mostrador (comer ahí o para recoger) o a domicilio.
+enum TipoPedido {
+  mesa
+  mostrador
+  domicilio
+
+  @@map("tipo_pedido")
+}
+
+/// Por dónde llegó el pedido. No cambia el flujo; sirve para saber cuánto vende cada canal.
+enum OrigenPedido {
+  local
+  whatsapp
+  telefono
+  otro
+
+  @@map("origen_pedido")
+}
+
 enum EstadoCocina {
   pendiente
   preparando
@@ -135,6 +154,8 @@ model Tenant {
   // Porcentaje de propina que se le sugiere al cliente (Ley 1935 de 2018: máximo 10 %).
   // En 0 el negocio no sugiere propina.
   propinaSugerida Decimal         @default(10) @map("propina_sugerida") @db.Decimal(5, 2)
+  // Valor del domicilio que se propone en cada pedido a domicilio (se puede cambiar en cada uno).
+  valorDomicilio  Decimal         @default(3000) @map("valor_domicilio") @db.Decimal(14, 2)
   creadoEn        DateTime        @default(now()) @map("creado_en") @db.Timestamptz(6)
 
   usuarios              Usuario[]
@@ -152,6 +173,9 @@ model Tenant {
   documentosFiscales    DocumentoFiscal[]
   credencialesProveedor CredencialProveedor[]
   auditoria             Auditoria[]
+  domiciliarios         Domiciliario[]
+  entregasDomicilio     EntregaDomicilio[]
+  contadoresPedidos     ContadorPedidos[]
 
   @@map("tenants")
 }
@@ -326,12 +350,23 @@ model TurnoCaja {
 model Pedido {
   id               String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId         String       @map("tenant_id") @db.Uuid
-  // Null cuando es una venta de mostrador, sin mesa.
+  // Solo los pedidos de tipo "mesa" tienen mesa (la base de datos lo verifica).
   mesaId           String?      @map("mesa_id") @db.Uuid
   turnoId          String       @map("turno_id") @db.Uuid
   meseroId         String       @map("mesero_id") @db.Uuid
   clienteId        String?      @map("cliente_id") @db.Uuid
   estado           EstadoPedido @default(abierto)
+  tipo             TipoPedido   @default(mostrador)
+  origen           OrigenPedido @default(local)
+  // Número del pedido en el día (hora de Colombia), desde 1. Identifica los pedidos sin mesa:
+  // la cocina ve "#15" y en el mostrador se llama al cliente con él.
+  numero           Int
+  // Nombre con el que se llama o se busca al cliente (mostrador y domicilio). No es el de la
+  // factura: ese es el cliente registrado (clienteId).
+  nombreCliente    String?      @map("nombre_cliente") @db.VarChar(80)
+  // Lo que cobra el negocio por llevar el pedido (solo domicilios). Suma al total como una
+  // línea más, por ahora sin impuesto: el contador debe confirmar cuál lleva.
+  valorDomicilio   Decimal      @default(0) @map("valor_domicilio") @db.Decimal(14, 2)
   subtotal         Decimal      @default(0) @db.Decimal(14, 2)
   impuestos        Decimal      @default(0) @db.Decimal(14, 2)
   total            Decimal      @default(0) @db.Decimal(14, 2)
@@ -359,6 +394,7 @@ model Pedido {
   pagos              Pago[]
   movimientos        MovimientoInventario[]
   documentosFiscales DocumentoFiscal[]
+  entrega            EntregaDomicilio?
 
   @@unique([tenantId, uuidOffline])
   @@index([tenantId, abiertoEn])
@@ -366,6 +402,62 @@ model Pedido {
   // Los reportes filtran las ventas por la fecha de cobro.
   @@index([tenantId, cerradoEn])
   @@map("pedidos")
+}
+
+/// Datos para llevar un pedido a domicilio. Son datos personales (Ley 1581 de 2012): solo los
+/// ven la caja, el administrador y el dueño, y solo se piden los necesarios para entregar.
+model EntregaDomicilio {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  pedidoId       String    @unique @map("pedido_id") @db.Uuid
+  telefono       String    @db.VarChar(20)
+  direccion      String    @db.VarChar(200)
+  // Por ejemplo: "Apto 302, timbre dañado" o "casa esquinera de rejas verdes".
+  indicaciones   String?   @db.VarChar(300)
+  // Con cuánto va a pagar el cliente en efectivo, para que el domiciliario lleve el cambio.
+  pagaCon        Decimal?  @map("paga_con") @db.Decimal(14, 2)
+  domiciliarioId String?   @map("domiciliario_id") @db.Uuid
+  // Salió del local con el domiciliario.
+  despachadoEn   DateTime? @map("despachado_en") @db.Timestamptz(6)
+  // El cliente lo recibió.
+  entregadoEn    DateTime? @map("entregado_en") @db.Timestamptz(6)
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  pedido       Pedido        @relation(fields: [pedidoId], references: [id])
+  domiciliario Domiciliario? @relation(fields: [domiciliarioId], references: [id])
+
+  @@index([tenantId, entregadoEn])
+  @@map("entregas_domicilio")
+}
+
+/// Persona del negocio que lleva los domicilios. No inicia sesión: la caja le asigna los
+/// pedidos y le manda los datos por WhatsApp.
+model Domiciliario {
+  id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId String   @map("tenant_id") @db.Uuid
+  nombre   String   @db.VarChar(80)
+  telefono String   @db.VarChar(20)
+  // Inactivo: ya no se le asignan pedidos, pero se conserva su historial.
+  activo   Boolean  @default(true)
+  creadoEn DateTime @default(now()) @map("creado_en") @db.Timestamptz(6)
+
+  tenant   Tenant             @relation(fields: [tenantId], references: [id])
+  entregas EntregaDomicilio[]
+
+  @@map("domiciliarios")
+}
+
+/// Último número de pedido que se dio en cada día (hora de Colombia), por negocio.
+/// Se incrementa con una sola instrucción atómica, así dos cajas no repiten número.
+model ContadorPedidos {
+  tenantId String   @map("tenant_id") @db.Uuid
+  fecha    DateTime @db.Date
+  ultimo   Int
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@id([tenantId, fecha])
+  @@map("contadores_pedidos")
 }
 
 /// Línea de un pedido. Copia el precio y la tasa del momento de la venta:

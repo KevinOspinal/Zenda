@@ -20,6 +20,9 @@ let otroNegocio;
 /** @type {Record<'hamburguesa' | 'gaseosa' | 'salchipapa', { id: string, precio: string }>} */
 const productos = /** @type {any} */ ({});
 
+/** Pedidos creados directo en la base: cada uno lleva su número del día. */
+let pedidosCreados = 0;
+
 /**
  * Registra una venta directamente en la base con totales calculados como en el sistema.
  * @param {object} venta
@@ -35,10 +38,12 @@ function registrarVenta({ turnoId, items, pagos, cerradoEn, estado }) {
   );
   const totales = calcularTotalesPedido(lineas);
 
+  pedidosCreados += 1;
   return conNegocio(negocio.tenantId, (tx) =>
     tx.pedido.create({
       data: {
         tenantId: negocio.tenantId,
+        numero: pedidosCreados,
         turnoId,
         meseroId: negocio.usuarios.mesero,
         estado,

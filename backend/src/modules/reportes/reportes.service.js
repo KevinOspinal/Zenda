@@ -17,8 +17,30 @@ import { conNegocio } from '../../lib/negocio.js';
 /** Métodos de pago, en el orden en que se muestran. */
 const METODOS_PAGO = /** @type {const} */ (['efectivo', 'tarjeta', 'transferencia', 'otro']);
 
+/** Tipos y orígenes de pedido, en el orden en que se muestran. */
+const TIPOS_PEDIDO = /** @type {const} */ (['mesa', 'mostrador', 'domicilio']);
+const ORIGENES_PEDIDO = /** @type {const} */ (['local', 'whatsapp', 'telefono', 'otro']);
+
 /**
- * Resumen del periodo: totales, ticket promedio, anulaciones, ventas por hora y por día.
+ * Completa una agrupación con todos los valores posibles, en su orden y con cero los que no
+ * tuvieron ventas, para que la pantalla siempre muestre la misma lista.
+ * @param {ReadonlyArray<string>} valores
+ * @param {{ clave: string, ventas: number, total: ValorNumerico }[]} filas
+ */
+function completarGrupos(valores, filas) {
+  return valores.map((valor) => {
+    const fila = filas.find((f) => f.clave === valor);
+    return {
+      clave: valor,
+      ventas: fila?.ventas ?? 0,
+      total: aDecimal(fila?.total ?? 0).toFixed(2),
+    };
+  });
+}
+
+/**
+ * Resumen del periodo: totales, ticket promedio, anulaciones, ventas por hora y por día, y por
+ * tipo de pedido (mesa, mostrador, domicilio) y por origen (local, WhatsApp, teléfono, otro).
  * @param {DatosSesion} sesion
  * @param {Rango} rango
  */
@@ -69,7 +91,23 @@ export function obtenerResumen(sesion, rango) {
         AND cerrado_en >= ${inicio} AND cerrado_en < ${fin}
       GROUP BY 1 ORDER BY 1`;
 
-    // 5. Ticket promedio: lo que gasta en promedio cada venta.
+    // 5. Ventas por tipo de pedido y por origen: cuánto vende cada canal.
+    /** @type {{ clave: string, ventas: number, total: ValorNumerico }[]} */
+    const porTipo = await tx.$queryRaw`
+      SELECT tipo::text AS clave, count(*)::int AS ventas, sum(total) AS total
+      FROM pedidos
+      WHERE tenant_id = ${tenantId}::uuid AND estado = 'pagado'
+        AND cerrado_en >= ${inicio} AND cerrado_en < ${fin}
+      GROUP BY 1`;
+    /** @type {{ clave: string, ventas: number, total: ValorNumerico }[]} */
+    const porOrigen = await tx.$queryRaw`
+      SELECT origen::text AS clave, count(*)::int AS ventas, sum(total) AS total
+      FROM pedidos
+      WHERE tenant_id = ${tenantId}::uuid AND estado = 'pagado'
+        AND cerrado_en >= ${inicio} AND cerrado_en < ${fin}
+      GROUP BY 1`;
+
+    // 6. Ticket promedio: lo que gasta en promedio cada venta.
     const total = aDecimal(totales.total);
     const ticketPromedio =
       totales.ventas > 0 ? redondearMonto(total.dividedBy(totales.ventas)) : new Decimal(0);
@@ -90,6 +128,14 @@ export function obtenerResumen(sesion, rango) {
       },
       porHora: porHora.map((fila) => ({ ...fila, total: aDecimal(fila.total).toFixed(2) })),
       porDia: porDia.map((fila) => ({ ...fila, total: aDecimal(fila.total).toFixed(2) })),
+      porTipo: completarGrupos(TIPOS_PEDIDO, porTipo).map(({ clave, ...fila }) => ({
+        tipo: clave,
+        ...fila,
+      })),
+      porOrigen: completarGrupos(ORIGENES_PEDIDO, porOrigen).map(({ clave, ...fila }) => ({
+        origen: clave,
+        ...fila,
+      })),
     };
   });
 }

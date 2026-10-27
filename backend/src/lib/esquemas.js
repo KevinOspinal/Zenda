@@ -25,6 +25,12 @@ export const esquemaMonto = z
       ),
   );
 
+/** Teléfono: dígitos y espacios, con + opcional al inicio (por ejemplo "+57 300 123 4567"). */
+export const esquemaTelefono = z
+  .string()
+  .trim()
+  .regex(/^\+?[0-9 ]{7,20}$/, 'teléfono inválido');
+
 /** Texto obligatorio sin espacios sobrantes. */
 export function textoObligatorio(maximo = 120) {
   return z.string().trim().min(1, 'es obligatorio').max(maximo, `máximo ${maximo} caracteres`);
