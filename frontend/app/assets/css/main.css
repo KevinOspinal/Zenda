@@ -33,3 +33,18 @@
 .cifra {
   font-variant-numeric: tabular-nums;
 }
+
+/* Colores de los métodos de pago en las gráficas de los reportes. Es una paleta categórica
+   validada (contraste, daltonismo y visión normal) en modo claro y oscuro; el orden fijo
+   evita que dos colores parecidos queden juntos. */
+:root {
+  --zenda-pago-efectivo: #059669;
+  --zenda-pago-tarjeta: #2a78d6;
+  --zenda-pago-transferencia: #eb6834;
+  --zenda-pago-otro: #6250d6;
+}
+.dark {
+  --zenda-pago-tarjeta: #3987e5;
+  --zenda-pago-transferencia: #d95926;
+  --zenda-pago-otro: #9085e9;
+}
