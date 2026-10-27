@@ -46,7 +46,13 @@ const sesion = useSesionStore();
           Convierte este dispositivo en el tablero de comandas de la cocina.
         </p>
       </div>
-      <UButton to="/cocina" size="lg" icon="i-lucide-chef-hat" label="Usar como cocina" />
+      <UButton
+        v-if="puede(sesion.rol, 'prepararPlatos')"
+        to="/cocina"
+        size="lg"
+        icon="i-lucide-chef-hat"
+        label="Usar como cocina"
+      />
     </section>
 
     <FormularioContrasena />

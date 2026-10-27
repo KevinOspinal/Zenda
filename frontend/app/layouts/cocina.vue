@@ -1,16 +1,20 @@
 <!--
   Layout de la pantalla de cocina: pantalla completa, sin navegación, con reloj grande y
   un botón para salir que pide confirmación (para no cerrarla por un toque accidental).
+  Con la cuenta de la cocina, salir es cerrar la sesión (su única pantalla es esta) y hay
+  un acceso a los ajustes del dispositivo (sonidos, tema y contraseña).
 -->
 <script setup>
 const sesion = useSesionStore();
 const conexion = useConexionStore();
 const ahora = useNow({ interval: 15_000 });
 const confirmandoSalida = ref(false);
+const esCuentaDeCocina = computed(() => sesion.rol === 'cocina');
 
 function salirDeCocina() {
   confirmandoSalida.value = false;
-  if (sesion.rol) navigateTo(inicioDe(sesion.rol));
+  if (esCuentaDeCocina.value) sesion.salir();
+  else if (sesion.rol) navigateTo(inicioDe(sesion.rol));
 }
 </script>
 
@@ -33,6 +37,15 @@ function salirDeCocina() {
         </span>
         <IndicadorConexion :estado="conexion.estado" />
         <UButton
+          v-if="esCuentaDeCocina"
+          to="/perfil"
+          color="neutral"
+          variant="ghost"
+          size="lg"
+          icon="i-lucide-settings"
+          aria-label="Ajustes del dispositivo"
+        />
+        <UButton
           color="neutral"
           variant="ghost"
           size="lg"
@@ -49,8 +62,14 @@ function salirDeCocina() {
 
     <UModal
       v-model:open="confirmandoSalida"
-      title="¿Salir de la pantalla de cocina?"
-      description="Este dispositivo dejará de mostrar las comandas."
+      :title="
+        esCuentaDeCocina ? '¿Cerrar la sesión de la cocina?' : '¿Salir de la pantalla de cocina?'
+      "
+      :description="
+        esCuentaDeCocina
+          ? 'Para volver a ver las comandas habrá que ingresar otra vez.'
+          : 'Este dispositivo dejará de mostrar las comandas.'
+      "
     >
       <template #footer>
         <div class="flex w-full justify-end gap-2">

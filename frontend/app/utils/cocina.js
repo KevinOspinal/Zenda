@@ -84,9 +84,10 @@ export function esAgregadoDespues(item, items) {
  */
 
 /**
- * Arma las tres columnas del tablero de cocina con los pedidos enviados a la cocina.
- * En cada columna, la comanda que más lleva esperando va primero.
- * @param {any[]} pedidos Pedidos activos con sus ítems.
+ * Arma las tres columnas del tablero de cocina con los pedidos enviados a la cocina, también
+ * los ya cobrados que tienen platos por entregar. En cada columna, la comanda que más lleva
+ * esperando va primero.
+ * @param {any[]} pedidos Comandas con sus ítems (ver `comandas` en el store de pedidos).
  * @param {Date | string | number} [ahora]
  * @returns {Record<'pendiente' | 'preparando' | 'listo', ComandaDelTablero[]>}
  */
@@ -95,7 +96,7 @@ export function armarTablero(pedidos, ahora = new Date()) {
   const tablero = { pendiente: [], preparando: [], listo: [] };
 
   for (const pedido of pedidos) {
-    if (pedido.estado !== 'enviado_a_cocina') continue;
+    if (pedido.estado !== 'enviado_a_cocina' && pedido.estado !== 'pagado') continue;
     const items = pedido.items ?? [];
     const columna = columnaDeComanda(items);
     if (!columna) continue;

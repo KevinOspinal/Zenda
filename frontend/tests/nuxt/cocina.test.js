@@ -4,6 +4,8 @@ import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TarjetaComanda from '~/components/cocina/TarjetaComanda.vue';
 import PaginaCocina from '~/pages/cocina.vue';
+import { usePedidosStore } from '~/stores/pedidos.js';
+import { armarTablero } from '~/utils/cocina.js';
 import { simularBackend } from './ayudantes.js';
 
 const { fetchFalso } = vi.hoisted(() => ({ fetchFalso: vi.fn() }));
@@ -83,7 +85,7 @@ describe('tarjeta de comanda', () => {
     expect(listo?.attributes('disabled')).toBeDefined();
   });
 
-  it('"Todo listo" termina lo que falta; con todo listo, "Ya salió" la quita', async () => {
+  it('"Todo listo" termina lo que falta; en mostrador, "Ya salió" la quita', async () => {
     const conPendientes = await mountSuspended(TarjetaComanda, {
       props: {
         comanda: comandaDe(
@@ -97,16 +99,51 @@ describe('tarjeta de comanda', () => {
     await todoListo?.trigger('click');
     expect(conPendientes.emitted('todoListo')).toHaveLength(1);
 
-    const lista = await mountSuspended(TarjetaComanda, {
+    const mostrador = await mountSuspended(TarjetaComanda, {
+      props: {
+        comanda: comandaDe({
+          ...pedido('2', 'Mostrador', [
+            { estadoCocina: 'listo', nombre: 'IND Classic', minutos: 5 },
+          ]),
+          mesa: null,
+          mesaId: null,
+        }),
+      },
+    });
+    const yaSalio = mostrador.findAll('button').find((b) => b.text().includes('Ya salió'));
+    expect(yaSalio).toBeDefined();
+    await yaSalio?.trigger('click');
+    expect(mostrador.emitted('entregar')).toHaveLength(1);
+  });
+
+  it('en una mesa, con todo listo, espera al mesero: la entrega no la marca la cocina', async () => {
+    const enMesa = await mountSuspended(TarjetaComanda, {
       props: {
         comanda: comandaDe(
-          pedido('2', 'Mesa 2', [{ estadoCocina: 'listo', nombre: 'IND Classic', minutos: 5 }]),
+          pedido('3', 'Mesa 2', [{ estadoCocina: 'listo', nombre: 'IND Classic', minutos: 5 }]),
         ),
       },
     });
-    const yaSalio = lista.findAll('button').find((b) => b.text().includes('Ya salió'));
-    await yaSalio?.trigger('click');
-    expect(lista.emitted('entregar')).toHaveLength(1);
+
+    expect(enMesa.text()).toContain('Esperando al mesero');
+    expect(enMesa.findAll('button').some((b) => b.text().includes('Ya salió'))).toBe(false);
+  });
+
+  it('una comanda que el cliente ya pagó lo dice', async () => {
+    const cobrada = await mountSuspended(TarjetaComanda, {
+      props: {
+        comanda: comandaDe(
+          pedido(
+            '4',
+            'Mesa 3',
+            [{ estadoCocina: 'preparando', nombre: 'IND Classic', minutos: 2 }],
+            'pagado',
+          ),
+        ),
+      },
+    });
+
+    expect(cobrada.text()).toContain('Pagado');
   });
 });
 
@@ -163,5 +200,74 @@ describe('tablero de cocina', () => {
       expect(opciones?.body).toEqual({ estadoCocina: 'preparando' });
     });
     await vi.waitFor(() => expect(pagina.findAll('section')[1]?.text()).toContain('Mesa 1'));
+  });
+});
+
+describe('pedidos cobrados con platos en la cocina', () => {
+  /**
+   * Pedido que pasó por la cocina, con un plato preparándose.
+   * @param {string} id
+   * @param {{ estado?: string, enMesa?: boolean }} [opciones]
+   */
+  const enviado = (id, { estado = 'enviado_a_cocina', enMesa = true } = {}) => ({
+    ...pedido(
+      id,
+      'Mesa 5',
+      [{ estadoCocina: 'preparando', nombre: 'IND Classic', minutos: 3 }],
+      estado,
+    ),
+    ...(enMesa ? {} : { mesa: null, mesaId: null }),
+    enviadoACocinaEn: hace(3),
+  });
+
+  it('la cocina los sigue viendo hasta que sale el último plato', async () => {
+    simularBackend(fetchFalso, {
+      'GET /pedidos': ({ query }) =>
+        query.cocina ? [enviado('c', { estado: 'pagado', enMesa: false })] : [],
+    });
+    const pedidos = usePedidosStore();
+    await pedidos.cargarActivos();
+
+    // No está por cobrar (no cuenta como activo), pero sigue en el tablero.
+    expect(pedidos.lista).toHaveLength(0);
+    expect(armarTablero(pedidos.comandas).preparando.map((c) => c.pedido.id)).toEqual(['c']);
+
+    pedidos.alCambiarEstadoCocina({ pedidoId: 'c', itemId: 'c-0', estadoCocina: 'listo' });
+    expect(pedidos.buscar('c')).not.toBeNull();
+    pedidos.alCambiarEstadoCocina({ pedidoId: 'c', itemId: 'c-0', estadoCocina: 'entregado' });
+    expect(pedidos.buscar('c')).toBeNull();
+  });
+
+  it('si se cobra mientras se prepara, deja de estar por cobrar pero no sale del tablero', async () => {
+    simularBackend(fetchFalso, {
+      'GET /pedidos': ({ query }) => (query.activos ? [enviado('m')] : []),
+    });
+    const pedidos = usePedidosStore();
+    await pedidos.cargarActivos();
+
+    pedidos.alCerrarPedido({ id: 'm', estado: 'pagado' });
+
+    expect(pedidos.lista).toHaveLength(0);
+    expect(pedidos.comandas.map((p) => p.id)).toEqual(['m']);
+    expect(pedidos.buscar('m')?.estado).toBe('pagado');
+  });
+
+  it('una venta cobrada sin pasar por la cocina, o una anulada, sale de una vez', async () => {
+    const sinCocina = pedido(
+      's',
+      'Mesa 6',
+      [{ estadoCocina: 'pendiente', nombre: 'Gaseosa', minutos: 1 }],
+      'abierto',
+    );
+    simularBackend(fetchFalso, {
+      'GET /pedidos': ({ query }) => (query.activos ? [sinCocina, enviado('x')] : []),
+    });
+    const pedidos = usePedidosStore();
+    await pedidos.cargarActivos();
+
+    pedidos.alCerrarPedido({ id: 's', estado: 'pagado' });
+    pedidos.alCerrarPedido({ id: 'x', estado: 'anulado' });
+
+    expect(pedidos.comandas).toHaveLength(0);
   });
 });

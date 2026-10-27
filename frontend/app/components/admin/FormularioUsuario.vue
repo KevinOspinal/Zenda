@@ -1,6 +1,7 @@
 <!--
   Crear un empleado (con su contraseña inicial) o editar uno: nombre, rol y si está activo.
-  Solo el dueño puede hacerlo; los roles asignables son administrador, cajero y mesero.
+  Solo el dueño puede hacerlo; los roles asignables son administrador, cajero, mesero y
+  cocina (la cuenta compartida de la tableta de la cocina).
   Cambiar el rol o desactivar a alguien cierra sus sesiones (regla del backend).
 -->
 <script setup>
@@ -21,6 +22,11 @@ const ROLES_ASIGNABLES = Object.freeze([
   },
   { value: 'cajero', label: 'Cajero', description: 'Cobrar, abrir y cerrar la caja' },
   { value: 'mesero', label: 'Mesero', description: 'Tomar pedidos y enviarlos a la cocina' },
+  {
+    value: 'cocina',
+    label: 'Cocina',
+    description: 'La tableta de la cocina: ve las comandas y marca los platos listos',
+  },
 ]);
 
 const contrasenaNueva = z
@@ -36,7 +42,7 @@ const esquema = computed(() =>
     email: props.usuario
       ? z.string()
       : z.string().trim().toLowerCase().pipe(z.email('Escribe un correo válido')),
-    rol: z.enum(['administrador', 'cajero', 'mesero']),
+    rol: z.enum(['administrador', 'cajero', 'mesero', 'cocina']),
     contrasena: props.usuario ? z.string() : contrasenaNueva,
     activo: z.boolean(),
   }),

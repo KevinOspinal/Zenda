@@ -145,6 +145,15 @@ describe('armarTablero', () => {
     expect(tablero.pendiente[0].minutos).toBe(25);
   });
 
+  it('incluye los pedidos ya cobrados que aún tienen platos por entregar', () => {
+    const tablero = armarTablero(
+      [pedido('cobrado', 'pagado', [['preparando', '2026-10-27T15:10:00.000Z']])],
+      ahora,
+    );
+
+    expect(tablero.preparando.map((c) => c.pedido.id)).toEqual(['cobrado']);
+  });
+
   it('no muestra pedidos sin enviar a la cocina ni comandas ya entregadas', () => {
     const tablero = armarTablero(
       [

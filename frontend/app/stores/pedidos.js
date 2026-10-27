@@ -2,7 +2,11 @@
 // Pedidos activos (sin cobrar ni anular) con sus ítems. Los usan el mapa de mesas, la toma
 // de pedidos, los avisos del mesero y la cocina.
 //
-// - Los datos vienen del API (GET /pedidos?activos=true&incluirItems=true).
+// Aparte se guardan los pedidos ya cobrados que tienen platos en la cocina (el cliente pagó
+// antes de que salieran): la cocina los sigue viendo y el mesero recibe sus avisos, pero no
+// cuentan como activos (no están por cobrar ni ocupan la mesa).
+//
+// - Los datos vienen del API (GET /pedidos?activos=true y ?cocina=true, con sus ítems).
 // - Cada acción guarda el pedido completo que responde el API: los totales e impuestos los
 //   calcula siempre el backend.
 // - Los eventos en vivo los mantienen al día (ver plugins/02.eventos-en-vivo.client.js).
@@ -11,12 +15,26 @@
 const ESTADOS_ACTIVOS = Object.freeze(['abierto', 'enviado_a_cocina']);
 
 /**
+ * Un pedido cobrado que pasó por la cocina y aún tiene platos por entregar.
+ * @param {any} pedido
+ */
+function esCobradoEnCocina(pedido) {
+  return (
+    pedido.estado === 'pagado' &&
+    Boolean(pedido.enviadoACocinaEn) &&
+    (pedido.items ?? []).some((/** @type {any} */ item) => item.estadoCocina !== 'entregado')
+  );
+}
+
+/**
  * @typedef {{ productoId: string, cantidad: string | number, notas?: string | null }} NuevoItem
  */
 
 export const usePedidosStore = defineStore('pedidos', () => {
   /** Pedidos activos por id. */
   const porId = ref(/** @type {Record<string, any>} */ ({}));
+  /** Pedidos cobrados con platos en la cocina, por id. */
+  const cobradosEnCocina = ref(/** @type {Record<string, any>} */ ({}));
   /** sin_cargar · cargando · listo · error */
   const estadoCarga = ref('sin_cargar');
   const errorCarga = ref('');
@@ -25,6 +43,17 @@ export const usePedidosStore = defineStore('pedidos', () => {
   const lista = computed(() =>
     Object.values(porId.value).sort((a, b) => String(a.abiertoEn).localeCompare(b.abiertoEn)),
   );
+
+  /** Lo que ve la cocina: los activos y los cobrados que aún tienen platos por entregar. */
+  const comandas = computed(() => [...lista.value, ...Object.values(cobradosEnCocina.value)]);
+
+  /**
+   * Un pedido activo o cobrado con platos en la cocina. Null si no está.
+   * @param {string} id
+   */
+  function buscar(id) {
+    return porId.value[id] ?? cobradosEnCocina.value[id] ?? null;
+  }
 
   /** @param {string} mesaId */
   function pedidoDeMesa(mesaId) {
@@ -36,7 +65,7 @@ export const usePedidosStore = defineStore('pedidos', () => {
    * @param {string} [meseroId]
    */
   function platosListos(meseroId) {
-    return lista.value
+    return comandas.value
       .filter((pedido) => !meseroId || pedido.meseroId === meseroId)
       .flatMap((pedido) =>
         (pedido.items ?? [])
@@ -46,22 +75,35 @@ export const usePedidosStore = defineStore('pedidos', () => {
   }
 
   /**
-   * Guarda un pedido que entregó el API. Si ya no está activo (se cobró o se anuló), lo quita.
+   * Guarda un pedido que entregó el API donde corresponde: entre los activos, entre los
+   * cobrados que siguen en la cocina, o en ninguna parte (se anuló o ya salió todo).
    * @param {any} pedido
    */
   function guardar(pedido) {
+    delete porId.value[pedido.id];
+    delete cobradosEnCocina.value[pedido.id];
     if (ESTADOS_ACTIVOS.includes(pedido.estado)) porId.value[pedido.id] = pedido;
-    else delete porId.value[pedido.id];
+    else if (esCobradoEnCocina(pedido)) cobradosEnCocina.value[pedido.id] = pedido;
   }
 
   // ───────────────────────────── Cargar ─────────────────────────────
 
-  /** Trae todos los pedidos activos con sus ítems. */
+  /** Trae los pedidos activos y las comandas de la cocina, con sus ítems. */
   async function cargarActivos() {
     if (estadoCarga.value !== 'listo') estadoCarga.value = 'cargando';
     try {
-      const pedidos = await useApi().get('/pedidos', { activos: true, incluirItems: true });
-      porId.value = Object.fromEntries(pedidos.map((/** @type {any} */ p) => [p.id, p]));
+      const api = useApi();
+      const [activos, deLaCocina] = await Promise.all([
+        api.get('/pedidos', { activos: true, incluirItems: true }),
+        api.get('/pedidos', { cocina: true, incluirItems: true }),
+      ]);
+      porId.value = Object.fromEntries(activos.map((/** @type {any} */ p) => [p.id, p]));
+      // Las comandas sin cobrar ya vienen entre los activos; aquí solo las cobradas.
+      cobradosEnCocina.value = Object.fromEntries(
+        deLaCocina
+          .filter((/** @type {any} */ p) => p.estado === 'pagado')
+          .map((/** @type {any} */ p) => [p.id, p]),
+      );
       estadoCarga.value = 'listo';
       errorCarga.value = '';
     } catch (error) {
@@ -129,7 +171,7 @@ export const usePedidosStore = defineStore('pedidos', () => {
    * @param {'preparando' | 'listo' | 'entregado'} estadoCocina
    */
   async function cambiarEstadoCocina(pedidoId, itemId, estadoCocina) {
-    const item = porId.value[pedidoId]?.items?.find((/** @type {any} */ i) => i.id === itemId);
+    const item = buscar(pedidoId)?.items?.find((/** @type {any} */ i) => i.id === itemId);
     const anterior = item?.estadoCocina;
     if (item) item.estadoCocina = estadoCocina;
     try {
@@ -202,22 +244,32 @@ export const usePedidosStore = defineStore('pedidos', () => {
    * @param {{ pedidoId: string, itemId: string, estadoCocina: string }} datos
    */
   function alCambiarEstadoCocina({ pedidoId, itemId, estadoCocina }) {
-    const item = porId.value[pedidoId]?.items?.find((/** @type {any} */ i) => i.id === itemId);
-    if (item) item.estadoCocina = estadoCocina;
-    else alCambiarPedido({ id: pedidoId });
+    const pedido = buscar(pedidoId);
+    const item = pedido?.items?.find((/** @type {any} */ i) => i.id === itemId);
+    if (!item) {
+      alCambiarPedido({ id: pedidoId });
+      return;
+    }
+    item.estadoCocina = estadoCocina;
+    // Un pedido cobrado sale de la cocina cuando se entrega su último plato.
+    guardar(pedido);
   }
 
   /**
    * Un pedido se cobró o se anuló (pedido:pagado, pedido:anulado): deja de estar activo.
-   * @param {{ id: string }} datos
+   * Si se cobró con platos en la cocina, la cocina lo sigue viendo hasta que salgan.
+   * @param {{ id: string, estado?: string }} datos
    */
-  function alCerrarPedido({ id }) {
-    delete porId.value[id];
+  function alCerrarPedido({ id, estado = 'anulado' }) {
+    const pedido = buscar(id);
+    if (pedido) guardar({ ...pedido, estado });
   }
 
   return {
     porId,
     lista,
+    comandas,
+    buscar,
     estadoCarga,
     errorCarga,
     pedidoDeMesa,

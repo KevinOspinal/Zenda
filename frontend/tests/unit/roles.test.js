@@ -23,7 +23,13 @@ describe('secciones por rol', () => {
   });
 
   it('todos los roles tienen perfil', () => {
-    for (const rol of /** @type {const} */ (['dueno', 'administrador', 'cajero', 'mesero'])) {
+    for (const rol of /** @type {const} */ ([
+      'dueno',
+      'administrador',
+      'cajero',
+      'mesero',
+      'cocina',
+    ])) {
       expect(idsDeSecciones(rol)).toContain('perfil');
     }
   });
@@ -35,6 +41,38 @@ describe('inicio por rol', () => {
     expect(inicioDe('cajero')).toBe('/caja');
     expect(inicioDe('administrador')).toBe('/reportes');
     expect(inicioDe('dueno')).toBe('/reportes');
+    expect(inicioDe('cocina')).toBe('/cocina');
+  });
+});
+
+describe('la cuenta de la cocina', () => {
+  it('no tiene navegación: su tablero no aparece en ella y solo le queda el perfil', () => {
+    expect(idsDeSecciones('cocina')).toEqual(['perfil']);
+    expect(idsDeSecciones('dueno')).not.toContain('cocina');
+  });
+
+  it('solo entra a su tablero y a su perfil, ni siquiera a un pedido', () => {
+    const entrar = (/** @type {string} */ ruta, /** @type {string} */ seccion) =>
+      redireccionNecesaria({ ruta, seccion, rol: 'cocina' });
+    expect(entrar('/cocina', 'cocina')).toBeNull();
+    expect(entrar('/perfil', 'perfil')).toBeNull();
+    expect(entrar('/mesas', 'mesas')).toBe('/cocina');
+    expect(redireccionNecesaria({ ruta: '/pedidos/abc', rol: 'cocina' })).toBe('/cocina');
+  });
+
+  it('marca los platos, pero no toma pedidos ni cobra', () => {
+    expect(puede('cocina', 'prepararPlatos')).toBe(true);
+    expect(puede('cocina', 'tomarPedidos')).toBe(false);
+    expect(puede('cocina', 'cobrar')).toBe(false);
+  });
+
+  it('el mesero no usa la pantalla de cocina; el cajero sí (en cafeterías también prepara)', () => {
+    expect(puede('mesero', 'prepararPlatos')).toBe(false);
+    expect(redireccionNecesaria({ ruta: '/cocina', seccion: 'cocina', rol: 'mesero' })).toBe(
+      '/mesas',
+    );
+    expect(puede('cajero', 'prepararPlatos')).toBe(true);
+    expect(redireccionNecesaria({ ruta: '/cocina', seccion: 'cocina', rol: 'cajero' })).toBeNull();
   });
 });
 
@@ -92,6 +130,6 @@ describe('redireccionNecesaria (quién entra a cada página)', () => {
 
   it('deja entrar a las secciones del propio rol y a páginas sin sección', () => {
     expect(redireccionNecesaria({ ruta: '/caja', seccion: 'caja', rol: 'cajero' })).toBeNull();
-    expect(redireccionNecesaria({ ruta: '/cocina', rol: 'mesero' })).toBeNull();
+    expect(redireccionNecesaria({ ruta: '/pedidos/abc', rol: 'mesero' })).toBeNull();
   });
 });

@@ -3,7 +3,9 @@
   y los platos por entregar con cantidad grande y notas resaltadas.
   - Tocar un plato lo avanza un paso (pendiente → preparando → listo).
   - "Todo listo" termina de una vez lo que falta.
-  - Cuando todo está listo, "Ya salió" la quita del tablero (por ejemplo, en mostrador).
+  - Cuando todo está listo: en mostrador, "Ya salió" la quita del tablero; en una mesa, la
+    quita el mesero al marcar los platos como entregados.
+  - Si el cliente ya pagó (comidas rápidas), lo dice: la comanda sigue hasta que salga.
   Pensada para leerse a 2 metros, en modo oscuro.
 -->
 <script setup>
@@ -36,6 +38,9 @@ const faltanPlatos = computed(() =>
   props.comanda.items.some((item) => ['pendiente', 'preparando'].includes(item.estadoCocina)),
 );
 const nombreMesa = computed(() => props.comanda.pedido.mesa?.nombre ?? 'Mostrador');
+/** En una mesa, el mesero confirma la entrega; en mostrador la entrega la cocina. */
+const enMesa = computed(() => Boolean(props.comanda.pedido.mesa));
+const pagado = computed(() => props.comanda.pedido.estado === 'pagado');
 
 // Clases completas para que Tailwind las encuentre.
 const BORDE_POR_URGENCIA = Object.freeze({
@@ -81,6 +86,13 @@ const PLATO_POR_ESTADO = Object.freeze({
           {{ duracionCorta(comanda.minutos) }}
         </span>
         <UBadge v-if="nueva" color="info" variant="solid" icon="i-lucide-sparkles" label="Nueva" />
+        <UBadge
+          v-if="pagado"
+          color="success"
+          variant="subtle"
+          icon="i-lucide-circle-check"
+          label="Pagado"
+        />
       </div>
     </header>
 
@@ -135,6 +147,13 @@ const PLATO_POR_ESTADO = Object.freeze({
       label="Todo listo"
       @click="emit('todoListo')"
     />
+    <p
+      v-else-if="enMesa"
+      class="flex items-center justify-center gap-2 rounded-lg bg-default py-3 text-base font-medium text-muted"
+    >
+      <UIcon name="i-lucide-hand-platter" class="size-5" />
+      Esperando al mesero
+    </p>
     <UButton
       v-else
       block

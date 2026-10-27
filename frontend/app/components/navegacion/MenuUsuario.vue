@@ -8,7 +8,10 @@ const sesion = useSesionStore();
 const opciones = computed(() => [
   [
     { label: 'Mi perfil', icon: 'i-lucide-circle-user', to: '/perfil' },
-    { label: 'Usar como pantalla de cocina', icon: 'i-lucide-chef-hat', to: '/cocina' },
+    // Solo quien prepara platos puede usar el dispositivo como pantalla de cocina.
+    ...(puede(sesion.rol, 'prepararPlatos')
+      ? [{ label: 'Usar como pantalla de cocina', icon: 'i-lucide-chef-hat', to: '/cocina' }]
+      : []),
   ],
   [
     {

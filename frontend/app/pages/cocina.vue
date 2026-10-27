@@ -5,7 +5,7 @@
   Siempre en modo oscuro: se lee mejor de lejos y cansa menos la vista.
 -->
 <script setup>
-definePageMeta({ layout: 'cocina', colorMode: 'dark' });
+definePageMeta({ layout: 'cocina', colorMode: 'dark', seccion: 'cocina' });
 useHead({ title: 'Cocina · Zenda' });
 
 const pedidos = usePedidosStore();
@@ -15,7 +15,7 @@ const ahora = useNow({ interval: 15_000 });
 
 pedidos.cargarActivos();
 
-const tablero = computed(() => armarTablero(pedidos.lista, ahora.value));
+const tablero = computed(() => armarTablero(pedidos.comandas, ahora.value));
 
 const COLUMNAS = Object.freeze([
   {

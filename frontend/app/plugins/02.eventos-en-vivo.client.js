@@ -25,7 +25,8 @@ export default defineNuxtPlugin(() => {
    */
   function avisarPlatoListo({ pedidoId, mesa, producto }) {
     if (mesa) mesas.resaltar(mesa.id);
-    const pedido = pedidos.porId[pedidoId];
+    // También si el pedido ya se cobró: el cliente pudo pagar antes de que saliera el plato.
+    const pedido = pedidos.buscar(pedidoId);
     // Solo al mesero del pedido; la cocina no se avisa a sí misma.
     if (!pedido || pedido.meseroId !== sesion.usuario?.id || enLaCocina()) return;
 
