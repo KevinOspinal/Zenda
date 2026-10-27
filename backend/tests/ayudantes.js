@@ -10,6 +10,7 @@ import { firmarTokenAcceso } from '../src/lib/tokens.js';
  * @typedef {object} NegocioDePrueba
  * @property {string} tenantId
  * @property {Record<Rol, string>} encabezados Encabezado `Authorization` listo para cada rol.
+ * @property {Record<Rol, string>} usuarios Id del usuario de cada rol.
  */
 
 /**
@@ -29,6 +30,8 @@ export async function crearNegocioDePrueba(nit, { regimenImpuesto } = {}) {
   const roles = ['dueno', 'administrador', 'cajero', 'mesero'];
   /** @type {Partial<Record<Rol, string>>} */
   const encabezados = {};
+  /** @type {Partial<Record<Rol, string>>} */
+  const usuarios = {};
 
   for (const rol of roles) {
     const usuario = await conNegocio(negocio.id, (tx) =>
@@ -45,7 +48,12 @@ export async function crearNegocioDePrueba(nit, { regimenImpuesto } = {}) {
     );
     const token = firmarTokenAcceso({ usuarioId: usuario.id, tenantId: negocio.id, rol });
     encabezados[rol] = `Bearer ${token}`;
+    usuarios[rol] = usuario.id;
   }
 
-  return { tenantId: negocio.id, encabezados: /** @type {Record<Rol, string>} */ (encabezados) };
+  return {
+    tenantId: negocio.id,
+    encabezados: /** @type {Record<Rol, string>} */ (encabezados),
+    usuarios: /** @type {Record<Rol, string>} */ (usuarios),
+  };
 }
