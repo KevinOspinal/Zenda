@@ -1,4 +1,5 @@
 // @ts-check
+// Reglas de ESLint para revisar la calidad del código.
 import js from '@eslint/js';
 import prettier from 'eslint-config-prettier';
 import globals from 'globals';

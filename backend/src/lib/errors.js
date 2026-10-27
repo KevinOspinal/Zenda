@@ -1,4 +1,5 @@
 // @ts-check
+// Errores propios de la aplicación que se pueden mostrar al cliente sin riesgo.
 
 /** Error de aplicación con código y estado HTTP, seguro de mostrar al cliente. */
 export class AppError extends Error {

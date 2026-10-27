@@ -1,4 +1,5 @@
 // @ts-check
+// Middlewares finales: ruta no encontrada (404) y conversión de errores al formato uniforme.
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 

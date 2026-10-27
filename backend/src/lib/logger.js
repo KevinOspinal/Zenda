@@ -1,4 +1,5 @@
 // @ts-check
+// Logger de la aplicación. Escribe registros en JSON y oculta datos sensibles.
 import pino from 'pino';
 import { env } from '../config/env.js';
 

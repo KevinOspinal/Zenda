@@ -1,4 +1,5 @@
 // @ts-check
+// Configuración de las pruebas con Vitest.
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({

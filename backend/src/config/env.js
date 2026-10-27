@@ -1,4 +1,5 @@
 // @ts-check
+// Lee y valida las variables de entorno. Todo el código usa `env` en lugar de `process.env`.
 import { z } from 'zod';
 
 /** Esquema de las variables de entorno. Si algo falta o es inválido, la app no arranca. */
