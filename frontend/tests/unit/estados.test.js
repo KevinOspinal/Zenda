@@ -70,6 +70,17 @@ describe('aparienciaDelPedido', () => {
     expect(etiqueta(enCocina(['entregado'], false))).toBe('Entregado');
   });
 
+  it('un domicilio está listo para salir, y con todo despachado va en camino', () => {
+    const domicilio = (/** @type {string} */ estadoCocina) => ({
+      estado: /** @type {const} */ ('enviado_a_cocina'),
+      tipo: /** @type {const} */ ('domicilio'),
+      mesa: null,
+      items: [{ estadoCocina }],
+    });
+    expect(etiqueta(domicilio('listo'))).toBe('Listo para salir');
+    expect(etiqueta(domicilio('entregado'))).toBe('En camino');
+  });
+
   it('los demás estados se muestran tal como vienen del API', () => {
     expect(aparienciaDelPedido({ estado: 'abierto', items: [] })).toBe(ESTADOS_PEDIDO.abierto);
     expect(aparienciaDelPedido({ estado: 'pagado', items: [{ estadoCocina: 'entregado' }] })).toBe(

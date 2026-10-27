@@ -1,19 +1,24 @@
 <!--
-  Caja: abrir el turno, ver lo vendido, cobrar los pedidos, dividir y anular cuentas, y
-  cerrar con arqueo.
+  Caja: abrir el turno, ver lo vendido, cobrar los pedidos, dividir y anular cuentas,
+  registrar y despachar domicilios, y cerrar con arqueo.
   - Tablet horizontal y PC: pedidos por cobrar a la izquierda y el elegido a la derecha.
   - Celular: la lista y el detalle en un panel desde abajo.
-  Atajos en PC: N venta de mostrador, C cobrar el pedido elegido.
+  Atajos en PC: N venta de mostrador, D nuevo domicilio, C cobrar el pedido elegido.
 -->
 <script setup>
 definePageMeta({ seccion: 'caja' });
 
 const caja = useCajaStore();
 const pedidos = usePedidosStore();
+const domicilios = useDomiciliosStore();
+const toast = useToast();
 const pantallaGrande = useMediaQuery('(min-width: 1024px)');
 
 caja.cargarTurno();
 pedidos.cargarActivos();
+domicilios.cargar();
+
+const nuevoDomicilio = ref(false);
 
 // Pedido elegido. En pantallas grandes se elige el primero de una vez.
 const seleccionadoId = ref('');
@@ -40,9 +45,33 @@ function cobrar() {
   detalleAbierto.value = false;
   cobrando.value = true;
 }
-function alCobrar() {
+/** Domicilio contra entrega que queda entregado apenas termine su cobro. */
+const entregarAlCobrar = ref('');
+/** @param {any} domicilio */
+function cobrarYEntregar(domicilio) {
+  seleccionadoId.value = domicilio.id;
+  entregarAlCobrar.value = domicilio.id;
+  cobrando.value = true;
+}
+watch(cobrando, (abierto) => {
+  if (!abierto) entregarAlCobrar.value = '';
+});
+
+async function alCobrar() {
+  const domicilioId = entregarAlCobrar.value;
   seleccionadoId.value = '';
   caja.cargarTurno();
+  if (!domicilioId) return;
+  try {
+    await domicilios.entregar(domicilioId);
+  } catch (fallo) {
+    toast.add({
+      title: fallo instanceof ErrorApi ? fallo.message : MENSAJE_ERROR_GENERICO,
+      description: 'Se cobró, pero no se pudo marcar como entregado. Inténtalo de nuevo.',
+      icon: 'i-lucide-circle-alert',
+      color: 'error',
+    });
+  }
 }
 /** Al dividir, queda elegida la cuenta nueva, lista para cobrar. */
 const alDividir = (/** @type {{ nuevo: any }} */ { nuevo }) => (seleccionadoId.value = nuevo.id);
@@ -59,6 +88,7 @@ async function abrirCierre() {
 
 defineShortcuts({
   n: () => navigateTo('/mostrador'),
+  d: () => (nuevoDomicilio.value = true),
   c: cobrar,
 });
 </script>
@@ -92,6 +122,10 @@ defineShortcuts({
           {{ formatearPesos(caja.turno.montoInicial) }}
         </p>
         <div class="flex flex-wrap gap-2">
+          <UButton icon="i-lucide-bike" variant="soft" size="lg" @click="nuevoDomicilio = true">
+            Nuevo domicilio
+            <UKbd value="D" class="ms-1 hidden lg:inline-flex" />
+          </UButton>
           <UButton to="/mostrador" icon="i-lucide-shopping-bag" variant="soft" size="lg">
             Venta de mostrador
             <UKbd value="N" class="ms-1 hidden lg:inline-flex" />
@@ -108,6 +142,8 @@ defineShortcuts({
       </div>
 
       <ResumenTurno :resumen="caja.turno.resumen" />
+
+      <DomiciliosEnCurso @cobrar-y-entregar="cobrarYEntregar" />
 
       <div class="grid gap-5 lg:grid-cols-5">
         <PedidosDeCaja
@@ -154,5 +190,6 @@ defineShortcuts({
     <ModalDividir v-model:abierto="dividiendo" :pedido="seleccionado" @dividido="alDividir" />
     <ModalAnular v-model:abierto="anulando" :pedido="seleccionado" @anulado="seleccionadoId = ''" />
     <CerrarCaja v-model:abierto="cerrando" :turno="turnoParaCerrar" />
+    <NuevoDomicilio v-model:abierto="nuevoDomicilio" />
   </div>
 </template>

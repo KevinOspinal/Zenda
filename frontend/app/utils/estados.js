@@ -5,6 +5,7 @@
 // para que "Preparando" sea siempre ámbar con una llama, en todas las pantallas.
 // El color nunca va solo: siempre lo acompañan el ícono y la etiqueta (accesibilidad).
 import { formatearPesos, aDecimal } from './dinero.js';
+import { tipoDelPedido } from './pedidos.js';
 
 /** @typedef {'primary' | 'secondary' | 'success' | 'info' | 'warning' | 'error' | 'neutral'} ColorUi */
 /** @typedef {{ etiqueta: string, color: ColorUi, icono: string }} Apariencia */
@@ -47,14 +48,30 @@ export const ESTADOS_PEDIDO = Object.freeze({
 });
 
 /**
- * Cómo va en la cocina un pedido que ya se envió, según sus platos (ver aparienciaDelPedido).
- * @type {Readonly<Record<'listoMesa' | 'listoMostrador' | 'servido' | 'entregado', Apariencia>>}
+ * Cómo va en la cocina un pedido que ya se envió, según sus platos y su tipo
+ * (ver aparienciaDelPedido).
+ * @type {Readonly<Record<'listoMesa' | 'listoMostrador' | 'listoDomicilio' | 'servido' |
+ *   'entregado' | 'despachado', Apariencia>>}
  */
 export const AVANCE_EN_COCINA = Object.freeze({
   listoMesa: { etiqueta: 'Listo para llevar', color: 'info', icono: 'i-lucide-bell-ring' },
   listoMostrador: { etiqueta: 'Listo para entregar', color: 'info', icono: 'i-lucide-bell-ring' },
+  listoDomicilio: { etiqueta: 'Listo para salir', color: 'info', icono: 'i-lucide-package-check' },
   servido: { etiqueta: 'Servido', color: 'secondary', icono: 'i-lucide-check-check' },
   entregado: { etiqueta: 'Entregado', color: 'secondary', icono: 'i-lucide-check-check' },
+  despachado: { etiqueta: 'En camino', color: 'secondary', icono: 'i-lucide-bike' },
+});
+
+/** Lo que dice un pedido con platos listos, y uno con todo entregado, según su tipo. */
+const LISTO_POR_TIPO = Object.freeze({
+  mesa: AVANCE_EN_COCINA.listoMesa,
+  mostrador: AVANCE_EN_COCINA.listoMostrador,
+  domicilio: AVANCE_EN_COCINA.listoDomicilio,
+});
+const TERMINADO_POR_TIPO = Object.freeze({
+  mesa: AVANCE_EN_COCINA.servido,
+  mostrador: AVANCE_EN_COCINA.entregado,
+  domicilio: AVANCE_EN_COCINA.despachado,
 });
 
 /**
@@ -62,10 +79,11 @@ export const AVANCE_EN_COCINA = Object.freeze({
  * se cobra, aunque ya se hayan entregado todos sus platos; por eso, mientras tanto, se mira
  * cómo van sus platos:
  * - Alguno pendiente o preparándose: "En cocina".
- * - Ninguno en preparación y alguno listo: "Listo para llevar" (en mostrador, "para entregar").
- * - Todos entregados: "Servido" (en mostrador, "Entregado").
- * @param {{ estado: keyof typeof ESTADOS_PEDIDO, mesa?: object | null,
- *   items?: { estadoCocina: string }[] }} pedido
+ * - Ninguno en preparación y alguno listo: "Listo para llevar" (en mostrador, "para entregar";
+ *   en domicilio, "para salir").
+ * - Todos entregados: "Servido" (en mostrador, "Entregado"; un domicilio, "En camino").
+ * @param {{ estado: keyof typeof ESTADOS_PEDIDO, tipo?: import('./pedidos.js').TipoPedido,
+ *   mesa?: object | null, items?: { estadoCocina: string }[] }} pedido
  * @returns {Apariencia}
  */
 export function aparienciaDelPedido(pedido) {
@@ -78,9 +96,8 @@ export function aparienciaDelPedido(pedido) {
     return ESTADOS_PEDIDO.enviado_a_cocina;
   }
 
-  const enMesa = Boolean(pedido.mesa);
-  if (hay('listo')) return enMesa ? AVANCE_EN_COCINA.listoMesa : AVANCE_EN_COCINA.listoMostrador;
-  return enMesa ? AVANCE_EN_COCINA.servido : AVANCE_EN_COCINA.entregado;
+  const tipo = tipoDelPedido(pedido);
+  return hay('listo') ? LISTO_POR_TIPO[tipo] : TERMINADO_POR_TIPO[tipo];
 }
 
 /**
@@ -166,5 +183,10 @@ export const ACCIONES_AUDITORIA = Object.freeze({
     etiqueta: 'Propina sugerida',
     color: 'info',
     icono: 'i-lucide-hand-coins',
+  },
+  cambiar_valor_domicilio: {
+    etiqueta: 'Valor del domicilio',
+    color: 'info',
+    icono: 'i-lucide-bike',
   },
 });

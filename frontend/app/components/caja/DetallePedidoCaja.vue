@@ -11,6 +11,8 @@ const emit = defineEmits({ cobrar: () => true, dividir: () => true, anular: () =
 
 const sesion = useSesionStore();
 const puedeAnular = computed(() => puede(sesion.rol, 'anularPedidos'));
+/** El total incluye el valor del domicilio: se muestra para que no sorprenda. */
+const tieneDomicilio = computed(() => aDecimal(props.pedido.valorDomicilio ?? 0).greaterThan(0));
 const sePuedeDividir = computed(() =>
   sumar(props.pedido.items.map((/** @type {any} */ i) => i.cantidad)).greaterThan(1),
 );
@@ -21,9 +23,13 @@ const sePuedeDividir = computed(() =>
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0">
         <h2 class="truncate text-xl font-bold text-highlighted">
-          {{ pedido.mesa?.nombre ?? 'Mostrador' }}
+          {{ nombreDelPedido(pedido) }}
         </h2>
         <p class="text-sm text-muted">Abierto {{ haceCuanto(pedido.abiertoEn) }}</p>
+        <p v-if="pedido.entrega" class="mt-1 flex items-start gap-1 text-sm text-default">
+          <UIcon name="i-lucide-map-pin" class="mt-0.5 size-4 shrink-0 text-muted" />
+          {{ pedido.entrega.direccion }}
+        </p>
       </div>
       <ChipEstado :apariencia="aparienciaDelPedido(pedido)" />
     </div>
@@ -31,6 +37,10 @@ const sePuedeDividir = computed(() =>
     <ResumenCuenta :items="pedido.items ?? []" solo-lectura />
 
     <dl class="cifra space-y-1 border-t border-default pt-3 text-sm">
+      <div v-if="tieneDomicilio" class="flex justify-between text-muted">
+        <dt>Domicilio (incluido en la base, sin impuesto)</dt>
+        <dd>{{ formatearPesos(pedido.valorDomicilio) }}</dd>
+      </div>
       <div class="flex justify-between text-muted">
         <dt>Base</dt>
         <dd>{{ formatearPesos(pedido.subtotal, { conCentavos: true }) }}</dd>

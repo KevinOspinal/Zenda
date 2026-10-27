@@ -57,12 +57,18 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
   const mesa = computed(
     () => pedido.value?.mesa ?? mesas.lista.find((m) => m.id === mesaId.value) ?? null,
   );
-  const titulo = computed(() => mesa.value?.nombre ?? 'Mostrador');
-  const subtitulo = computed(() =>
-    pedido.value
-      ? `Abierto ${haceCuanto(pedido.value.abiertoEn)}`
-      : 'Pedido nuevo: toca un producto para empezar',
+  const titulo = computed(() =>
+    pedido.value ? nombreDelPedido(pedido.value) : (mesa.value?.nombre ?? 'Mostrador'),
   );
+  const subtitulo = computed(() => {
+    if (!pedido.value) return 'Pedido nuevo: toca un producto para empezar';
+    const { entrega, valorDomicilio } = pedido.value;
+    // Un domicilio recuerda a dónde va y que el total incluye su valor.
+    if (entrega) {
+      return `A ${entrega.direccion} · incluye ${formatearPesos(valorDomicilio)} de domicilio`;
+    }
+    return `Abierto ${haceCuanto(pedido.value.abiertoEn)}`;
+  });
   /** A dónde vuelve el botón de atrás y a dónde se va al terminar: al mapa o a la caja. */
   const volverA = computed(() => (mesa.value || mesaId.value ? '/mesas' : '/caja'));
 

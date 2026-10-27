@@ -45,6 +45,15 @@ describe('inicio por rol', () => {
   });
 });
 
+describe('domiciliarios', () => {
+  it('los gestiona la gerencia; la caja no los ve en su navegación', () => {
+    expect(idsDeSecciones('dueno')).toContain('domiciliarios');
+    expect(idsDeSecciones('administrador')).toContain('domiciliarios');
+    expect(idsDeSecciones('cajero')).not.toContain('domiciliarios');
+    expect(puede('cajero', 'gestionarDomiciliarios')).toBe(false);
+  });
+});
+
 describe('la cuenta de la cocina', () => {
   it('no tiene navegación: su tablero no aparece en ella y solo le queda el perfil', () => {
     expect(idsDeSecciones('cocina')).toEqual(['perfil']);

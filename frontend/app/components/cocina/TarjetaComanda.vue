@@ -4,7 +4,8 @@
   - Tocar un plato lo avanza un paso (pendiente → preparando → listo).
   - "Todo listo" termina de una vez lo que falta.
   - Cuando todo está listo: en mostrador, "Ya salió" la quita del tablero; en una mesa, la
-    quita el mesero al marcar los platos como entregados.
+    quita el mesero al marcar los platos como entregados; un domicilio, la caja al despacharlo.
+  - Los pedidos sin mesa se reconocen por su número del día y el cliente ("#15 · Juan").
   - Si el cliente ya pagó (comidas rápidas), lo dice: la comanda sigue hasta que salga.
   Pensada para leerse a 2 metros, en modo oscuro.
 -->
@@ -37,9 +38,12 @@ const nueva = computed(() => props.comanda.minutos < 1);
 const faltanPlatos = computed(() =>
   props.comanda.items.some((item) => ['pendiente', 'preparando'].includes(item.estadoCocina)),
 );
-const nombreMesa = computed(() => props.comanda.pedido.mesa?.nombre ?? 'Mostrador');
-/** En una mesa, el mesero confirma la entrega; en mostrador la entrega la cocina. */
-const enMesa = computed(() => Boolean(props.comanda.pedido.mesa));
+const nombreMesa = computed(() => nombreDelPedido(props.comanda.pedido));
+/**
+ * Quién entrega lo que está listo: en una mesa, el mesero; un domicilio sale cuando la caja
+ * lo despacha; en mostrador lo entrega la cocina ("Ya salió").
+ */
+const tipo = computed(() => tipoDelPedido(props.comanda.pedido));
 const pagado = computed(() => props.comanda.pedido.estado === 'pagado');
 
 // Clases completas para que Tailwind las encuentre.
@@ -70,6 +74,14 @@ const PLATO_POR_ESTADO = Object.freeze({
     <header class="flex items-start justify-between gap-3">
       <div class="min-w-0">
         <h3 class="truncate text-2xl font-bold text-highlighted">{{ nombreMesa }}</h3>
+        <UBadge
+          v-if="tipo !== 'mesa'"
+          :icon="TIPOS_PEDIDO[tipo].icono"
+          :label="TIPOS_PEDIDO[tipo].etiqueta"
+          color="neutral"
+          variant="subtle"
+          class="mb-1"
+        />
         <p class="text-sm text-muted">
           Pedido de las {{ formatearHora(comanda.pedido.abiertoEn) }}
         </p>
@@ -148,11 +160,11 @@ const PLATO_POR_ESTADO = Object.freeze({
       @click="emit('todoListo')"
     />
     <p
-      v-else-if="enMesa"
+      v-else-if="tipo !== 'mostrador'"
       class="flex items-center justify-center gap-2 rounded-lg bg-default py-3 text-base font-medium text-muted"
     >
-      <UIcon name="i-lucide-hand-platter" class="size-5" />
-      Esperando al mesero
+      <UIcon :name="tipo === 'mesa' ? 'i-lucide-hand-platter' : 'i-lucide-bike'" class="size-5" />
+      {{ tipo === 'mesa' ? 'Esperando al mesero' : 'Esperando despacho' }}
     </p>
     <UButton
       v-else

@@ -42,6 +42,7 @@ export const PERMISOS = Object.freeze({
   verInventario: CAJA,
   registrarInventario: GERENCIA, // compras y ajustes
   verUsuarios: GERENCIA,
+  gestionarDomiciliarios: GERENCIA,
   gestionarUsuarios: SOLO_DUENO,
   configurarNegocio: SOLO_DUENO, // propina sugerida
   verAuditoria: SOLO_DUENO,
@@ -141,6 +142,13 @@ export const SECCIONES = Object.freeze([
     etiqueta: 'Usuarios',
     icono: 'i-lucide-users',
     ruta: '/admin/usuarios',
+    roles: GERENCIA,
+  },
+  {
+    id: 'domiciliarios',
+    etiqueta: 'Domiciliarios',
+    icono: 'i-lucide-bike',
+    ruta: '/admin/domiciliarios',
     roles: GERENCIA,
   },
   {

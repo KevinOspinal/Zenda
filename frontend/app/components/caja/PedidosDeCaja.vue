@@ -20,9 +20,8 @@ const busqueda = ref('');
 const visibles = computed(() => {
   const texto = busqueda.value.trim().toLowerCase();
   if (!texto) return props.pedidos;
-  return props.pedidos.filter((pedido) =>
-    (pedido.mesa?.nombre ?? 'mostrador').toLowerCase().includes(texto),
-  );
+  // Se busca por mesa, número del día o nombre del cliente ("#15 · Juan").
+  return props.pedidos.filter((pedido) => nombreDelPedido(pedido).toLowerCase().includes(texto));
 });
 </script>
 
@@ -33,8 +32,8 @@ const visibles = computed(() => {
       icon="i-lucide-search"
       size="lg"
       class="w-full"
-      placeholder="Buscar mesa"
-      aria-label="Buscar mesa"
+      placeholder="Buscar mesa, número o cliente"
+      aria-label="Buscar mesa, número o cliente"
     />
 
     <UEmpty
@@ -60,13 +59,14 @@ const visibles = computed(() => {
         >
           <span class="grid size-10 shrink-0 place-items-center rounded-lg bg-elevated">
             <UIcon
-              :name="pedido.mesa ? 'i-lucide-armchair' : 'i-lucide-shopping-bag'"
+              :name="TIPOS_PEDIDO[tipoDelPedido(pedido)].icono"
               class="size-5 text-toned"
+              :aria-label="TIPOS_PEDIDO[tipoDelPedido(pedido)].etiqueta"
             />
           </span>
           <span class="min-w-0 flex-1">
             <span class="block truncate font-semibold text-highlighted">
-              {{ pedido.mesa?.nombre ?? 'Mostrador' }}
+              {{ nombreDelPedido(pedido) }}
             </span>
             <span class="cifra block text-sm text-muted">
               {{ duracionCorta(minutosTranscurridos(pedido.abiertoEn, ahora)) }}

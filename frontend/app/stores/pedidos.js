@@ -65,13 +65,17 @@ export const usePedidosStore = defineStore('pedidos', () => {
    * @param {string} [meseroId]
    */
   function platosListos(meseroId) {
-    return comandas.value
-      .filter((pedido) => !meseroId || pedido.meseroId === meseroId)
-      .flatMap((pedido) =>
-        (pedido.items ?? [])
-          .filter((/** @type {any} */ item) => item.estadoCocina === 'listo')
-          .map((/** @type {any} */ item) => ({ item, pedido })),
-      );
+    return (
+      comandas.value
+        // Solo los de mesa: los de mostrador y los domicilios los entrega la caja.
+        .filter((pedido) => tipoDelPedido(pedido) === 'mesa')
+        .filter((pedido) => !meseroId || pedido.meseroId === meseroId)
+        .flatMap((pedido) =>
+          (pedido.items ?? [])
+            .filter((/** @type {any} */ item) => item.estadoCocina === 'listo')
+            .map((/** @type {any} */ item) => ({ item, pedido })),
+        )
+    );
   }
 
   /**
@@ -126,12 +130,18 @@ export const usePedidosStore = defineStore('pedidos', () => {
   // ───────────────────────────── Acciones ─────────────────────────────
 
   /**
-   * Crea un pedido con sus primeros productos. Sin mesa es una venta de mostrador.
+   * Crea un pedido con sus primeros productos. Sin mesa es una venta de mostrador; un
+   * domicilio trae además su tipo y sus datos de entrega (ver stores/domicilios.js).
    * El uuidOffline evita duplicarlo si la petición se repite.
-   * @param {{ mesaId?: string, items: NuevoItem[] }} datos
+   * @param {{ mesaId?: string, items: NuevoItem[], [campo: string]: unknown }} datos
    */
-  async function crear({ mesaId, items }) {
-    const pedido = await useApi().post('/pedidos', { mesaId, items, uuidOffline: generarUuid() });
+  async function crear({ mesaId, items, ...otrosDatos }) {
+    const pedido = await useApi().post('/pedidos', {
+      mesaId,
+      items,
+      uuidOffline: generarUuid(),
+      ...otrosDatos,
+    });
     guardar(pedido);
     return pedido;
   }
