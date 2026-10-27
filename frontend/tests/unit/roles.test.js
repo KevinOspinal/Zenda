@@ -1,7 +1,7 @@
 // @ts-check
 // Pruebas de lo que ve y puede hacer cada rol. Los permisos deben coincidir con el backend.
 import { describe, expect, it } from 'vitest';
-import { inicioDe, puede, seccionesDe } from '../../app/utils/roles.js';
+import { inicioDe, puede, redireccionNecesaria, seccionesDe } from '../../app/utils/roles.js';
 
 /** @param {import('../../app/utils/roles.js').Rol} rol */
 const idsDeSecciones = (rol) => seccionesDe(rol).map((seccion) => seccion.id);
@@ -61,5 +61,37 @@ describe('permisos (iguales a los del backend)', () => {
 
   it('sin rol (sin sesión) no se puede nada', () => {
     expect(puede(null, 'tomarPedidos')).toBe(false);
+  });
+});
+
+describe('redireccionNecesaria (quién entra a cada página)', () => {
+  it('sin sesión, solo deja ver las páginas públicas', () => {
+    expect(redireccionNecesaria({ ruta: '/caja', seccion: 'caja', rol: null })).toBe('/ingresar');
+    expect(redireccionNecesaria({ ruta: '/ingresar', publica: true, rol: null })).toBeNull();
+  });
+
+  it('con sesión, el ingreso y la raíz llevan al inicio del rol', () => {
+    expect(redireccionNecesaria({ ruta: '/ingresar', publica: true, rol: 'mesero' })).toBe(
+      '/mesas',
+    );
+    expect(redireccionNecesaria({ ruta: '/', rol: 'cajero' })).toBe('/caja');
+  });
+
+  it('una sección de otro rol lleva al inicio del propio rol', () => {
+    expect(redireccionNecesaria({ ruta: '/reportes', seccion: 'reportes', rol: 'mesero' })).toBe(
+      '/mesas',
+    );
+    expect(
+      redireccionNecesaria({
+        ruta: '/admin/auditoria',
+        seccion: 'auditoria',
+        rol: 'administrador',
+      }),
+    ).toBe('/reportes');
+  });
+
+  it('deja entrar a las secciones del propio rol y a páginas sin sección', () => {
+    expect(redireccionNecesaria({ ruta: '/caja', seccion: 'caja', rol: 'cajero' })).toBeNull();
+    expect(redireccionNecesaria({ ruta: '/cocina', rol: 'mesero' })).toBeNull();
   });
 });

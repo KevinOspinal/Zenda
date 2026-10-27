@@ -4,6 +4,17 @@
 -->
 <script setup>
 import { es } from '@nuxt/ui/locale';
+
+const sesion = useSesionStore();
+
+// Si la sesión termina (el usuario salió, venció o se cerró desde otro dispositivo),
+// la app vuelve al ingreso. El ingreso muestra el motivo, si lo hay.
+watch(
+  () => sesion.activa,
+  (activa, estabaActiva) => {
+    if (estabaActiva && !activa) navigateTo('/ingresar', { replace: true });
+  },
+);
 </script>
 
 <template>

@@ -1,0 +1,76 @@
+<!--
+  Pantalla de carga: se ve mientras la app arranca y recupera la sesión guardada.
+  Es HTML y CSS puros porque aparece antes de que cargue la app (y Nuxt UI).
+-->
+<div class="zenda-carga" role="status" aria-label="Cargando Zenda">
+  <div class="zenda-carga__logo">
+    <svg viewBox="0 0 24 24" width="36" height="36" aria-hidden="true">
+      <g
+        fill="none"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+      >
+        <path
+          d="M11 20a10 10 0 0 0 10-10a25.9 25.9 0 0 0-1.04-7.281a1 1 0 0 0-1.755-.325C15.833 5.5 13 5.5 9.8 6.1A7 7 0 0 0 11 20"
+        />
+        <path d="M2 21a5 5 0 0 1 2.911-4.544C7.613 15.212 8.351 15.24 11 13" />
+      </g>
+    </svg>
+  </div>
+  <p class="zenda-carga__nombre">Zenda</p>
+</div>
+
+<style>
+  /* Colores de Zenda: fondo claro u oscuro según el sistema, logo en esmeralda. */
+  .zenda-carga {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 14px;
+    background: #fff;
+    font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+  }
+  .zenda-carga__logo {
+    display: grid;
+    place-items: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 20px;
+    background: #047857;
+    color: #fff;
+    animation: zenda-latido 1.4s ease-in-out infinite;
+  }
+  .zenda-carga__nombre {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: #1c1917;
+  }
+  @keyframes zenda-latido {
+    50% {
+      transform: scale(0.94);
+      opacity: 0.85;
+    }
+  }
+  @media (prefers-color-scheme: dark) {
+    .zenda-carga {
+      background: #1c1917;
+    }
+    .zenda-carga__logo {
+      background: #34d399;
+      color: #1c1917;
+    }
+    .zenda-carga__nombre {
+      color: #fff;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .zenda-carga__logo {
+      animation: none;
+    }
+  }
+</style>

@@ -25,6 +25,9 @@ export default defineNuxtConfig({
     public: {
       // Dirección del API. En cada ambiente se cambia con la variable NUXT_PUBLIC_API_URL.
       apiUrl: 'http://localhost:3000',
+      // Muestra el enlace "Registrar mi negocio". En producción se apaga con
+      // NUXT_PUBLIC_REGISTRO_HABILITADO=false (el backend también lo cierra allí).
+      registroHabilitado: true,
     },
   },
 

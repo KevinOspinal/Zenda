@@ -191,3 +191,27 @@ export function seccionesDe(rol) {
 export function inicioDe(rol) {
   return INICIO_POR_ROL[rol];
 }
+
+/**
+ * Decide si el usuario puede entrar a una página o a dónde hay que llevarlo.
+ * La usa el middleware de sesión en cada navegación.
+ * @param {object} datos
+ * @param {string} datos.ruta Ruta a la que quiere ir, por ejemplo "/caja".
+ * @param {boolean} [datos.publica] La página se ve sin sesión (ingreso y registro).
+ * @param {string} [datos.seccion] Sección a la que pertenece la página (id de SECCIONES).
+ * @param {Rol | null} datos.rol Rol de la sesión activa, o null si no hay sesión.
+ * @returns {string | null} Ruta a la que hay que redirigir, o null si puede entrar.
+ */
+export function redireccionNecesaria({ ruta, publica = false, seccion, rol }) {
+  // 1. Sin sesión: solo las páginas públicas.
+  if (!rol) return publica ? null : '/ingresar';
+
+  // 2. Con sesión, el ingreso, el registro y la raíz llevan al inicio del rol.
+  if (publica || ruta === '/') return inicioDe(rol);
+
+  // 3. Una página de una sección solo la ven los roles de esa sección.
+  const datosSeccion = SECCIONES.find((s) => s.id === seccion);
+  if (datosSeccion && !datosSeccion.roles.includes(rol)) return inicioDe(rol);
+
+  return null;
+}

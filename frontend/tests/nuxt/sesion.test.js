@@ -7,54 +7,21 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useApi } from '~/composables/useApi.js';
 import { useSesionStore } from '~/stores/sesion.js';
+import {
+  NEGOCIO,
+  USUARIO,
+  errorDeRed,
+  errorDelApi,
+  sesionDelApi,
+  simularBackend as simularBackendCon,
+} from './ayudantes.js';
 
 // En Nuxt, $fetch es una importación automática: se reemplaza por un backend simulado.
 const { fetchFalso } = vi.hoisted(() => ({ fetchFalso: vi.fn() }));
 mockNuxtImport('$fetch', () => fetchFalso);
 
-const USUARIO = { id: 'u1', nombre: 'Laura Mesa', email: 'laura@laindustria.test', rol: 'mesero' };
-const NEGOCIO = { id: 'n1', nombre: 'La Industria', nit: '900111222' };
-
-/**
- * Sesión como la entrega el API.
- * @param {string} numero Para distinguir un token de otro: "1", "2"...
- */
-const sesionDelApi = (numero) => ({
-  tokenAcceso: `acceso-${numero}`,
-  refreshToken: `n1.refresh-${numero}`,
-  expiraEnSegundos: 900,
-  usuario: USUARIO,
-});
-
-/**
- * Error como lo lanza $fetch cuando el API responde con un código de error.
- * @param {number} status
- * @param {string} code
- * @param {Record<string, string>} [encabezados]
- */
-function errorDelApi(status, code, encabezados = {}) {
-  const cuerpo = { error: { code, message: `mensaje técnico de ${code}` } };
-  return Object.assign(new Error(code), {
-    data: cuerpo,
-    response: { status, _data: cuerpo, headers: new Headers(encabezados) },
-  });
-}
-
-/** Error como lo lanza $fetch cuando no hay conexión (sin respuesta). */
-const errorDeRed = () => Object.assign(new Error('fetch failed'), { response: undefined });
-
-/**
- * Programa el backend simulado: cada ruta responde con una función.
- * @param {Record<string, (opciones: any) => any>} rutas Claves como "POST /auth/login".
- */
-function simularBackend(rutas) {
-  fetchFalso.mockImplementation(async (ruta, opciones = {}) => {
-    const responder = rutas[`${opciones.method ?? 'GET'} ${ruta}`];
-    if (!responder) throw new Error(`Ruta no simulada: ${ruta}`);
-    return responder(opciones);
-  });
-  return fetchFalso;
-}
+/** @param {Record<string, (opciones: any) => any>} rutas */
+const simularBackend = (rutas) => simularBackendCon(fetchFalso, rutas);
 
 /**
  * Llamadas que recibió el backend simulado para una ruta.
