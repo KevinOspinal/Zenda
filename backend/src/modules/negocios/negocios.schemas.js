@@ -6,8 +6,12 @@ import {
   alMenosUnCampo,
   esquemaContrasenaNueva,
   esquemaMonto,
+  esquemaTelefono,
   textoObligatorio,
 } from '../../lib/esquemas.js';
+
+/** Régimen de impuestos del negocio (ver src/config/impuestos.js). */
+const esquemaRegimen = z.enum(['responsable_inc', 'franquicia_iva', 'no_responsable']);
 import { PROPINA_MAXIMA_SUGERIDA } from '../pedidos/propina.js';
 
 /** POST /negocios/registro */
@@ -21,9 +25,7 @@ export const esquemaRegistroNegocio = z.object({
       .regex(/^\d{5,15}$/, 'debe tener solo dígitos, sin puntos ni dígito de verificación'),
     ciudad: z.string().trim().max(80).optional(),
     // Define qué impuesto se cobra (ver src/config/impuestos.js).
-    regimenImpuesto: z
-      .enum(['responsable_inc', 'franquicia_iva', 'no_responsable'])
-      .default('responsable_inc'),
+    regimenImpuesto: esquemaRegimen.default('responsable_inc'),
   }),
   dueno: z.object({
     nombre: textoObligatorio(120),
@@ -32,7 +34,7 @@ export const esquemaRegistroNegocio = z.object({
   }),
 });
 
-/** PATCH /negocios/actual: al menos uno de los dos valores. */
+/** PATCH /negocios/actual: al menos un valor. */
 export const esquemaConfiguracionNegocio = alMenosUnCampo(
   z
     .object({
@@ -43,6 +45,12 @@ export const esquemaConfiguracionNegocio = alMenosUnCampo(
       ),
       // Valor del domicilio que se propone en cada pedido a domicilio (editable en cada uno).
       valorDomicilio: esquemaMonto,
+      // No responsable = no factura electrónicamente: sin impuestos y con recibo de venta.
+      regimenImpuesto: esquemaRegimen,
+      // Datos del recibo de venta. null los borra.
+      direccion: z.string().trim().max(200, 'máximo 200 caracteres').nullable(),
+      telefono: esquemaTelefono.nullable(),
+      pieRecibo: z.string().trim().max(200, 'máximo 200 caracteres').nullable(),
     })
     .partial(),
 );

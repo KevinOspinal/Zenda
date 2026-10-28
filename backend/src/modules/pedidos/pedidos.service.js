@@ -27,6 +27,7 @@ import {
 } from '../inventario/movimientos.js';
 import { calcularLinea, calcularTotalesPedido, obtenerTasaImpuesto } from './calculoImpuestos.js';
 import { calcularPropinaSugerida } from './propina.js';
+import { emitirReciboSiNoFactura } from './recibos.js';
 
 /** @typedef {import('../../lib/tokens.js').DatosSesion} DatosSesion */
 /** @typedef {import('../../lib/negocio.js').TransaccionPrisma} TransaccionPrisma */
@@ -94,6 +95,8 @@ const DETALLE_PEDIDO = /** @type {const} */ ({
   mesa: { select: { id: true, nombre: true, estado: true } },
   cliente: { select: { id: true, nombre: true, tipoDocumento: true, numeroDocumento: true } },
   entrega: DETALLE_ENTREGA,
+  // Solo en negocios que no facturan electrónicamente (ver recibos.js).
+  recibo: { select: { numero: true, emitidoEn: true, encabezado: true } },
   tenant: { select: { propinaSugerida: true } },
 });
 
@@ -543,14 +546,15 @@ export function cobrarPedido(sesion, pedidoId, { pagos, propina = '0', clienteId
     });
     if (actualizados.count !== 1) throw errorPedidoCerrado();
 
-    // 6. Registrar los pagos.
+    // 6. Registrar los pagos, con lo que entregó el cliente en efectivo (para el recibo).
     await tx.pago.createMany({
-      data: pagos.map(({ metodo, monto, referencia }) => ({
+      data: pagos.map(({ metodo, monto, referencia, recibido }) => ({
         tenantId: sesion.tenantId,
         pedidoId,
         metodo,
         monto,
         referencia,
+        recibido,
       })),
     });
 
@@ -560,7 +564,10 @@ export function cobrarPedido(sesion, pedidoId, { pagos, propina = '0', clienteId
     // 8. Liberar la mesa.
     if (pedido.mesaId) await liberarMesa(tx, pedido.mesaId);
 
-    // 9. Cambio a devolver: lo recibido en efectivo menos lo abonado en efectivo.
+    // 9. Si el negocio no factura electrónicamente, su recibo de venta con número consecutivo.
+    await emitirReciboSiNoFactura(tx, sesion.tenantId, pedidoId);
+
+    // 10. Cambio a devolver: lo recibido en efectivo menos lo abonado en efectivo.
     const cambio = sumar(
       pagos
         .filter((pago) => pago.recibido !== undefined)

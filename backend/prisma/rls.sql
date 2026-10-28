@@ -41,7 +41,8 @@ BEGIN
     'auditoria',
     'domiciliarios',
     'entregas_domicilio',
-    'contadores_pedidos'
+    'contadores_pedidos',
+    'recibos_venta'
   ]
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', tabla);

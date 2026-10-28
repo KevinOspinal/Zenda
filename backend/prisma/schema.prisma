@@ -156,6 +156,13 @@ model Tenant {
   propinaSugerida Decimal         @default(10) @map("propina_sugerida") @db.Decimal(5, 2)
   // Valor del domicilio que se propone en cada pedido a domicilio (se puede cambiar en cada uno).
   valorDomicilio  Decimal         @default(3000) @map("valor_domicilio") @db.Decimal(14, 2)
+  // Datos que aparecen en el recibo de venta (negocios que no facturan electrónicamente).
+  direccion       String?         @db.VarChar(200)
+  telefono        String?         @db.VarChar(20)
+  // Mensaje al pie del recibo, por ejemplo "¡Gracias por tu compra!".
+  pieRecibo       String?         @map("pie_recibo") @db.VarChar(200)
+  // Último número de recibo de venta que se dio (numeración propia y continua).
+  ultimoRecibo    Int             @default(0) @map("ultimo_recibo")
   creadoEn        DateTime        @default(now()) @map("creado_en") @db.Timestamptz(6)
 
   usuarios              Usuario[]
@@ -176,6 +183,7 @@ model Tenant {
   domiciliarios         Domiciliario[]
   entregasDomicilio     EntregaDomicilio[]
   contadoresPedidos     ContadorPedidos[]
+  recibosVenta          ReciboVenta[]
 
   @@map("tenants")
 }
@@ -395,6 +403,7 @@ model Pedido {
   movimientos        MovimientoInventario[]
   documentosFiscales DocumentoFiscal[]
   entrega            EntregaDomicilio?
+  recibo             ReciboVenta?
 
   @@unique([tenantId, uuidOffline])
   @@index([tenantId, abiertoEn])
@@ -494,6 +503,8 @@ model Pago {
   monto      Decimal    @db.Decimal(14, 2)
   // Número de aprobación del datáfono o de la transferencia, si aplica.
   referencia String?
+  // Lo que entregó el cliente en efectivo (para el cambio y el recibo). Solo en efectivo.
+  recibido   Decimal?   @db.Decimal(14, 2)
   creadoEn   DateTime   @default(now()) @map("creado_en") @db.Timestamptz(6)
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
@@ -590,4 +601,24 @@ model Auditoria {
 
   @@index([tenantId, fecha])
   @@map("auditoria")
+}
+
+/// Recibo de venta de un negocio que no factura electrónicamente (no responsable de IVA ni del
+/// impuesto al consumo). Se emite al cobrar, con numeración propia y continua, y guarda los
+/// datos del negocio con que se emitió para reimprimirlo igual.
+/// ⚠️ Pendiente de validar con un contador: contenido y leyendas del recibo.
+model ReciboVenta {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  pedidoId   String   @unique @map("pedido_id") @db.Uuid
+  numero     Int
+  // Nombre, NIT, ciudad, dirección, teléfono y mensaje al pie del negocio al emitirlo.
+  encabezado Json
+  emitidoEn  DateTime @default(now()) @map("emitido_en") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  pedido Pedido @relation(fields: [pedidoId], references: [id])
+
+  @@unique([tenantId, numero])
+  @@map("recibos_venta")
 }

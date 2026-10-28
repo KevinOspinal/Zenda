@@ -43,3 +43,12 @@ export const IMPUESTO_POR_REGIMEN = Object.freeze({
   // No responsable: no cobra ningún impuesto al consumo.
   no_responsable: null,
 });
+
+/**
+ * Indica si el negocio factura electrónicamente. Un negocio no responsable de IVA ni del
+ * impuesto al consumo no está obligado: entrega un recibo de venta (ver pedidos/recibos.js).
+ * @param {RegimenImpuesto} regimen
+ */
+export function facturaElectronica(regimen) {
+  return regimen !== 'no_responsable';
+}

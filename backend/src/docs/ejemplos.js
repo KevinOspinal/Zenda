@@ -119,6 +119,8 @@ export const PEDIDO = Object.freeze({
   pagos: [],
   mesa: { id: ID.mesa, nombre: 'Mesa 1', estado: 'ocupada' },
   cliente: null,
+  // Solo en negocios que no facturan electrónicamente, después de cobrar.
+  recibo: null,
   // 10 % del subtotal (25925.92), en pesos enteros hacia abajo.
   propinaSugerida: '2592.00',
 });

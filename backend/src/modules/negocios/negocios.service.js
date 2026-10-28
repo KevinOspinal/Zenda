@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { env } from '../../config/env.js';
+import { IMPUESTO_POR_REGIMEN, facturaElectronica } from '../../config/impuestos.js';
 import { ACCIONES, registrarAuditoria } from '../../lib/auditoria.js';
 import { hashearContrasena } from '../../lib/contrasenas.js';
 import { AppError } from '../../lib/errors.js';
@@ -20,7 +21,22 @@ const DATOS_NEGOCIO = /** @type {const} */ ({
   regimenImpuesto: true,
   propinaSugerida: true,
   valorDomicilio: true,
+  direccion: true,
+  telefono: true,
+  pieRecibo: true,
 });
+
+/** @typedef {import('../../config/impuestos.js').RegimenImpuesto} RegimenImpuesto */
+
+/**
+ * Datos del negocio para el cliente del API, con si factura electrónicamente: uno no
+ * responsable de IVA ni del impuesto al consumo no lo hace y entrega recibo de venta.
+ * @template {{ regimenImpuesto: RegimenImpuesto }} T
+ * @param {T} negocio
+ */
+function presentarNegocio(negocio) {
+  return { ...negocio, facturaElectronica: facturaElectronica(negocio.regimenImpuesto) };
+}
 
 /**
  * Indica si el registro público está abierto. Si la variable REGISTRO_HABILITADO no se
@@ -91,8 +107,10 @@ export async function registrarNegocio({ negocio, dueno }) {
  * @param {DatosSesion} sesion
  */
 export function obtenerNegocioActual(sesion) {
-  return conNegocio(sesion.tenantId, (tx) =>
-    tx.tenant.findUniqueOrThrow({ where: { id: sesion.tenantId }, select: DATOS_NEGOCIO }),
+  return conNegocio(sesion.tenantId, async (tx) =>
+    presentarNegocio(
+      await tx.tenant.findUniqueOrThrow({ where: { id: sesion.tenantId }, select: DATOS_NEGOCIO }),
+    ),
   );
 }
 
@@ -103,17 +121,21 @@ const CAMBIOS_AUDITADOS = /** @type {const} */ ([
 ]);
 
 /**
- * Cambia la propina sugerida y el valor del domicilio por defecto. Cada cambio queda en la
- * auditoría con el valor anterior.
+ * Cambia la configuración del negocio: propina sugerida, valor del domicilio, régimen de
+ * impuestos y datos del recibo. La propina, el domicilio y el régimen quedan en la auditoría
+ * con el valor anterior. Un régimen nuevo cambia el impuesto de los productos (ver
+ * ajustarImpuestosDeProductos); las ventas pasadas y lo que ya se pidió no cambian.
  * @param {DatosSesion} sesion
- * @param {{ propinaSugerida?: string, valorDomicilio?: string }} datos
+ * @param {{ propinaSugerida?: string, valorDomicilio?: string,
+ *   regimenImpuesto?: RegimenImpuesto, direccion?: string | null, telefono?: string | null,
+ *   pieRecibo?: string | null }} datos
  */
 export function actualizarNegocioActual(sesion, datos) {
   return conNegocio(sesion.tenantId, async (tx) => {
     // 1. Leer los valores anteriores para la auditoría.
     const anterior = await tx.tenant.findUniqueOrThrow({
       where: { id: sesion.tenantId },
-      select: { propinaSugerida: true, valorDomicilio: true },
+      select: { propinaSugerida: true, valorDomicilio: true, regimenImpuesto: true },
     });
 
     // 2. Guardar el cambio.
@@ -123,7 +145,7 @@ export function actualizarNegocioActual(sesion, datos) {
       select: DATOS_NEGOCIO,
     });
 
-    // 3. Registrar en la auditoría solo los valores que cambiaron.
+    // 3. Registrar en la auditoría los valores que cambiaron.
     for (const [campo, accion] of CAMBIOS_AUDITADOS) {
       if (anterior[campo].equals(negocio[campo])) continue;
       await registrarAuditoria(tx, sesion, {
@@ -133,6 +155,54 @@ export function actualizarNegocioActual(sesion, datos) {
         detalle: { anterior: anterior[campo], nuevo: negocio[campo] },
       });
     }
-    return negocio;
+
+    // 4. Un régimen nuevo cambia el impuesto de los productos.
+    if (anterior.regimenImpuesto !== negocio.regimenImpuesto) {
+      const productosActualizados = await ajustarImpuestosDeProductos(
+        tx,
+        anterior.regimenImpuesto,
+        negocio.regimenImpuesto,
+      );
+      await registrarAuditoria(tx, sesion, {
+        accion: ACCIONES.CAMBIAR_REGIMEN_IMPUESTO,
+        entidad: 'tenants',
+        entidadId: sesion.tenantId,
+        detalle: {
+          anterior: anterior.regimenImpuesto,
+          nuevo: negocio.regimenImpuesto,
+          productosActualizados,
+        },
+      });
+    }
+    return presentarNegocio(negocio);
   });
+}
+
+/**
+ * Ajusta el impuesto de los productos al régimen nuevo.
+ * ⚠️ Regla para validar con un contador.
+ * - No responsable: ningún producto lleva impuesto.
+ * - De no responsable a INC o IVA: todos llevan el impuesto del régimen; el dueño revisa
+ *   después los que no lo causan (por ejemplo, alimentos que se venden sin preparación).
+ * - Entre INC e IVA: los que llevaban el impuesto anterior pasan al nuevo; los exentos siguen.
+ * @param {import('../../lib/negocio.js').TransaccionPrisma} tx
+ * @param {RegimenImpuesto} anterior
+ * @param {RegimenImpuesto} nuevo
+ * @returns {Promise<number>} Cuántos productos cambiaron.
+ */
+async function ajustarImpuestosDeProductos(tx, anterior, nuevo) {
+  const impuestoNuevo = IMPUESTO_POR_REGIMEN[nuevo];
+  if (!impuestoNuevo) {
+    const { count } = await tx.producto.updateMany({
+      where: { tipoImpuesto: { not: 'exento' } },
+      data: { tipoImpuesto: 'exento' },
+    });
+    return count;
+  }
+  const impuestoAnterior = IMPUESTO_POR_REGIMEN[anterior];
+  const { count } = await tx.producto.updateMany({
+    where: impuestoAnterior ? { tipoImpuesto: impuestoAnterior } : {},
+    data: { tipoImpuesto: impuestoNuevo },
+  });
+  return count;
 }

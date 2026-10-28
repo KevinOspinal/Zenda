@@ -18,6 +18,11 @@ const NEGOCIO_ACTUAL = {
   regimenImpuesto: 'responsable_inc',
   propinaSugerida: '10',
   valorDomicilio: '3000',
+  direccion: 'Carrera 2 # 98-22',
+  telefono: '3123334444',
+  pieRecibo: '¡Gracias por tu compra!',
+  // Calculado: los no responsables de IVA ni del impuesto al consumo no facturan electrónicamente.
+  facturaElectronica: true,
 };
 
 export const documentacionNegocios = {
@@ -112,7 +117,20 @@ régimen de impuesto y **porcentaje de propina sugerida**.`,
       resumen: 'Cambiar la propina sugerida',
       roles: ['dueno'],
       descripcion: `
-Cambia la configuración del negocio. Envía uno o los dos valores.
+Cambia la configuración del negocio. Envía solo lo que cambia.
+
+**Régimen de impuestos** (\`regimenImpuesto\`). Decide si el negocio factura electrónicamente
+(\`facturaElectronica\` en la respuesta):
+- \`responsable_inc\` (INC 8 %) o \`franquicia_iva\` (IVA 19 %): factura electrónica.
+- \`no_responsable\`: no cobra impuestos ni factura electrónicamente. En cada cobro se emite un
+  **recibo de venta** con numeración propia (ver \`recibo\` en el pedido).
+- Cambiarlo ajusta el impuesto de los productos: a no responsable, todos quedan sin impuesto;
+  de no responsable a INC o IVA, todos llevan el del régimen (revisa los que no lo causan);
+  entre INC e IVA, se cambia uno por otro. Las ventas pasadas no cambian. Queda en la
+  **auditoría** (\`cambiar_regimen_impuesto\`). ⚠️ Confírmalo con un contador.
+
+**Datos del recibo** (\`direccion\`, \`telefono\`, \`pieRecibo\`): aparecen en el recibo de
+venta. \`null\` los borra.
 
 **Valor del domicilio** (\`valorDomicilio\`): el que se propone en cada pedido a domicilio;
 en cada pedido se puede cambiar (por ejemplo, si es lejos). Por defecto, $3.000. El cambio queda
@@ -126,7 +144,7 @@ mesa (es por el servicio a la mesa).
   ⚠️ Confírmalo con un contador.
 - El cambio queda en la **auditoría** con el valor anterior (\`cambiar_propina_sugerida\`).`,
       cuerpo: cuerpo(esquemaConfiguracionNegocio, {
-        ejemplo: { propinaSugerida: 8, valorDomicilio: 3500 },
+        ejemplo: { regimenImpuesto: 'no_responsable', direccion: 'Carrera 2 # 98-22' },
         descripciones: {
           propinaSugerida:
             'Porcentaje de 0 a 10, con máximo 2 decimales. 0 desactiva la sugerencia.',

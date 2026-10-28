@@ -21,6 +21,7 @@ export const ACCIONES = Object.freeze({
   CAMBIAR_CREDENCIALES_FACTURACION: 'cambiar_credenciales_facturacion',
   CAMBIAR_PROPINA_SUGERIDA: 'cambiar_propina_sugerida',
   CAMBIAR_VALOR_DOMICILIO: 'cambiar_valor_domicilio',
+  CAMBIAR_REGIMEN_IMPUESTO: 'cambiar_regimen_impuesto',
 });
 
 /**

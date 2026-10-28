@@ -461,6 +461,11 @@ propia factura**.
       descripcion: `
 Cobra con **uno o varios pagos** (por ejemplo, parte en efectivo y parte con tarjeta).
 
+**Recibo de venta:** si el negocio no factura electrónicamente (régimen \`no_responsable\`),
+el cobro emite su recibo con el siguiente número consecutivo; el pedido lo trae en \`recibo\`
+(\`numero\`, \`emitidoEn\` y los datos del negocio con que se emitió). Lo que entregó el
+cliente en efectivo (\`recibido\`) queda guardado en el pago, para mostrar el cambio.
+
 **Propina voluntaria** (Ley 1935 de 2018)
 - El mesero le muestra al cliente la \`propinaSugerida\` del pedido y le **pregunta** si
   quiere darla. El cliente puede aceptarla, cambiar el valor o no darla.
