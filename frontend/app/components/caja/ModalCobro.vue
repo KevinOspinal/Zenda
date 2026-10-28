@@ -29,6 +29,7 @@ const propinaOtra = ref('');
 const pagos = ref(/** @type {import('~/utils/caja.js').PagoEnPantalla[]} */ ([]));
 const cliente = ref(/** @type {any} */ (null));
 const cobrando = ref(false);
+const { imprimir } = useImpresionDeRecibo();
 const resultado = ref(
   /** @type {{ pedido: any, cambio: string, advertencias: any[] } | null} */ (null),
 );
@@ -164,6 +165,16 @@ async function confirmar() {
           </p>
         </div>
         <p v-else class="text-lg text-muted">No hay cambio para devolver.</p>
+        <!-- Negocio sin factura electrónica: su recibo de venta, si el cliente lo quiere. -->
+        <UButton
+          v-if="resultado.pedido?.recibo"
+          size="xl"
+          color="neutral"
+          variant="outline"
+          icon="i-lucide-printer"
+          :label="`Imprimir recibo No. ${numeroDeRecibo(resultado.pedido.recibo.numero)}`"
+          @click="imprimir(resultado.pedido)"
+        />
       </div>
 
       <!-- Armar el cobro. -->

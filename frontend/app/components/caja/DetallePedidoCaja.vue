@@ -12,6 +12,7 @@ const emit = defineEmits({ cobrar: () => true, dividir: () => true, anular: () =
 const sesion = useSesionStore();
 const puedeAnular = computed(() => puede(sesion.rol, 'anularPedidos'));
 /** El total incluye el valor del domicilio: se muestra para que no sorprenda. */
+const tieneImpuestos = computed(() => !aDecimal(props.pedido.impuestos ?? 0).isZero());
 const tieneDomicilio = computed(() => aDecimal(props.pedido.valorDomicilio ?? 0).greaterThan(0));
 const sePuedeDividir = computed(() =>
   sumar(props.pedido.items.map((/** @type {any} */ i) => i.cantidad)).greaterThan(1),
@@ -41,11 +42,12 @@ const sePuedeDividir = computed(() =>
         <dt>Domicilio (incluido en la base, sin impuesto)</dt>
         <dd>{{ formatearPesos(pedido.valorDomicilio) }}</dd>
       </div>
-      <div class="flex justify-between text-muted">
+      <!-- Sin impuestos (negocio sin factura electrónica), la base es el total: no se repite. -->
+      <div v-if="tieneImpuestos" class="flex justify-between text-muted">
         <dt>Base</dt>
         <dd>{{ formatearPesos(pedido.subtotal, { conCentavos: true }) }}</dd>
       </div>
-      <div class="flex justify-between text-muted">
+      <div v-if="tieneImpuestos" class="flex justify-between text-muted">
         <dt>Impuesto</dt>
         <dd>{{ formatearPesos(pedido.impuestos, { conCentavos: true }) }}</dd>
       </div>

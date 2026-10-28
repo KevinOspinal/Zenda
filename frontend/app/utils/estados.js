@@ -189,4 +189,9 @@ export const ACCIONES_AUDITORIA = Object.freeze({
     color: 'info',
     icono: 'i-lucide-bike',
   },
+  cambiar_regimen_impuesto: {
+    etiqueta: 'Régimen de impuestos',
+    color: 'warning',
+    icono: 'i-lucide-receipt-text',
+  },
 });

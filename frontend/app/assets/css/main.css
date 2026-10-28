@@ -48,3 +48,23 @@
   --zenda-pago-transferencia: #d95926;
   --zenda-pago-otro: #9085e9;
 }
+
+/* Impresión del recibo de venta: solo se imprime la zona del recibo, sin la app alrededor
+   (ver ReciboParaImprimir). Sin márgenes, para la impresora térmica. */
+@media print {
+  @page {
+    margin: 0;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .zona-impresion,
+  .zona-impresion * {
+    visibility: visible;
+  }
+  .zona-impresion {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+}

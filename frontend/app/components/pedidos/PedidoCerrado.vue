@@ -14,6 +14,7 @@ const props = defineProps({
 
 const pedidos = usePedidosStore();
 const toast = useToast();
+const { imprimir } = useImpresionDeRecibo();
 const pantallaAncha = useMediaQuery('(min-width: 640px)');
 
 const tipo = computed(() => tipoDelPedido(props.pedido));
@@ -82,6 +83,18 @@ const acciones = computed(() => [
           color: /** @type {const} */ (faltaCocina.value ? 'warning' : 'neutral'),
           variant: /** @type {const} */ (faltaCocina.value ? 'solid' : 'outline'),
           onClick: enviarACocina,
+        },
+      ]
+    : []),
+  ...(props.pedido.recibo
+    ? [
+        {
+          label: 'Imprimir recibo',
+          icon: 'i-lucide-printer',
+          size: /** @type {const} */ ('lg'),
+          color: /** @type {const} */ ('neutral'),
+          variant: /** @type {const} */ ('outline'),
+          onClick: () => imprimir(props.pedido),
         },
       ]
     : []),

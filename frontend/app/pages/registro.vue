@@ -19,19 +19,6 @@ const PASOS = [
 const paso = ref(0);
 
 /** Régimen de impuesto: define qué cobra el negocio. */
-const REGIMENES = [
-  {
-    value: 'responsable_inc',
-    label: 'Impuesto al consumo (INC 8 %)',
-    description: 'Restaurantes y cafeterías independientes. Es el más común.',
-  },
-  { value: 'franquicia_iva', label: 'IVA 19 %', description: 'Franquicias de marcas.' },
-  {
-    value: 'no_responsable',
-    label: 'No responsable',
-    description: 'Negocios pequeños que no cobran impuesto al consumo.',
-  },
-];
 
 const esquemaNegocio = z.object({
   nombre: z.string().trim().min(1, 'Escribe el nombre del negocio').max(120),
@@ -145,11 +132,11 @@ async function registrar() {
         <UInput v-model="negocio.ciudad" size="xl" class="w-full" placeholder="Cali" />
       </UFormField>
       <UFormField
-        label="¿Qué impuesto cobra tu negocio?"
+        label="¿Cómo factura tu negocio?"
         name="regimenImpuesto"
         help="Si no estás seguro, confírmalo con tu contador."
       >
-        <URadioGroup v-model="negocio.regimenImpuesto" :items="REGIMENES" variant="card" />
+        <URadioGroup v-model="negocio.regimenImpuesto" :items="OPCIONES_REGIMEN" variant="card" />
       </UFormField>
       <UButton
         type="submit"

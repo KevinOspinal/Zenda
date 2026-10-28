@@ -6,6 +6,7 @@ import {
   duracionCorta,
   fechaRelativa,
   formatearFechaCorta,
+  formatearFechaYHora,
   formatearHora,
   haceCuanto,
   minutosTranscurridos,
@@ -32,6 +33,10 @@ describe('hora y fecha en Colombia', () => {
 
   it('da el día en formato YYYY-MM-DD para los filtros de los reportes', () => {
     expect(diaEnColombia(NOCHE_DEL_26)).toBe('2026-10-26');
+  });
+
+  it('da la fecha y la hora completas, como van en un recibo', () => {
+    expect(conEspaciosNormales(formatearFechaYHora(NOCHE_DEL_26))).toBe('26/10/2026 7:45 p. m.');
   });
 
   it('rechaza fechas inválidas', () => {

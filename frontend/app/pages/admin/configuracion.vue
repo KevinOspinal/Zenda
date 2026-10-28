@@ -1,9 +1,9 @@
 <!--
-  Configuración del negocio (solo el dueño): sus datos, la propina sugerida en mesa, de 0 a
-  10 % (Ley 1935 de 2018) con una vista previa, y el valor del domicilio por defecto. Cada
-  cambio queda en la auditoría.
-  Los datos del negocio se ven pero no se editan aquí: el backend solo permite cambiar la
-  propina sugerida y el valor del domicilio.
+  Configuración del negocio (solo el dueño): sus datos, cómo factura (con factura electrónica
+  o con recibo de venta), los datos del recibo, la propina sugerida en mesa, de 0 a 10 % (Ley
+  1935 de 2018) con una vista previa, y el valor del domicilio por defecto. La facturación, la
+  propina y el domicilio quedan en la auditoría.
+  El nombre y el NIT se ven pero no se editan aquí.
 -->
 <script setup>
 definePageMeta({ seccion: 'configuracion' });
@@ -124,13 +124,16 @@ async function guardar() {
             <dd class="font-medium text-highlighted">{{ negocio.ciudad || '—' }}</dd>
           </div>
           <div>
-            <dt class="text-sm text-muted">Impuesto</dt>
+            <dt class="text-sm text-muted">Facturación</dt>
             <dd class="font-medium text-highlighted">
               {{ NOMBRES_REGIMEN[negocio.regimenImpuesto] }}
             </dd>
           </div>
         </dl>
       </section>
+
+      <FacturacionDelNegocio :negocio="negocio" @guardado="(guardado) => (negocio = guardado)" />
+      <DatosDelRecibo :negocio="negocio" @guardado="(guardado) => (negocio = guardado)" />
 
       <section class="space-y-5 rounded-xl bg-default p-5 ring-1 ring-default">
         <div>

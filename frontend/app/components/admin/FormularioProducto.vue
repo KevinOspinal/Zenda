@@ -110,9 +110,15 @@ async function guardar() {
       title="El cambio de precio queda registrado en la auditoría"
       description="Los pedidos ya tomados conservan el precio con el que se vendieron."
     />
-    <UFormField label="Impuesto" name="tipoImpuesto">
+    <UFormField v-if="permitidos.length > 1" label="Impuesto" name="tipoImpuesto">
       <URadioGroup v-model="datos.tipoImpuesto" :items="opcionesImpuesto" variant="card" />
     </UFormField>
+    <!-- Un negocio sin factura electrónica no cobra impuestos: no hay nada que elegir. -->
+    <p v-else class="flex items-start gap-2 rounded-lg bg-elevated p-3 text-sm text-muted">
+      <UIcon name="i-lucide-receipt-text" class="mt-0.5 size-4 shrink-0" />
+      Sin impuesto: el negocio no factura electrónicamente (no es responsable de IVA ni del impuesto
+      al consumo).
+    </p>
     <USwitch
       v-model="datos.controlaStock"
       size="lg"

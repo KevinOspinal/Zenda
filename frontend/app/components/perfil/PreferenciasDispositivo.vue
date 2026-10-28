@@ -1,10 +1,18 @@
 <!--
-  Preferencias de este dispositivo: tema (claro, oscuro o automático), sonidos y vibración.
+  Preferencias de este dispositivo: tema (claro, oscuro o automático), sonidos, vibración y,
+  si el negocio entrega recibo de venta, el ancho del papel de su impresora.
   Se guardan en el dispositivo, no en la cuenta: cada equipo del negocio tiene las suyas.
 -->
 <script setup>
 const modoDeColor = useColorMode();
 const preferencias = usePreferenciasStore();
+const sesion = useSesionStore();
+/** Solo los negocios sin factura electrónica imprimen recibo de venta. */
+const imprimeRecibos = computed(() => !facturaElectronica(sesion.negocio?.regimenImpuesto));
+const ANCHOS_PAPEL = Object.freeze([
+  { value: '80', label: '80 mm', description: 'El más común' },
+  { value: '58', label: '58 mm', description: 'Impresoras pequeñas' },
+]);
 const { isSupported: vibracionDisponible } = useVibrate();
 
 const TEMAS = Object.freeze([
@@ -61,5 +69,17 @@ const TEMAS = Object.freeze([
           : 'Este dispositivo no permite vibrar.'
       "
     />
+    <UFormField
+      v-if="imprimeRecibos"
+      label="Papel de la impresora de recibos"
+      help="El ancho del rollo de la impresora térmica conectada a este equipo."
+    >
+      <URadioGroup
+        v-model="preferencias.anchoRecibo"
+        :items="ANCHOS_PAPEL"
+        orientation="horizontal"
+        variant="card"
+      />
+    </UFormField>
   </section>
 </template>

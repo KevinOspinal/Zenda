@@ -21,6 +21,13 @@ const PARTES_FECHA = new Intl.DateTimeFormat('es-CO', {
   timeZone: ZONA_HORARIA,
 });
 
+const FECHA_NUMERICA = new Intl.DateTimeFormat('es-CO', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  timeZone: ZONA_HORARIA,
+});
+
 // en-CA da el formato YYYY-MM-DD, el que usan los filtros de los reportes.
 const DIA_ISO = new Intl.DateTimeFormat('en-CA', { timeZone: ZONA_HORARIA });
 
@@ -41,6 +48,15 @@ function aFecha(valor) {
  */
 export function formatearHora(fecha) {
   return HORA.format(aFecha(fecha));
+}
+
+/**
+ * Fecha y hora completas en Colombia, como van en un recibo: "28/10/2026 7:45 p. m.".
+ * @param {ValorFecha} fecha
+ */
+export function formatearFechaYHora(fecha) {
+  const valor = aFecha(fecha);
+  return `${FECHA_NUMERICA.format(valor)} ${HORA.format(valor)}`;
 }
 
 /**
