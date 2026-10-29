@@ -23,7 +23,8 @@
 </div>
 
 <style>
-  /* Colores de Zenda: fondo claro u oscuro según el sistema, logo en esmeralda. */
+  /* Colores de Zenda: fondo claro u oscuro según el sistema, logo en el índigo de la marca
+     (los mismos tonos de Tailwind que usa la app: índigo 700 y 400, slate 900). */
   .zenda-carga {
     position: fixed;
     inset: 0;
@@ -40,7 +41,7 @@
     width: 72px;
     height: 72px;
     border-radius: 20px;
-    background: #047857;
+    background: #432dd7;
     color: #fff;
     animation: zenda-latido 1.4s ease-in-out infinite;
   }
@@ -48,7 +49,7 @@
     margin: 0;
     font-size: 20px;
     font-weight: 700;
-    color: #1c1917;
+    color: #0f172b;
   }
   @keyframes zenda-latido {
     50% {
@@ -58,11 +59,11 @@
   }
   @media (prefers-color-scheme: dark) {
     .zenda-carga {
-      background: #1c1917;
+      background: #0f172b;
     }
     .zenda-carga__logo {
-      background: #34d399;
-      color: #1c1917;
+      background: #7c86ff;
+      color: #0f172b;
     }
     .zenda-carga__nombre {
       color: #fff;

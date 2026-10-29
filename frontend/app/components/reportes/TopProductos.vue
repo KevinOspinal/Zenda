@@ -1,5 +1,5 @@
 <!--
-  Ranking de productos más vendidos: barras horizontales de un solo tono (el esmeralda de la
+  Ranking de productos más vendidos: barras horizontales de un solo tono (el índigo de la
   marca), del que más vendió al que menos, con su cantidad, su total y su participación.
   Los tres primeros llevan el número destacado. Se ven los 10 primeros y un botón abre la
   lista completa.

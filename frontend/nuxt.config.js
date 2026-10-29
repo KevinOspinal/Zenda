@@ -37,8 +37,8 @@ export default defineNuxtConfig({
       title: 'Zenda',
       meta: [
         { name: 'description', content: 'Administración para restaurantes y cafeterías' },
-        // Color de la barra del navegador en el celular: el esmeralda de la marca (700).
-        { name: 'theme-color', content: '#047857' },
+        // Color de la barra del navegador en el celular: el índigo de la marca (700).
+        { name: 'theme-color', content: '#432dd7' },
       ],
     },
   },

@@ -1,5 +1,5 @@
 <!--
-  Gráfica de ventas de una sola serie (en el esmeralda de la marca): por hora en barras o
+  Gráfica de ventas de una sola serie (en el índigo de la marca): por hora en barras o
   por día en área. Trae su información al pasar el dedo o el mouse y, debajo, la misma
   información en una tabla para quien no puede ver la gráfica.
 -->

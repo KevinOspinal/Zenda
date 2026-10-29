@@ -9,7 +9,7 @@ describe('configuración de la app', () => {
     expect(useRuntimeConfig().public.apiUrl).toBe('http://localhost:3000');
   });
 
-  it('usa el tema fresco y natural: esmeralda con grises cálidos', () => {
-    expect(useAppConfig().ui.colors).toMatchObject({ primary: 'emerald', neutral: 'stone' });
+  it('usa el tema de la marca: índigo con grises fríos', () => {
+    expect(useAppConfig().ui.colors).toMatchObject({ primary: 'indigo', neutral: 'slate' });
   });
 });

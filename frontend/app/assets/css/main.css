@@ -15,7 +15,7 @@
 }
 
 /* Contraste AA en modo claro. Nuxt UI usa el tono 500 de cada color, que sobre blanco no
-   llega al mínimo para textos (esmeralda-500: 2,5:1). Con el tono 700 se pasa de 4,5:1 en
+   llega al mínimo para textos (ámbar-500: 2,1:1). Con el tono 700 se pasa de 4,5:1 en
    textos, chips y botones con letra blanca.
    Solo en modo claro (:not(.dark)): estos estilos le ganan a los de Nuxt UI, que están en
    @layer theme, y sin esa condición también cambiarían el modo oscuro, que tiene sus tonos. */

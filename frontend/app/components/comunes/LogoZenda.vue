@@ -1,5 +1,5 @@
 <!--
-  Logo provisional de Zenda: una hoja sobre un cuadro esmeralda y el nombre.
+  Logo provisional de Zenda: una hoja sobre un cuadro del color de la marca y el nombre.
   Se reemplaza cuando el usuario entregue el logo oficial.
 -->
 <script setup>
