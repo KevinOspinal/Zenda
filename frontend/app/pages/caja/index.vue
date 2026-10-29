@@ -1,9 +1,10 @@
 <!--
   Caja: abrir el turno, ver lo vendido, cobrar los pedidos, dividir y anular cuentas,
-  registrar y despachar domicilios, y cerrar con arqueo.
+  registrar y despachar domicilios, reimprimir recibos y cerrar con arqueo.
   - Tablet horizontal y PC: pedidos por cobrar a la izquierda y el elegido a la derecha.
   - Celular: la lista y el detalle en un panel desde abajo.
-  Atajos en PC: N venta de mostrador, D nuevo domicilio, C cobrar el pedido elegido.
+  Atajos en PC: N venta de mostrador, D nuevo domicilio, C cobrar el pedido elegido,
+  R últimos recibos (solo en negocios que entregan recibo de venta).
 -->
 <script setup>
 definePageMeta({ seccion: 'caja' });
@@ -11,6 +12,7 @@ definePageMeta({ seccion: 'caja' });
 const caja = useCajaStore();
 const pedidos = usePedidosStore();
 const domicilios = useDomiciliosStore();
+const sesion = useSesionStore();
 const toast = useToast();
 const pantallaGrande = useMediaQuery('(min-width: 1024px)');
 
@@ -19,6 +21,10 @@ pedidos.cargarActivos();
 domicilios.cargar();
 
 const nuevoDomicilio = ref(false);
+
+// Los negocios sin factura electrónica entregan recibo de venta y pueden reimprimirlo.
+const entregaRecibos = computed(() => !facturaElectronica(sesion.negocio?.regimenImpuesto));
+const verRecibos = ref(false);
 
 // Pedido elegido. En pantallas grandes se elige el primero de una vez.
 const seleccionadoId = ref('');
@@ -90,6 +96,7 @@ defineShortcuts({
   n: () => navigateTo('/mostrador'),
   d: () => (nuevoDomicilio.value = true),
   c: cobrar,
+  r: () => (verRecibos.value = entregaRecibos.value),
 });
 </script>
 
@@ -129,6 +136,17 @@ defineShortcuts({
           <UButton to="/mostrador" icon="i-lucide-shopping-bag" variant="soft" size="lg">
             Venta de mostrador
             <UKbd value="N" class="ms-1 hidden lg:inline-flex" />
+          </UButton>
+          <UButton
+            v-if="entregaRecibos"
+            icon="i-lucide-printer"
+            color="neutral"
+            variant="soft"
+            size="lg"
+            @click="verRecibos = true"
+          >
+            Últimos recibos
+            <UKbd value="R" class="ms-1 hidden lg:inline-flex" />
           </UButton>
           <UButton
             icon="i-lucide-lock"
@@ -191,5 +209,6 @@ defineShortcuts({
     <ModalAnular v-model:abierto="anulando" :pedido="seleccionado" @anulado="seleccionadoId = ''" />
     <CerrarCaja v-model:abierto="cerrando" :turno="turnoParaCerrar" />
     <NuevoDomicilio v-model:abierto="nuevoDomicilio" />
+    <UltimosRecibos v-if="entregaRecibos" v-model:abierto="verRecibos" />
   </div>
 </template>

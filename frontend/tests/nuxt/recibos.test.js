@@ -1,12 +1,14 @@
 // @ts-check
 // Pruebas de los negocios sin factura electrónica con un backend simulado: el recibo de venta,
-// imprimirlo al cobrar, cambiar cómo factura el negocio y los datos del recibo.
+// imprimirlo al cobrar, reimprimirlo desde los últimos recibos, cambiar cómo factura el negocio
+// y los datos del recibo.
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import DatosDelRecibo from '~/components/admin/DatosDelRecibo.vue';
 import FacturacionDelNegocio from '~/components/admin/FacturacionDelNegocio.vue';
 import FormularioProducto from '~/components/admin/FormularioProducto.vue';
 import ModalCobro from '~/components/caja/ModalCobro.vue';
+import UltimosRecibos from '~/components/caja/UltimosRecibos.vue';
 import ReciboDeVenta from '~/components/recibos/ReciboDeVenta.vue';
 import { useSesionStore } from '~/stores/sesion.js';
 import { simularBackend } from './ayudantes.js';
@@ -55,6 +57,22 @@ const PEDIDO_COBRADO = {
   pagos: [{ id: 'pg1', metodo: 'efectivo', monto: '15000', recibido: '20000' }],
   cliente: null,
   recibo: { numero: 7, emitidoEn: '2026-10-28T19:45:00.000Z', encabezado: ENCABEZADO },
+};
+
+/** El mismo recibo como lo lista GET /recibos. */
+const RECIBO_EN_LISTA = {
+  id: 'r7',
+  pedidoId: 'p1',
+  numero: 7,
+  emitidoEn: '2026-10-28T19:45:00.000Z',
+  pedido: {
+    tipo: 'mostrador',
+    numero: 16,
+    nombreCliente: 'Ana',
+    total: '15000',
+    mesa: null,
+    pagos: [{ metodo: 'efectivo' }],
+  },
 };
 
 const botonConTexto = (/** @type {string} */ texto) =>
@@ -125,6 +143,64 @@ describe('recibo de venta', () => {
     botonConTexto('Imprimir recibo No. 000007')?.click();
 
     await vi.waitFor(() => expect(imprimir).toHaveBeenCalledTimes(1));
+    // El que sale al cobrar es el original.
+    expect(useImpresionDeRecibo().copia.value).toBe(false);
+  });
+
+  it('una reimpresión sale marcada como copia', async () => {
+    const original = await mountSuspended(ReciboDeVenta, { props: { pedido: PEDIDO_COBRADO } });
+    const copia = await mountSuspended(ReciboDeVenta, {
+      props: { pedido: PEDIDO_COBRADO, copia: true },
+    });
+
+    expect(original.text()).not.toContain('COPIA');
+    expect(copia.text()).toContain('*** COPIA ***');
+  });
+});
+
+describe('últimos recibos', () => {
+  it('lista los recibos y reimprime uno como copia', async () => {
+    sesionDeNegocio('no_responsable');
+    const imprimir = vi.fn();
+    window.print = imprimir;
+    simularBackend(fetchFalso, {
+      'GET /recibos': () => [RECIBO_EN_LISTA],
+      'GET /pedidos/p1': () => PEDIDO_COBRADO,
+    });
+    await mountSuspended(UltimosRecibos, { props: { abierto: true } });
+
+    await vi.waitFor(() => expect(document.body.textContent).toContain('No. 000007'));
+    expect(document.body.textContent).toContain('#16 · Ana');
+    expect(document.body.textContent).toContain(pesos('15.000'));
+    expect(document.body.textContent).toContain('Efectivo');
+
+    botonConTexto('Reimprimir')?.click();
+
+    await vi.waitFor(() => expect(imprimir).toHaveBeenCalledTimes(1));
+    const { pedido, copia } = useImpresionDeRecibo();
+    expect(pedido.value.recibo.numero).toBe(7);
+    expect(copia.value).toBe(true);
+  });
+
+  it('busca un recibo viejo por su número', async () => {
+    sesionDeNegocio('no_responsable');
+    simularBackend(fetchFalso, {
+      'GET /recibos': (opciones) => (opciones.query?.numero ? [] : [RECIBO_EN_LISTA]),
+    });
+    await mountSuspended(UltimosRecibos, { props: { abierto: true } });
+    await vi.waitFor(() => expect(document.body.textContent).toContain('No. 000007'));
+
+    const buscador = /** @type {HTMLInputElement} */ (
+      document.querySelector('input[aria-label="Buscar por número de recibo"]')
+    );
+    buscador.value = '000002';
+    buscador.dispatchEvent(new Event('input'));
+
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain('No encontramos el recibo No. 000002'),
+    );
+    const [, opciones] = fetchFalso.mock.calls.findLast(([ruta]) => ruta === '/recibos') ?? [];
+    expect(opciones.query).toEqual({ numero: 2 });
   });
 });
 

@@ -89,12 +89,13 @@ const acciones = computed(() => [
   ...(props.pedido.recibo
     ? [
         {
-          label: 'Imprimir recibo',
+          label: 'Reimprimir recibo',
           icon: 'i-lucide-printer',
           size: /** @type {const} */ ('lg'),
           color: /** @type {const} */ ('neutral'),
           variant: /** @type {const} */ ('outline'),
-          onClick: () => imprimir(props.pedido),
+          // El original se imprimió al cobrar: esta sale como copia.
+          onClick: () => imprimir(props.pedido, { copia: true }),
         },
       ]
     : []),

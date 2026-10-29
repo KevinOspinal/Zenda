@@ -10,6 +10,8 @@ const props = defineProps({
   pedido: { type: /** @type {import('vue').PropType<any>} */ (Object), required: true },
   /** Ancho del papel en milímetros: "80" o "58". */
   ancho: { type: String, default: '80' },
+  /** Es una reimpresión: sale marcada como COPIA. */
+  copia: { type: Boolean, default: false },
 });
 
 const encabezado = computed(() => props.pedido.recibo?.encabezado ?? {});
@@ -40,6 +42,7 @@ const cliente = computed(() => props.pedido.cliente ?? null);
       <p class="text-center font-bold">
         RECIBO DE VENTA No. {{ numeroDeRecibo(pedido.recibo.numero) }}
       </p>
+      <p v-if="copia" class="text-center font-bold">*** COPIA ***</p>
       <p>Fecha: {{ formatearFechaYHora(pedido.recibo.emitidoEn) }}</p>
       <p>
         Pedido: {{ nombreDelPedido(pedido) }}
