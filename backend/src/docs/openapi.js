@@ -13,6 +13,7 @@ import { documentacionMenu } from './rutas/menu.js';
 import { documentacionMesasYClientes } from './rutas/mesasYClientes.js';
 import { documentacionNegocios } from './rutas/negocios.js';
 import { documentacionPedidos } from './rutas/pedidos.js';
+import { documentacionRecibos } from './rutas/recibos.js';
 import { documentacionUsuarios } from './rutas/usuarios.js';
 
 const INTRODUCCION = `
@@ -286,6 +287,11 @@ export const documentoOpenApi = {
       description: 'El ciclo de una venta: crear, agregar productos, cocina, cobrar y anular.',
     },
     {
+      name: 'Recibos',
+      description:
+        'Recibos de venta de los negocios que no facturan electrónicamente, para reimprimirlos.',
+    },
+    {
       name: 'Domiciliarios',
       description: 'Quienes llevan los domicilios. La caja los asigna al despachar cada pedido.',
     },
@@ -304,6 +310,7 @@ export const documentoOpenApi = {
     ...documentacionMesasYClientes,
     ...documentacionCaja,
     ...documentacionPedidos,
+    ...documentacionRecibos,
     ...documentacionDomiciliarios,
     ...documentacionInventarioReportesAuditoria,
   },

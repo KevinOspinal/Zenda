@@ -21,6 +21,7 @@ export const ID = Object.freeze({
   uuidOffline: '492f0a8c-3856-4c64-886e-2b7a74373677',
   domiciliario: '5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e',
   entrega: '0a1b2c3d-4e5f-4a6b-9c8d-7e6f5a4b3c2d',
+  recibo: '6c7d8e9f-a0b1-4c2d-9e3f-4a5b6c7d8e9f',
 });
 
 /** Un token de ejemplo (recortado). Usa el que te entrega POST /auth/login. */
@@ -165,5 +166,24 @@ export const PEDIDO_DOMICILIO = Object.freeze({
     despachadoEn: null,
     entregadoEn: null,
     domiciliario: null,
+  },
+});
+
+/**
+ * Recibo de venta de ejemplo, como lo lista GET /recibos: el pedido de ejemplo ya cobrado en
+ * efectivo, en un negocio que no factura electrónicamente (por eso su total no lleva impuesto).
+ */
+export const RECIBO_EN_LISTA = Object.freeze({
+  id: ID.recibo,
+  pedidoId: ID.pedido,
+  numero: 7,
+  emitidoEn: '2026-10-26T23:02:41.510Z',
+  pedido: {
+    tipo: 'mesa',
+    numero: 15,
+    nombreCliente: null,
+    total: '28000',
+    mesa: { nombre: 'Mesa 1' },
+    pagos: [{ metodo: 'efectivo' }],
   },
 });

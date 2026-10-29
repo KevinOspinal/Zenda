@@ -152,6 +152,58 @@ describe('negocio que no factura electrónicamente', () => {
   });
 });
 
+describe('últimos recibos', () => {
+  it('lista los recibos del más reciente al más antiguo, con el resumen de su pedido', async () => {
+    const { pedido } = await ventaCobrada(noFactura);
+
+    const res = await llamar('get', '/recibos', noFactura.encabezados.cajero);
+
+    expect(res.status).toBe(200);
+    const numeros = res.body.map((/** @type {any} */ recibo) => recibo.numero);
+    expect(numeros).toEqual([...numeros].sort((a, b) => b - a));
+    expect(res.body[0]).toEqual({
+      id: expect.any(String),
+      pedidoId: pedido.id,
+      numero: pedido.recibo.numero,
+      emitidoEn: expect.any(String),
+      pedido: {
+        tipo: 'mostrador',
+        numero: pedido.numero,
+        nombreCliente: null,
+        total: '12000',
+        mesa: null,
+        pagos: [{ metodo: 'efectivo' }],
+      },
+    });
+  });
+
+  it('busca un recibo por su número', async () => {
+    const res = await llamar('get', '/recibos?numero=2', noFactura.encabezados.cajero);
+    const noExiste = await llamar('get', '/recibos?numero=9999', noFactura.encabezados.cajero);
+
+    expect(res.body.map((/** @type {any} */ recibo) => recibo.numero)).toEqual([2]);
+    expect(noExiste.body).toEqual([]);
+  });
+
+  it('valida el número que se busca', async () => {
+    const res = await llamar('get', '/recibos?numero=abc', noFactura.encabezados.cajero);
+
+    expect(res.status).toBe(400);
+  });
+
+  it('el mesero no los consulta', async () => {
+    const res = await llamar('get', '/recibos', noFactura.encabezados.mesero);
+
+    expect(res.status).toBe(403);
+  });
+
+  it('cada negocio ve solo sus recibos', async () => {
+    const res = await llamar('get', '/recibos', conFactura.encabezados.cajero);
+
+    expect(res.body).toEqual([]);
+  });
+});
+
 describe('negocio que factura electrónicamente', () => {
   it('no emite recibo: su documento es la factura electrónica', async () => {
     const { pedido } = await ventaCobrada(conFactura);
