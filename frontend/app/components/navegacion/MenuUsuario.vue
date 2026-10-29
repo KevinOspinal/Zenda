@@ -3,6 +3,11 @@
   Va al pie de la barra lateral (tablet y PC).
 -->
 <script setup>
+defineProps({
+  /** Solo el avatar, para la barra lateral compacta. */
+  compacto: { type: Boolean, default: false },
+});
+
 const sesion = useSesionStore();
 
 const opciones = computed(() => [
@@ -30,11 +35,12 @@ const opciones = computed(() => [
       color="neutral"
       variant="ghost"
       block
-      class="justify-start gap-3 px-2 py-2"
+      class="gap-3 px-2 py-2"
+      :class="compacto ? 'justify-center' : 'justify-start'"
       :aria-label="`Opciones de ${sesion.usuario?.nombre ?? 'la cuenta'}`"
     >
       <UAvatar :alt="sesion.usuario?.nombre" size="md" />
-      <span class="min-w-0 flex-1 text-left">
+      <span v-if="!compacto" class="min-w-0 flex-1 text-left">
         <span class="block truncate font-semibold text-highlighted">{{
           sesion.usuario?.nombre
         }}</span>
@@ -42,7 +48,7 @@ const opciones = computed(() => [
           {{ sesion.rol ? ROLES[sesion.rol].etiqueta : '' }}
         </span>
       </span>
-      <UIcon name="i-lucide-chevrons-up-down" class="size-4 shrink-0 text-muted" />
+      <UIcon v-if="!compacto" name="i-lucide-chevrons-up-down" class="size-4 shrink-0 text-muted" />
     </UButton>
   </UDropdownMenu>
 </template>

@@ -121,7 +121,7 @@ function abrirMesa(mesa) {
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div
           v-if="mesas.zonas.length > 1"
-          class="flex gap-2 overflow-x-auto"
+          class="flex max-w-full min-w-0 gap-2 overflow-x-auto pb-1"
           role="group"
           aria-label="Filtrar por zona"
         >

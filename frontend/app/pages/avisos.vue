@@ -95,7 +95,7 @@ async function entregarTodo({ pedido, items }) {
     <TransitionGroup
       v-else
       tag="div"
-      class="grid gap-3 lg:grid-cols-2"
+      class="grid grid-cols-1 gap-3 lg:grid-cols-2"
       enter-from-class="opacity-0 -translate-y-2"
       enter-active-class="transition duration-300 motion-reduce:transition-none"
       leave-to-class="opacity-0 translate-x-8"

@@ -122,7 +122,7 @@ const acciones = computed(() => [
       :ui="{ title: 'text-base font-semibold', icon: 'size-6' }"
     />
 
-    <div class="grid gap-6 lg:grid-cols-5">
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-5">
       <TicketDelPedido class="lg:col-span-3" :pedido="pedido" />
 
       <div class="space-y-6 lg:col-span-2">

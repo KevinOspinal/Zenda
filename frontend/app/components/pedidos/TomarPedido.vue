@@ -162,9 +162,11 @@ function personalizar(producto) {
       :actions="[{ label: 'Volver', to: volverA }]"
     />
 
-    <div v-else class="grid gap-6 lg:grid-cols-3">
+    <!-- El menú usa todo el ancho que deja la cuenta, que en tablet horizontal y PC tiene un
+         ancho fijo. minmax(0, …) evita que una fila ancha (las categorías) estire la página. -->
+    <div v-else class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <MenuParaPedir
-        class="lg:col-span-2"
+        class="min-w-0"
         :cantidades="cantidades"
         @agregar="agregar"
         @personalizar="personalizar"

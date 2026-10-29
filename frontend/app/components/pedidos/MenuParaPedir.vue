@@ -34,6 +34,36 @@ const productosVisibles = computed(() => {
     ? menu.productos.filter((producto) => producto.nombre.toLowerCase().includes(texto))
     : menu.productos.filter((producto) => producto.categoriaId === categoriaActiva.value);
 });
+
+// Categorías en el celular: una fila que se desliza con el dedo. Un desvanecido en cada borde
+// avisa que hay más categorías de ese lado. Desde tablet se acomodan en varias filas.
+const filaCategorias = useTemplateRef('filaCategorias');
+const { arrivedState } = useScroll(filaCategorias);
+const movimiento = usePreferredReducedMotion();
+/** Desvanecido de cada borde (solo en celular, donde la fila se desliza). */
+const DESVANECIDOS = Object.freeze({
+  ambos:
+    'max-sm:[mask-image:linear-gradient(to_right,transparent,black_2rem,black_calc(100%-2rem),transparent)]',
+  inicio: 'max-sm:[mask-image:linear-gradient(to_right,transparent,black_2rem)]',
+  fin: 'max-sm:[mask-image:linear-gradient(to_right,black_calc(100%-2rem),transparent)]',
+});
+const desvanecido = computed(() => {
+  const hayAntes = !arrivedState.left;
+  const hayDespues = !arrivedState.right;
+  if (hayAntes && hayDespues) return DESVANECIDOS.ambos;
+  if (hayAntes) return DESVANECIDOS.inicio;
+  return hayDespues ? DESVANECIDOS.fin : '';
+});
+
+// La categoría elegida siempre queda a la vista (por ejemplo, si estaba al final de la fila).
+watch(categoriaActiva, async () => {
+  await nextTick();
+  filaCategorias.value?.querySelector('[aria-pressed="true"]')?.scrollIntoView({
+    block: 'nearest',
+    inline: 'nearest',
+    behavior: movimiento.value === 'reduce' ? 'auto' : 'smooth',
+  });
+});
 </script>
 
 <template>
@@ -55,7 +85,7 @@ const productosVisibles = computed(() => {
       <div class="flex gap-2">
         <USkeleton v-for="n in 4" :key="n" class="h-10 w-28 rounded-lg" />
       </div>
-      <div class="grid gap-3 sm:grid-cols-2">
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3">
         <USkeleton v-for="n in 6" :key="n" class="h-20 rounded-xl" />
       </div>
     </div>
@@ -84,7 +114,9 @@ const productosVisibles = computed(() => {
     <template v-else>
       <div
         v-if="!busqueda"
-        class="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
+        ref="filaCategorias"
+        class="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible"
+        :class="desvanecido"
         role="group"
         aria-label="Categorías"
       >
@@ -102,7 +134,8 @@ const productosVisibles = computed(() => {
         />
       </div>
 
-      <div class="grid gap-3 sm:grid-cols-2">
+      <!-- Tantas columnas como quepan, sin que una tarjeta quede de menos de 15rem (240 px). -->
+      <div class="grid grid-cols-[repeat(auto-fill,minmax(min(100%,15rem),1fr))] gap-3">
         <TarjetaProducto
           v-for="producto in productosVisibles"
           :key="producto.id"

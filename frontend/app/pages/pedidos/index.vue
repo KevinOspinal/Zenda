@@ -30,7 +30,7 @@ const visibles = computed(() =>
 
     <div
       v-if="pedidos.estadoCarga === 'cargando' || pedidos.estadoCarga === 'sin_cargar'"
-      class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+      class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
     >
       <USkeleton v-for="n in 4" :key="n" class="h-36 rounded-xl" />
     </div>
@@ -56,7 +56,7 @@ const visibles = computed(() =>
     <TransitionGroup
       v-else
       tag="div"
-      class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+      class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
       enter-from-class="opacity-0 -translate-y-1"
       enter-active-class="transition duration-200 motion-reduce:transition-none"
       leave-to-class="opacity-0"

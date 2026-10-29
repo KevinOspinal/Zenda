@@ -45,7 +45,7 @@ useHead(() => ({ title: titulo.value === 'Zenda' ? 'Zenda' : `${titulo.value} ·
             <h1 class="truncate text-lg font-bold text-highlighted">
               {{ titulo }}
             </h1>
-            <p class="truncate text-xs text-muted lg:hidden">{{ sesion.negocio?.nombre }}</p>
+            <p class="truncate text-xs text-muted xl:hidden">{{ sesion.negocio?.nombre }}</p>
           </div>
         </div>
         <IndicadorConexion :estado="conexion.estado" />
