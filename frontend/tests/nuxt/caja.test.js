@@ -1,10 +1,12 @@
 // @ts-check
-// Pruebas de la caja con un backend simulado: abrir la caja, la pantalla con el turno y el
-// cobro completo con propina, efectivo y cambio.
+// Pruebas de la caja con un backend simulado: abrir la caja, la pantalla con el turno (sus
+// tarjetas, la lista con filtros y cómo va el turno) y el cobro completo con propina, efectivo
+// y cambio.
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AbrirCaja from '~/components/caja/AbrirCaja.vue';
 import ModalCobro from '~/components/caja/ModalCobro.vue';
+import PedidosDeCaja from '~/components/caja/PedidosDeCaja.vue';
 import PaginaCaja from '~/pages/caja/index.vue';
 import { useSesionStore } from '~/stores/sesion.js';
 import { errorDelApi, simularBackend } from './ayudantes.js';
@@ -134,8 +136,76 @@ describe('pantalla de caja', () => {
     const pagina = await mountSuspended(PaginaCaja);
 
     await vi.waitFor(() => expect(pagina.text()).toContain('Mesa 4'));
-    expect(pagina.text()).toContain('Efectivo en caja');
+    expect(pagina.text()).toContain('Efectivo en el cajón');
     expect(pagina.text()).toContain(pesos('130.000'));
+  });
+
+  it('las tarjetas dicen en cuántas ventas, de dónde sale el efectivo y cuánto falta', async () => {
+    simularBackend(fetchFalso, {
+      'GET /caja/actual': () => TURNO,
+      'GET /pedidos': () => [PEDIDO],
+    });
+
+    const pagina = await mountSuspended(PaginaCaja);
+
+    await vi.waitFor(() => expect(pagina.text()).toContain('Mesa 4'));
+    expect(pagina.text()).toContain(`1 venta · promedio ${pesos('36.000')}`);
+    expect(pagina.text()).toContain(`Base ${pesos('100.000')} + ${pesos('30.000')} cobrados`);
+    expect(pagina.text()).toContain('1 cuenta abierta');
+  });
+
+  it('sin nada por cobrar, invita a vender y muestra cómo va el turno', async () => {
+    simularBackend(fetchFalso, {
+      'GET /caja/actual': () => TURNO,
+      'GET /pedidos': () => [],
+    });
+
+    const pagina = await mountSuspended(PaginaCaja);
+
+    await vi.waitFor(() => expect(pagina.text()).toContain('Todo cobrado'));
+    expect(pagina.text()).toContain('Cómo va el turno');
+    // Lo cobrado por método: $ 30.000 en efectivo y $ 8.000 con tarjeta.
+    expect(pagina.text()).toContain(pesos('8.000'));
+    expect(pagina.text()).toContain('Pedido cobrado');
+  });
+});
+
+describe('lista de pedidos por cobrar', () => {
+  const MOSTRADOR = {
+    ...PEDIDO,
+    id: 'p2',
+    mesaId: null,
+    mesa: null,
+    tipo: 'mostrador',
+    numero: 16,
+    nombreCliente: 'Ana',
+  };
+
+  it('se filtra por tipo de pedido, con cuántos hay de cada uno', async () => {
+    const lista = await mountSuspended(PedidosDeCaja, {
+      props: { pedidos: [{ ...PEDIDO, tipo: 'mesa' }, MOSTRADOR] },
+    });
+    const filtro = (/** @type {string} */ texto) =>
+      lista.findAll('[aria-pressed]').find((boton) => boton.text().startsWith(texto));
+
+    expect(filtro('Todos')?.text()).toContain('2');
+    expect(filtro('Mostrador')?.text()).toContain('1');
+
+    await filtro('Mostrador')?.trigger('click');
+
+    expect(lista.text()).toContain('#16 · Ana');
+    expect(lista.text()).not.toContain('Mesa 4');
+  });
+
+  it('sin pedidos, ofrece vender o registrar un domicilio', async () => {
+    const lista = await mountSuspended(PedidosDeCaja, { props: { pedidos: [] } });
+
+    await lista
+      .findAll('button')
+      .find((boton) => boton.text().includes('Nuevo domicilio'))
+      ?.trigger('click');
+
+    expect(lista.emitted('nuevo-domicilio')).toHaveLength(1);
   });
 });
 
