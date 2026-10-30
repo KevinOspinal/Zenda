@@ -174,7 +174,8 @@ export async function obtenerPerfil({ usuarioId, tenantId }) {
     });
     const negocio = await tx.tenant.findUnique({
       where: { id: tenantId },
-      select: { id: true, nombre: true, nit: true, regimenImpuesto: true },
+      // La ciudad completa las direcciones de los domicilios al abrirlas en el mapa.
+      select: { id: true, nombre: true, nit: true, ciudad: true, regimenImpuesto: true },
     });
     return { usuario, negocio };
   });
