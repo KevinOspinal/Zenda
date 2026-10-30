@@ -1,12 +1,14 @@
 // @ts-check
-// Domicilios en curso (sin entregar) y los domiciliarios del negocio. Los usa la caja: los
-// datos de entrega son personales (Ley 1581) y el API solo se los da a la caja.
+// Domicilios en curso y los domiciliarios del negocio. Los usa la caja: los datos de entrega
+// son personales (Ley 1581) y el API solo se los da a la caja (y a cada domiciliario, los
+// suyos: ver stores/entregas.js).
 //
-// - Los domicilios vienen de GET /pedidos?domicilios=true, con sus ítems y su entrega.
+// - En curso: sin entregar, o contra entrega entregados y sin cobrar ("por liquidar").
+// - Vienen de GET /pedidos?domicilios=true, con sus ítems y su entrega.
 // - Los eventos en vivo los mantienen al día (ver plugins/02.eventos-en-vivo.client.js).
 
 export const useDomiciliosStore = defineStore('domicilios', () => {
-  /** Domicilios sin entregar, por id. */
+  /** Domicilios en curso, por id. */
   const porId = ref(/** @type {Record<string, any>} */ ({}));
   /** sin_cargar · cargando · listo · error */
   const estadoCarga = ref('sin_cargar');
@@ -18,13 +20,16 @@ export const useDomiciliosStore = defineStore('domicilios', () => {
     Object.values(porId.value).sort((a, b) => String(a.abiertoEn).localeCompare(b.abiertoEn)),
   );
 
+  /** Lo que cada domiciliario debe traer a la caja (contra entrega, entregado y sin cobrar). */
+  const porLiquidar = computed(() => porLiquidarPorDomiciliario(lista.value));
+
   /**
-   * Guarda un domicilio que entregó el API; si ya se entregó o se anuló, sale de la lista.
+   * Guarda un domicilio que entregó el API; si terminó o se anuló, sale de la lista.
    * @param {any} pedido
    */
   function guardar(pedido) {
-    if (pedido.estado === 'anulado' || pedido.entrega?.entregadoEn) delete porId.value[pedido.id];
-    else porId.value[pedido.id] = pedido;
+    if (estaEnCurso(pedido)) porId.value[pedido.id] = pedido;
+    else delete porId.value[pedido.id];
   }
 
   /** Trae los domicilios en curso. */
@@ -89,13 +94,29 @@ export const useDomiciliosStore = defineStore('domicilios', () => {
   }
 
   /**
-   * El cliente recibió el domicilio: sale de la lista.
+   * El cliente recibió el domicilio. Si ya está pagado, sale de la lista; si es contra entrega
+   * y no se ha cobrado, queda por liquidar.
    * @param {string} id
    */
   async function entregar(id) {
     const pedido = await useApi().post(`/pedidos/${id}/entregar`);
     guardar(pedido);
     return pedido;
+  }
+
+  /**
+   * La caja recibe el dinero que trae un domiciliario: cada domicilio queda cobrado con el
+   * método con que pagó el cliente, y sale de la lista.
+   * @param {string} domiciliarioId
+   * @param {{ pedidoId: string, metodo: string, referencia?: string }[]} pedidos
+   * @returns {Promise<{ pedidos: any[], total: string }>}
+   */
+  async function liquidar(domiciliarioId, pedidos) {
+    const resultado = await useApi().post(`/domiciliarios/${domiciliarioId}/liquidar`, {
+      pedidos,
+    });
+    for (const pedido of resultado.pedidos) guardar(pedido);
+    return resultado;
   }
 
   // ───────────────────────────── Eventos en vivo ─────────────────────────────
@@ -137,6 +158,7 @@ export const useDomiciliosStore = defineStore('domicilios', () => {
   return {
     porId,
     lista,
+    porLiquidar,
     estadoCarga,
     domiciliarios,
     cargar,
@@ -146,6 +168,7 @@ export const useDomiciliosStore = defineStore('domicilios', () => {
     enviarACocina,
     despachar,
     entregar,
+    liquidar,
     alCambiarPedido,
     alCambiarEstadoCocina,
     alCambiarEstadoCocinaDelPedido,

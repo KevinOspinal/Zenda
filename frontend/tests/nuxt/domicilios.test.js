@@ -1,10 +1,12 @@
 // @ts-check
-// Pruebas de los domicilios en la caja con un backend simulado: registrar uno nuevo, ver en
-// qué va cada domicilio, despacharlo (con el enlace de WhatsApp) y entregarlo.
+// Pruebas de los domicilios en la caja con un backend simulado: registrar uno nuevo (con su
+// forma de pago), ver en qué va cada domicilio, cobrar los de pago anticipado, despacharlo (con
+// el enlace de WhatsApp), entregarlo y liquidar al domiciliario.
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import DespacharDomicilio from '~/components/caja/DespacharDomicilio.vue';
 import DomiciliosEnCurso from '~/components/caja/DomiciliosEnCurso.vue';
+import LiquidarDomiciliario from '~/components/caja/LiquidarDomiciliario.vue';
 import NuevoDomicilio from '~/components/caja/NuevoDomicilio.vue';
 import TarjetaDomicilio from '~/components/caja/TarjetaDomicilio.vue';
 import PedidoCerrado from '~/components/pedidos/PedidoCerrado.vue';
@@ -46,6 +48,7 @@ const domicilio = (cambios = {}, entrega = {}) => ({
     telefono: '3109876543',
     direccion: 'Calle 10 # 5-20',
     indicaciones: 'Apto 302',
+    formaPago: 'contra_entrega',
     pagaCon: '50000',
     despachadoEn: null,
     entregadoEn: null,
@@ -82,6 +85,17 @@ function escribirEn(etiqueta, valor) {
   campo.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+/**
+ * Elige una opción de un grupo de opciones (por ejemplo, la forma de pago) por su texto.
+ * @param {string} texto
+ */
+function elegirOpcion(texto) {
+  const opcion = [...document.querySelectorAll('[role="radio"]')].find((radio) =>
+    radio.parentElement?.parentElement?.textContent?.includes(texto),
+  );
+  /** @type {HTMLElement} */ (opcion).click();
+}
+
 beforeEach(() => {
   fetchFalso.mockReset();
   navegarFalso.mockReset();
@@ -107,6 +121,12 @@ describe('nuevo domicilio', () => {
     escribirEn('Nombre del cliente', 'Juan');
     escribirEn('Teléfono', '310 987 6543');
     escribirEn('Dirección', 'Calle 10 # 5-20');
+    // "¿Con cuánto paga?" aparece al elegir contra entrega.
+    expect(document.querySelector('input[aria-label="Con cuánto paga"]')).toBeNull();
+    elegirOpcion('Contra entrega');
+    await vi.waitFor(() =>
+      expect(document.querySelector('input[aria-label="Con cuánto paga"]')).not.toBeNull(),
+    );
     const pagaCon = /** @type {HTMLInputElement} */ (
       document.querySelector('input[aria-label="Con cuánto paga"]')
     );
@@ -123,8 +143,57 @@ describe('nuevo domicilio', () => {
       nombreCliente: 'Juan',
       valorDomicilio: '3000',
       items: [],
-      entrega: { telefono: '310 987 6543', direccion: 'Calle 10 # 5-20', pagaCon: '50000' },
+      entrega: {
+        telefono: '310 987 6543',
+        direccion: 'Calle 10 # 5-20',
+        formaPago: 'contra_entrega',
+        pagaCon: '50000',
+      },
     });
+  });
+
+  it('pago anticipado: no pide con cuánto paga y guarda la ubicación del cliente', async () => {
+    simularBackend(fetchFalso, {
+      'GET /negocios/actual': () => ({ id: 'n1', valorDomicilio: '3000' }),
+      'POST /pedidos': (opciones) => domicilio({ id: 'd9', ...opciones.body, items: [] }),
+    });
+    await mountSuspended(NuevoDomicilio, { props: { abierto: true } });
+    await vi.waitFor(() => expect(botonConTexto('Registrar y agregar productos')).toBeDefined());
+
+    escribirEn('Nombre del cliente', 'Ana');
+    escribirEn('Teléfono', '310 987 6543');
+    escribirEn('Dirección', 'Calle 10 # 5-20');
+    escribirEn('Ubicación que mandó el cliente', 'https://maps.app.goo.gl/AbC123');
+    elegirOpcion('Pago anticipado');
+    botonConTexto('Registrar y agregar productos')?.click();
+
+    await vi.waitFor(() => expect(navegarFalso).toHaveBeenCalledWith('/pedidos/d9'));
+    const [, opciones] =
+      fetchFalso.mock.calls.find(([ruta, o]) => ruta === '/pedidos' && o?.method === 'POST') ?? [];
+    expect(opciones.body.entrega).toEqual({
+      telefono: '310 987 6543',
+      direccion: 'Calle 10 # 5-20',
+      formaPago: 'anticipado',
+      ubicacionUrl: 'https://maps.app.goo.gl/AbC123',
+    });
+  });
+
+  it('sin elegir cómo paga no se registra', async () => {
+    simularBackend(fetchFalso, {
+      'GET /negocios/actual': () => ({ id: 'n1', valorDomicilio: '3000' }),
+    });
+    await mountSuspended(NuevoDomicilio, { props: { abierto: true } });
+    await vi.waitFor(() => expect(botonConTexto('Registrar y agregar productos')).toBeDefined());
+
+    escribirEn('Nombre del cliente', 'Ana');
+    escribirEn('Teléfono', '310 987 6543');
+    escribirEn('Dirección', 'Calle 10 # 5-20');
+    botonConTexto('Registrar y agregar productos')?.click();
+
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain('Elige cómo paga el cliente'),
+    );
+    expect(fetchFalso.mock.calls.some(([ruta]) => ruta === '/pedidos')).toBe(false);
   });
 });
 
@@ -137,7 +206,8 @@ describe('tarjeta de un domicilio', () => {
     const texto = tarjeta.text();
     expect(texto).toContain('#15 · Juan');
     expect(texto).toContain('Listo para salir');
-    expect(texto).toContain(`Cobrar ${pesos('15.000')}`);
+    expect(texto).toContain('Contra entrega');
+    expect(texto).toContain(`Cobra al entregar ${pesos('15.000')}`);
     expect(texto).toContain(`Lleva cambio de ${pesos('35.000')}`);
 
     const despachar = tarjeta.findAll('button').find((b) => b.text().includes('Despachar'));
@@ -184,6 +254,41 @@ describe('tarjeta de un domicilio', () => {
     expect(tarjeta.text()).not.toContain('Despachar');
     // Sin cobrar, todavía se le pueden agregar productos.
     expect(tarjeta.text()).toContain('Agregar productos');
+  });
+
+  it('pago anticipado sin cobrar: falta cobrar y no se despacha', async () => {
+    const tarjeta = await mountSuspended(TarjetaDomicilio, {
+      props: { domicilio: domicilio({}, { formaPago: 'anticipado', pagaCon: null }) },
+    });
+
+    const texto = tarjeta.text();
+    expect(texto).toContain('Falta cobrar');
+    expect(texto).toContain(`Cobrar ${pesos('15.000')} antes de salir`);
+    expect(texto).not.toContain('Despachar');
+    await tarjeta
+      .findAll('button')
+      .find((b) => b.text().trim() === 'Cobrar')
+      ?.trigger('click');
+    expect(tarjeta.emitted('cobrar')).toHaveLength(1);
+  });
+
+  it('por liquidar: dice quién lo entregó y deja recibir el dinero', async () => {
+    const tarjeta = await mountSuspended(TarjetaDomicilio, {
+      props: {
+        domicilio: domicilio({}, { ...EN_CAMINO, entregadoEn: new Date().toISOString() }),
+      },
+    });
+
+    const texto = tarjeta.text();
+    expect(texto).toContain('Por liquidar');
+    expect(texto).toContain('Lo entregó Pedro Gómez');
+    expect(texto).toContain(`Por recibir ${pesos('15.000')}`);
+    expect(texto).not.toContain('Lleva cambio');
+    await tarjeta
+      .findAll('button')
+      .find((b) => b.text().includes('Recibir dinero'))
+      ?.trigger('click');
+    expect(tarjeta.emitted('liquidar')).toHaveLength(1);
   });
 
   it('en camino: dice quién lo lleva y deja marcarlo entregado', async () => {
@@ -361,5 +466,65 @@ describe('despachar un domicilio', () => {
     );
     expect(enlace).not.toBeNull();
     expect(decodeURIComponent(enlace.href)).toContain('Dirección: Calle 10 # 5-20');
+  });
+});
+
+describe('liquidar a un domiciliario', () => {
+  it('recibe lo que trae, con el método con que pagó cada cliente', async () => {
+    const entregado = { ...EN_CAMINO, entregadoEn: new Date().toISOString() };
+    const primero = domicilio({ id: 'd1' }, entregado);
+    const segundo = domicilio({ id: 'd2', numero: 16, nombreCliente: 'Ana' }, entregado);
+    simularBackend(fetchFalso, {
+      'POST /domiciliarios/dm1/liquidar': (opciones) => ({
+        pedidos: opciones.body.pedidos.map((/** @type {any} */ p) =>
+          domicilio({ id: p.pedidoId, estado: 'pagado' }, entregado),
+        ),
+        total: '30000.00',
+      }),
+    });
+    await mountSuspended(LiquidarDomiciliario, {
+      props: {
+        abierto: true,
+        grupo: {
+          domiciliario: EN_CAMINO.domiciliario,
+          pedidos: [primero, segundo],
+          total: '30000',
+        },
+      },
+    });
+    await vi.waitFor(() => expect(botonConTexto(`Recibir ${pesos('30.000')}`)).toBeDefined());
+
+    // Ana le pagó por transferencia: el efectivo para contar baja a $15.000.
+    const transferenciaDeAna = [...document.querySelectorAll('[role="radio"]')].filter((radio) =>
+      radio.parentElement?.parentElement?.textContent?.includes('Transferencia'),
+    )[1];
+    /** @type {HTMLElement} */ (transferenciaDeAna).click();
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Efectivo para contar'));
+    botonConTexto(`Recibir ${pesos('30.000')}`)?.click();
+
+    await vi.waitFor(() => {
+      const [, opciones] =
+        fetchFalso.mock.calls.find(([ruta]) => ruta === '/domiciliarios/dm1/liquidar') ?? [];
+      expect(opciones?.body).toEqual({
+        pedidos: [
+          { pedidoId: 'd1', metodo: 'efectivo' },
+          { pedidoId: 'd2', metodo: 'transferencia' },
+        ],
+      });
+    });
+  });
+
+  it('la lista muestra lo que trae cada domiciliario', async () => {
+    const entregado = { ...EN_CAMINO, entregadoEn: new Date().toISOString() };
+    const domicilios = useDomiciliosStore();
+    domicilios.porId = {
+      d1: domicilio({ id: 'd1' }, entregado),
+      d2: domicilio({ id: 'd2', numero: 16, nombreCliente: 'Ana' }, entregado),
+    };
+
+    const lista = await mountSuspended(DomiciliosEnCurso);
+
+    expect(lista.text()).toContain(`Pedro Gómez trae ${pesos('30.000')}`);
+    expect(lista.text()).toContain('2 domicilios por liquidar');
   });
 });

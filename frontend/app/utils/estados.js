@@ -194,4 +194,19 @@ export const ACCIONES_AUDITORIA = Object.freeze({
     color: 'warning',
     icono: 'i-lucide-receipt-text',
   },
+  dar_acceso_domiciliario: {
+    etiqueta: 'Acceso de domiciliario',
+    color: 'success',
+    icono: 'i-lucide-key-round',
+  },
+  quitar_acceso_domiciliario: {
+    etiqueta: 'Acceso de domiciliario quitado',
+    color: 'warning',
+    icono: 'i-lucide-user-x',
+  },
+  liquidar_domiciliario: {
+    etiqueta: 'Domiciliario liquidado',
+    color: 'info',
+    icono: 'i-lucide-hand-coins',
+  },
 });

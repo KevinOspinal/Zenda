@@ -23,7 +23,6 @@ const emit = defineEmits({
 const sesion = useSesionStore();
 const pedidos = usePedidosStore();
 const toast = useToast();
-const puedeCobrar = computed(() => puede(sesion.rol, 'cobrar'));
 
 const {
   pedido,
@@ -48,6 +47,11 @@ const {
   mesaId: toRef(props, 'mesaId'),
   alCrear: (id) => emit('creado', id),
 });
+
+/** La caja cobra, salvo un domicilio contra entrega que no ha salido: lo cobra el domiciliario. */
+const puedeCobrar = computed(
+  () => puede(sesion.rol, 'cobrar') && !(pedido.value && seCobraAlEntregar(pedido.value)),
+);
 
 const cuentaAbierta = ref(false);
 async function enviar() {

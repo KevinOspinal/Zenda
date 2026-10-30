@@ -1,7 +1,8 @@
 <!--
-  Despachar un domicilio: se elige quién lo lleva y sale del local. Después, un botón abre
-  WhatsApp con los datos listos para enviarle al domiciliario (dirección, teléfono del
-  cliente, cuánto cobrar y el cambio que debe llevar).
+  Despachar un domicilio: se elige quién lo lleva y sale del local. Si el domiciliario tiene
+  acceso a Zenda, le aparece en vivo en su celular. Después, un botón abre WhatsApp con los
+  datos listos para enviarle (dirección con su enlace de Google Maps, teléfono del cliente,
+  cuánto cobrar y el cambio que debe llevar): útil para quien no tiene acceso.
 -->
 <script setup>
 const props = defineProps({
@@ -47,9 +48,17 @@ const opciones = computed(() =>
   domicilios.domiciliarios.map((domiciliario) => ({
     value: domiciliario.id,
     label: domiciliario.nombre,
-    description: domiciliario.telefono,
+    description: domiciliario.acceso?.activo
+      ? `${domiciliario.telefono} · lo ve en su celular`
+      : domiciliario.telefono,
   })),
 );
+
+/** El domiciliario que lo lleva entra a Zenda: el domicilio ya le apareció en su celular. */
+const loVeEnZenda = computed(() => {
+  const id = despachado.value?.entrega?.domiciliario?.id;
+  return Boolean(domicilios.domiciliarios.find((d) => d.id === id)?.acceso?.activo);
+});
 
 async function despachar() {
   if (!props.pedido || !domiciliarioId.value) return;
@@ -68,7 +77,10 @@ async function despachar() {
 const enlace = computed(() => {
   const domiciliario = despachado.value?.entrega?.domiciliario;
   return domiciliario
-    ? enlaceWhatsApp(domiciliario.telefono, mensajeParaDomiciliario(despachado.value))
+    ? enlaceWhatsApp(
+        domiciliario.telefono,
+        mensajeParaDomiciliario(despachado.value, sesion.negocio?.ciudad),
+      )
     : '';
 });
 </script>
@@ -86,13 +98,18 @@ const enlace = computed(() => {
         <p class="text-lg font-semibold text-highlighted">
           Salió con {{ despachado.entrega.domiciliario.nombre }}
         </p>
+        <p v-if="loVeEnZenda" class="flex items-center justify-center gap-1.5 text-sm text-muted">
+          <UIcon name="i-lucide-smartphone" class="size-4" />
+          Ya le apareció en su celular, con el mapa y lo que debe cobrar.
+        </p>
         <UButton
           :to="enlace"
           target="_blank"
           external
           block
           size="xl"
-          color="success"
+          :color="loVeEnZenda ? 'neutral' : 'success'"
+          :variant="loVeEnZenda ? 'soft' : 'solid'"
           icon="i-lucide-message-circle"
           label="Enviarle los datos por WhatsApp"
         />

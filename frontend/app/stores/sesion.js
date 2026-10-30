@@ -13,7 +13,10 @@
 
 /** @typedef {import('~/utils/roles.js').Rol} Rol */
 /** @typedef {{ id: string, nombre: string, email: string, rol: Rol }} Usuario */
-/** @typedef {{ id: string, nombre: string, nit: string, regimenImpuesto?: string }} Negocio */
+/**
+ * @typedef {{ id: string, nombre: string, nit: string, ciudad?: string | null,
+ *   regimenImpuesto?: string }} Negocio
+ */
 /**
  * Respuesta del login, del refresh, del registro y del cambio de contraseña.
  * @typedef {{ tokenAcceso: string, refreshToken: string, expiraEnSegundos: number,

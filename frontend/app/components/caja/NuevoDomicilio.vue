@@ -1,7 +1,8 @@
 <!--
   Registrar un domicilio que llegó por WhatsApp o por teléfono: a nombre de quién, a dónde se
-  lleva, con cuánto paga y el valor del domicilio (el del negocio, que se cambia si es lejos).
-  Al guardarlo se pasa a tomar los productos del pedido.
+  lleva, cómo paga (obligatorio: decide su recorrido), con cuánto paga si es contra entrega, la
+  ubicación que mandó el cliente y el valor del domicilio (el del negocio, que se cambia si es
+  lejos). Al guardarlo se pasa a tomar los productos del pedido.
   Solo se piden los datos necesarios para entregar (Ley 1581 de 2012).
 -->
 <script setup>
@@ -21,6 +22,16 @@ const ORIGENES = Object.freeze(
   })),
 );
 
+/** Cómo paga: pago anticipado o contra entrega (ver utils/domicilios.js). */
+const FORMAS_PAGO = Object.freeze(
+  /** @type {const} */ (['contra_entrega', 'anticipado']).map((forma) => ({
+    value: forma,
+    label: FORMAS_PAGO_DOMICILIO[forma].etiqueta,
+    description: FORMAS_PAGO_DOMICILIO[forma].descripcion,
+    icon: FORMAS_PAGO_DOMICILIO[forma].icono,
+  })),
+);
+
 const esquema = z.object({
   nombreCliente: z.string().trim().min(1, 'Escribe el nombre del cliente').max(80),
   telefono: z
@@ -31,7 +42,16 @@ const esquema = z.object({
   indicaciones: z.string().trim().max(300, 'Máximo 300 caracteres'),
   origen: z.enum(['whatsapp', 'telefono', 'otro']),
   valorDomicilio: z.string().refine((valor) => !valor || esMontoValido(valor), 'Valor inválido'),
+  formaPago: z.enum(['anticipado', 'contra_entrega'], 'Elige cómo paga el cliente'),
   pagaCon: z.string().refine((valor) => !valor || esMontoValido(valor), 'Valor inválido'),
+  ubicacionUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine(
+      (valor) => !valor || valor.startsWith('https://'),
+      'Pega el enlace completo de Google Maps o Waze',
+    ),
 });
 
 const VACIO = Object.freeze({
@@ -41,10 +61,13 @@ const VACIO = Object.freeze({
   indicaciones: '',
   origen: 'whatsapp',
   valorDomicilio: '',
+  formaPago: '',
   pagaCon: '',
+  ubicacionUrl: '',
 });
 const datos = reactive({ ...VACIO });
 const error = ref('');
+const esContraEntrega = computed(() => datos.formaPago === 'contra_entrega');
 
 // Al abrir, el formulario empieza limpio con el valor del domicilio del negocio.
 watch(
@@ -74,7 +97,10 @@ async function guardar() {
         telefono: datos.telefono.trim(),
         direccion: datos.direccion.trim(),
         ...(datos.indicaciones.trim() ? { indicaciones: datos.indicaciones.trim() } : {}),
-        ...(datos.pagaCon ? { pagaCon: datos.pagaCon } : {}),
+        formaPago: datos.formaPago,
+        // "Con cuánto paga" solo existe contra entrega: el de pago anticipado ya pagó.
+        ...(esContraEntrega.value && datos.pagaCon ? { pagaCon: datos.pagaCon } : {}),
+        ...(datos.ubicacionUrl.trim() ? { ubicacionUrl: datos.ubicacionUrl.trim() } : {}),
       },
     });
     abierto.value = false;
@@ -138,6 +164,26 @@ async function guardar() {
             placeholder="Apto 302, timbre dañado"
           />
         </UFormField>
+        <UFormField
+          label="Ubicación que mandó el cliente"
+          name="ubicacionUrl"
+          hint="Opcional"
+          help="Pega el enlace de Google Maps o Waze: el domiciliario llega al punto exacto."
+        >
+          <UInput
+            v-model="datos.ubicacionUrl"
+            type="url"
+            inputmode="url"
+            size="lg"
+            class="w-full"
+            icon="i-lucide-map-pinned"
+            placeholder="https://maps.app.goo.gl/…"
+            autocomplete="off"
+          />
+        </UFormField>
+        <UFormField label="¿Cómo paga?" name="formaPago">
+          <URadioGroup v-model="datos.formaPago" :items="FORMAS_PAGO" variant="card" />
+        </UFormField>
         <div class="grid gap-4 sm:grid-cols-2">
           <UFormField
             label="Valor del domicilio"
@@ -147,6 +193,7 @@ async function guardar() {
             <CampoDinero v-model="datos.valorDomicilio" etiqueta="Valor del domicilio" />
           </UFormField>
           <UFormField
+            v-if="esContraEntrega"
             label="¿Con cuánto paga?"
             name="pagaCon"
             hint="Opcional"

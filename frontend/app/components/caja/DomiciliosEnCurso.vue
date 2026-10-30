@@ -1,12 +1,16 @@
 <!--
-  Domicilios en curso en la caja: los que no se han entregado, el que más espera primero.
-  Desde aquí se despachan (con el domiciliario y sus datos por WhatsApp) y se marcan como
-  entregados. Si un domicilio no se ha cobrado, primero se cobra (lo hace la página de caja).
+  Domicilios en curso en la caja, el que más espera primero: los que no se han entregado y los
+  que están por liquidar (contra entrega, entregados, con el dinero aún en manos del
+  domiciliario). Arriba, lo que trae cada domiciliario para recibirlo de una vez.
+  Desde aquí se cobran los de pago anticipado, se despachan (con el domiciliario y sus datos por
+  WhatsApp), se marcan como entregados y se liquidan. El cobro lo abre la página de caja.
 -->
 <script setup>
 const emit = defineEmits({
   /** @param {any} _domicilio Domicilio que hay que cobrar antes de marcarlo entregado. */
   cobrarYEntregar: (_domicilio) => true,
+  /** @param {any} _domicilio Domicilio de pago anticipado que hay que cobrar antes de salir. */
+  cobrar: (_domicilio) => true,
 });
 
 const domicilios = useDomiciliosStore();
@@ -14,6 +18,8 @@ const toast = useToast();
 
 const despachando = ref(false);
 const elegido = ref(/** @type {any} */ (null));
+const liquidando = ref(false);
+const grupoElegido = ref(/** @type {any} */ (null));
 
 /** @param {unknown} fallo */
 function avisarError(fallo) {
@@ -62,6 +68,16 @@ async function entregar(domicilio) {
     avisarError(fallo);
   }
 }
+
+/**
+ * Abre la liquidación del domiciliario de este domicilio, con todo lo que tiene por liquidar.
+ * @param {string} domiciliarioId
+ */
+function liquidar(domiciliarioId) {
+  grupoElegido.value =
+    domicilios.porLiquidar.find((grupo) => grupo.domiciliario.id === domiciliarioId) ?? null;
+  liquidando.value = Boolean(grupoElegido.value);
+}
 </script>
 
 <template>
@@ -74,16 +90,43 @@ async function entregar(domicilio) {
       Domicilios en curso
       <UBadge :label="String(domicilios.lista.length)" color="primary" variant="subtle" />
     </h2>
+
+    <!-- Lo que trae cada domiciliario: se recibe de una vez. -->
+    <div v-if="domicilios.porLiquidar.length" class="flex flex-wrap gap-2">
+      <button
+        v-for="grupo in domicilios.porLiquidar"
+        :key="grupo.domiciliario.id"
+        type="button"
+        class="flex min-h-12 items-center gap-3 rounded-xl bg-secondary/10 px-4 py-2 text-left ring-1 ring-secondary/30 transition hover:bg-secondary/15 focus-visible:outline-2 focus-visible:outline-primary active:scale-[0.98] motion-reduce:transition-none"
+        @click="liquidar(grupo.domiciliario.id)"
+      >
+        <UIcon name="i-lucide-hand-coins" class="size-5 text-secondary" />
+        <span>
+          <span class="block font-semibold text-highlighted">
+            {{ grupo.domiciliario.nombre }} trae {{ formatearPesos(grupo.total) }}
+          </span>
+          <span class="text-xs text-muted">
+            {{ grupo.pedidos.length }}
+            {{ grupo.pedidos.length === 1 ? 'domicilio por liquidar' : 'domicilios por liquidar' }}
+            · Recibir
+          </span>
+        </span>
+      </button>
+    </div>
+
     <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       <TarjetaDomicilio
         v-for="domicilio in domicilios.lista"
         :key="domicilio.id"
         :domicilio="domicilio"
         @enviar-a-cocina="enviarACocina(domicilio)"
+        @cobrar="emit('cobrar', domicilio)"
         @despachar="despachar(domicilio)"
         @entregar="entregar(domicilio)"
+        @liquidar="liquidar(domicilio.entrega.domiciliario.id)"
       />
     </div>
     <DespacharDomicilio v-model:abierto="despachando" :pedido="elegido" />
+    <LiquidarDomiciliario v-model:abierto="liquidando" :grupo="grupoElegido" />
   </section>
 </template>
