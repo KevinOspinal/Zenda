@@ -5,7 +5,7 @@
 // peticiones: si cambia una validación, la documentación cambia sola.
 import { z } from 'zod';
 
-/** @typedef {'dueno' | 'administrador' | 'cajero' | 'mesero' | 'cocina'} Rol */
+/** @typedef {'dueno' | 'administrador' | 'cajero' | 'mesero' | 'cocina' | 'domiciliario'} Rol */
 /** @typedef {Record<string, any>} Objeto */
 
 /** Nombre legible de cada rol. */
@@ -15,6 +15,7 @@ const NOMBRES_ROL = Object.freeze({
   cajero: 'Cajero',
   mesero: 'Mesero',
   cocina: 'Cocina',
+  domiciliario: 'Domiciliario',
 });
 
 /** Todos los roles: para endpoints que cualquier usuario autenticado puede usar. */
@@ -24,6 +25,7 @@ export const TODOS = /** @type {Rol[]} */ ([
   'cajero',
   'mesero',
   'cocina',
+  'domiciliario',
 ]);
 
 /** Los que atienden a los clientes: todos menos la cocina (tomar y modificar pedidos). */

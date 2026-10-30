@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   alMenosUnCampo,
   esquemaBooleanoEnUrl,
+  esquemaContrasenaNueva,
   esquemaTelefono,
   textoObligatorio,
 } from '../../lib/esquemas.js';
@@ -32,3 +33,10 @@ export const esquemaActualizarDomiciliario = alMenosUnCampo(
     })
     .partial(),
 );
+
+/** POST /domiciliarios/:id/acceso: el usuario con que entra a Zenda desde su celular. */
+export const esquemaDarAcceso = z.object({
+  // Se normaliza a minúsculas: el login no distingue mayúsculas.
+  email: z.string().trim().toLowerCase().pipe(z.email('correo inválido')),
+  contrasena: esquemaContrasenaNueva,
+});

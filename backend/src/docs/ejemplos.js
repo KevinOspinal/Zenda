@@ -136,7 +136,10 @@ export const DOMICILIARIO = Object.freeze({
   nombre: 'Pedro Gómez',
   telefono: '3001234567',
   activo: true,
+  usuarioId: null,
   creadoEn: '2026-10-20T14:00:00.000Z',
+  // Sin acceso a Zenda. Con acceso: { email, activo }.
+  acceso: null,
 });
 
 /**
@@ -161,7 +164,9 @@ export const PEDIDO_DOMICILIO = Object.freeze({
     telefono: '3109876543',
     direccion: 'Calle 10 # 5-20, barrio San Antonio',
     indicaciones: 'Apto 302, timbre dañado',
+    formaPago: 'contra_entrega',
     pagaCon: '50000',
+    ubicacionUrl: 'https://maps.google.com/?q=3.6587,-76.2455',
     domiciliarioId: null,
     despachadoEn: null,
     entregadoEn: null,

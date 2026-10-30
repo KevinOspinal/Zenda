@@ -21,11 +21,20 @@ let otroNegocio;
 const ids = { hamburguesa: '', gaseosa: '', domiciliario: '' };
 let mesasCreadas = 0;
 
+/** Domicilio contra entrega: el cliente paga con $50.000 y el domiciliario lleva el cambio. */
 const ENTREGA = Object.freeze({
   telefono: '3109876543',
   direccion: 'Calle 10 # 5-20, barrio San Antonio',
   indicaciones: 'Apto 302, timbre dañado',
+  formaPago: 'contra_entrega',
   pagaCon: '50000',
+});
+
+/** Domicilio de pago anticipado: se cobra en la caja antes de que salga. */
+const ENTREGA_ANTICIPADA = Object.freeze({
+  telefono: '3109876543',
+  direccion: 'Calle 10 # 5-20, barrio San Antonio',
+  formaPago: 'anticipado',
 });
 
 /**
@@ -207,7 +216,7 @@ describe('domicilios', () => {
   });
 
   it('el valor se cambia al registrarlo y después, mientras no se cobre', async () => {
-    const pedido = await crearDomicilio({ valorDomicilio: 5000 });
+    const pedido = await crearDomicilio({ valorDomicilio: 5000, entrega: ENTREGA_ANTICIPADA });
     expect(pedido.total).toBe('17000');
 
     const lejos = await llamar(
@@ -382,7 +391,7 @@ describe('domicilios', () => {
   });
 
   it('uno cobrado antes de mandarlo a cocina se puede enviar después', async () => {
-    const pedido = await crearDomicilio();
+    const pedido = await crearDomicilio({ entrega: ENTREGA_ANTICIPADA });
     await cobrar(pedido.id, '15000');
 
     const res = await llamar(

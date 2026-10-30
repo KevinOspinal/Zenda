@@ -24,6 +24,8 @@ enum RolUsuario {
   mesero
   // La tableta de la cocina: solo ve las comandas y marca los platos (preparando y listo).
   cocina
+  // Quien lleva los domicilios: solo ve los que tiene asignados y los marca como entregados.
+  domiciliario
 
   @@map("rol_usuario")
 }
@@ -96,6 +98,17 @@ enum OrigenPedido {
   otro
 
   @@map("origen_pedido")
+}
+
+// Cómo paga el cliente un domicilio. Se elige al tomar el pedido y decide su recorrido:
+// - anticipado: paga antes de que salga (en la caja o por transferencia); solo sale pagado.
+// - contra_entrega: le paga al domiciliario al recibirlo; el domiciliario trae el dinero a la
+//   caja (el domicilio queda "por liquidar" hasta que la caja lo recibe).
+enum FormaPagoDomicilio {
+  anticipado
+  contra_entrega
+
+  @@map("forma_pago_domicilio")
 }
 
 enum EstadoCocina {
@@ -208,6 +221,8 @@ model Usuario {
   turnosCerrados   TurnoCaja[]     @relation("TurnoCerradoPor")
   pedidosAtendidos Pedido[]
   auditoria        Auditoria[]
+  // Solo los usuarios con rol domiciliario: el domiciliario al que corresponde su acceso.
+  domiciliario     Domiciliario?
 
   @@unique([tenantId, email])
   @@map("usuarios")
@@ -416,20 +431,25 @@ model Pedido {
 /// Datos para llevar un pedido a domicilio. Son datos personales (Ley 1581 de 2012): solo los
 /// ven la caja, el administrador y el dueño, y solo se piden los necesarios para entregar.
 model EntregaDomicilio {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String    @map("tenant_id") @db.Uuid
-  pedidoId       String    @unique @map("pedido_id") @db.Uuid
-  telefono       String    @db.VarChar(20)
-  direccion      String    @db.VarChar(200)
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String             @map("tenant_id") @db.Uuid
+  pedidoId       String             @unique @map("pedido_id") @db.Uuid
+  telefono       String             @db.VarChar(20)
+  direccion      String             @db.VarChar(200)
   // Por ejemplo: "Apto 302, timbre dañado" o "casa esquinera de rejas verdes".
-  indicaciones   String?   @db.VarChar(300)
+  indicaciones   String?            @db.VarChar(300)
+  formaPago      FormaPagoDomicilio @map("forma_pago")
   // Con cuánto va a pagar el cliente en efectivo, para que el domiciliario lleve el cambio.
-  pagaCon        Decimal?  @map("paga_con") @db.Decimal(14, 2)
-  domiciliarioId String?   @map("domiciliario_id") @db.Uuid
+  // Solo contra entrega (la base de datos lo verifica).
+  pagaCon        Decimal?           @map("paga_con") @db.Decimal(14, 2)
+  // Enlace de Google Maps o Waze con la ubicación que mandó el cliente (por ejemplo, por
+  // WhatsApp). Si está, se navega a ese punto exacto en vez de buscar la dirección escrita.
+  ubicacionUrl   String?            @map("ubicacion_url") @db.VarChar(500)
+  domiciliarioId String?            @map("domiciliario_id") @db.Uuid
   // Salió del local con el domiciliario.
-  despachadoEn   DateTime? @map("despachado_en") @db.Timestamptz(6)
+  despachadoEn   DateTime?          @map("despachado_en") @db.Timestamptz(6)
   // El cliente lo recibió.
-  entregadoEn    DateTime? @map("entregado_en") @db.Timestamptz(6)
+  entregadoEn    DateTime?          @map("entregado_en") @db.Timestamptz(6)
 
   tenant       Tenant        @relation(fields: [tenantId], references: [id])
   pedido       Pedido        @relation(fields: [pedidoId], references: [id])
@@ -442,15 +462,18 @@ model EntregaDomicilio {
 /// Persona del negocio que lleva los domicilios. No inicia sesión: la caja le asigna los
 /// pedidos y le manda los datos por WhatsApp.
 model Domiciliario {
-  id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId String   @map("tenant_id") @db.Uuid
-  nombre   String   @db.VarChar(80)
-  telefono String   @db.VarChar(20)
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  nombre    String   @db.VarChar(80)
+  telefono  String   @db.VarChar(20)
   // Inactivo: ya no se le asignan pedidos, pero se conserva su historial.
-  activo   Boolean  @default(true)
-  creadoEn DateTime @default(now()) @map("creado_en") @db.Timestamptz(6)
+  activo    Boolean  @default(true)
+  // Su acceso a Zenda (rol domiciliario), si el dueño se lo dio: ve sus entregas en el celular.
+  usuarioId String?  @unique @map("usuario_id") @db.Uuid
+  creadoEn  DateTime @default(now()) @map("creado_en") @db.Timestamptz(6)
 
   tenant   Tenant             @relation(fields: [tenantId], references: [id])
+  usuario  Usuario?           @relation(fields: [usuarioId], references: [id])
   entregas EntregaDomicilio[]
 
   @@map("domiciliarios")

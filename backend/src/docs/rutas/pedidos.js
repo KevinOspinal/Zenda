@@ -80,10 +80,22 @@ que no tienen mesa.
 - **mesa**: necesita \`mesaId\`; la mesa pasa a **ocupada**. Una mesa admite un solo pedido
   abierto (si ya tiene uno, 409 \`MESA_OCUPADA\`).
 - **mostrador**: comer en el local sin mesa o recoger. \`nombreCliente\` sirve para llamarlo.
-- **domicilio**: necesita \`nombreCliente\` y \`entrega\` (teléfono y dirección). Suma
-  \`valorDomicilio\` al total (si no llega, el del negocio: $3.000 por defecto), por ahora sin
-  impuesto: ⚠️ el contador debe confirmar cuál lleva. Solo lo registran **cajero,
-  administrador y dueño** (si no, 403): los datos de entrega son personales (Ley 1581).
+- **domicilio**: necesita \`nombreCliente\` y \`entrega\` (teléfono, dirección y **forma de
+  pago**). Suma \`valorDomicilio\` al total (si no llega, el del negocio: $3.000 por defecto),
+  por ahora sin impuesto: ⚠️ el contador debe confirmar cuál lleva. Solo lo registran
+  **cajero, administrador y dueño** (si no, 403): los datos de entrega son personales (Ley 1581).
+
+**Forma de pago de un domicilio** (\`entrega.formaPago\`, obligatoria): decide su recorrido.
+
+| | \`anticipado\` | \`contra_entrega\` |
+| --- | --- | --- |
+| Cobro | En la caja, antes de que salga | Cuando el domiciliario trae el dinero |
+| Despachar | Solo pagado (409 \`DOMICILIO_SIN_PAGAR\`) | Cuando la cocina lo tiene listo |
+| Al entregar | Termina | Queda **por liquidar** (entregado sin cobrar) |
+| \`pagaCon\` | No aplica (400) | Opcional: el billete, para llevar el cambio |
+
+\`entrega.ubicacionUrl\` (opcional): el enlace de Google Maps o Waze con la ubicación que
+mandó el cliente; el domiciliario navega a ese punto exacto.
 
 \`origen\` dice por dónde llegó (\`local\`, \`whatsapp\`, \`telefono\`, \`otro\`); sirve para
 los reportes por canal. La propina solo se sugiere en mesa (\`propinaSugerida\` es 0 en los demás).
@@ -125,6 +137,7 @@ generó. Si el mismo pedido llega dos veces, la segunda vez **no se duplica**: r
                 telefono: '3109876543',
                 direccion: 'Calle 10 # 5-20, barrio San Antonio',
                 indicaciones: 'Apto 302, timbre dañado',
+                formaPago: 'contra_entrega',
                 pagaCon: 50000,
               },
               items: [
@@ -146,8 +159,12 @@ generó. Si el mismo pedido llega dos veces, la segunda vez **no se duplica**: r
           mesaId: 'Mesa del pedido (solo tipo `mesa`).',
           origen: 'Por dónde llegó: `local` (por defecto), `whatsapp`, `telefono` u `otro`.',
           nombreCliente: 'Nombre para llamar al cliente (obligatorio en domicilios).',
-          entrega: 'Solo domicilios: teléfono, dirección, indicaciones y con cuánto paga.',
-          'entrega.pagaCon': 'Con cuánto paga en efectivo, para llevarle el cambio.',
+          entrega:
+            'Solo domicilios: teléfono, dirección, indicaciones, forma de pago y con cuánto paga.',
+          'entrega.formaPago': '`anticipado` (se cobra antes de salir) o `contra_entrega`.',
+          'entrega.pagaCon':
+            'Solo contra entrega: con cuánto paga en efectivo, para llevarle el cambio.',
+          'entrega.ubicacionUrl': 'Enlace de Google Maps o Waze con la ubicación del cliente.',
           valorDomicilio: 'Solo domicilios. Si no llega, el valor por defecto del negocio.',
           uuidOffline: 'UUID generado por la app al vender sin internet. Evita duplicados.',
           items: 'Productos iniciales. Se pueden agregar más después.',
@@ -185,11 +202,13 @@ pagar antes de que salieran sus platos). Los cobrados se incluyen durante 12 hor
 se acumulen los platos que nadie marcó como entregados. Las ventas que se cobraron sin pasar por
 la cocina no aparecen.
 
-**Para la caja:** \`?domicilios=true\` trae los domicilios que no se han entregado (de las
-últimas 24 horas), con sus ítems y sus datos de entrega. Solo para cajero, administrador y
-dueño (si no, 403).
+**Domicilios en curso:** \`?domicilios=true\` trae los domicilios de las últimas 24 horas que no
+se han entregado **o que están por liquidar** (contra entrega, entregados y sin cobrar), con
+sus ítems y sus datos de entrega.
+- Cajero, administrador y dueño: todos.
+- Domiciliario: solo los que lleva él. Es lo único que puede listar (otro filtro: 403).
 
-Los datos de entrega (\`entrega\`) solo llegan al cajero, al administrador y al dueño.
+Los datos de entrega (\`entrega\`) solo llegan a la caja y al domiciliario que lleva el pedido.
 
 Solo se puede usar uno de estos filtros: \`estado\`, \`activos\`, \`cocina\` o \`domicilios\`
 (si no, 400).`,
@@ -245,7 +264,10 @@ El pedido con sus ítems (en el orden en que se agregaron), pagos, mesa y client
 Trae \`propinaSugerida\`: la propina que el mesero le sugiere al cliente antes de cobrar.
 Es el porcentaje del negocio (10 % por defecto, ver \`PATCH /negocios/actual\`) sobre el
 **subtotal antes de impuestos**, en pesos enteros. Todas las respuestas que devuelven el
-pedido completo la incluyen.`,
+pedido completo la incluyen.
+
+El domiciliario solo ve los domicilios que lleva él (otro: 404), con sus datos de entrega
+mientras el domicilio esté en curso.`,
       parametros: idPedido,
       respuestas: { 200: respuesta('El pedido.', PEDIDO) },
       errores: ['400', '404'],
@@ -481,6 +503,9 @@ cliente en efectivo (\`recibido\`) queda guardado en el pago, para mostrar el ca
 - \`monto\` es lo que se abona a la cuenta. En efectivo, envía \`recibido\` (el billete del
   cliente) y la respuesta trae el **cambio** a devolver. El cambio no entra a la caja.
 - Se puede cobrar desde \`abierto\`: en comidas rápidas el cliente paga antes de que cocinen.
+- Un domicilio **contra entrega** no se cobra antes de salir (409 \`COBRO_CONTRA_ENTREGA\`): se
+  cobra cuando el domiciliario trae el dinero, aquí o con \`POST /domiciliarios/{id}/liquidar\`.
+  Si el cliente ya pagó, cámbialo a \`anticipado\` con \`PATCH /pedidos/{id}/domicilio\`.
 - Con \`clienteId\`, la factura irá a nombre de ese cliente; sin él, a "consumidor final".
 
 **Qué pasa al cobrar**
@@ -578,12 +603,16 @@ Anula un pedido abierto o cobrado. Exige un **motivo** y queda en la **auditorí
       resumen: 'Corregir los datos de un domicilio',
       roles: [...COBRAN],
       descripcion: `
-Corrige a quién y a dónde se lleva, con cuánto paga y el **valor del domicilio** (se ajusta si
-es lejos). Envía solo lo que cambia; \`null\` en \`indicaciones\` o \`pagaCon\` los borra.
+Corrige a quién y a dónde se lleva, la forma de pago, con cuánto paga, la ubicación y el
+**valor del domicilio** (se ajusta si es lejos). Envía solo lo que cambia; \`null\` en
+\`indicaciones\`, \`pagaCon\` o \`ubicacionUrl\` los borra.
 
 **Reglas**
 - Solo domicilios (si no, 409 \`NO_ES_DOMICILIO\`), sin anular ni entregar (409).
 - \`valorDomicilio\` cambia el total: solo antes de cobrar (si no, 409 \`PEDIDO_CERRADO\`).
+- \`formaPago\` cambia solo antes de que salga (409 \`DOMICILIO_DESPACHADO\`), y uno ya cobrado
+  no pasa a contra entrega (409 \`DOMICILIO_YA_PAGADO\`). Al pasar a \`anticipado\` se borra
+  \`pagaCon\`; enviarlo con \`anticipado\` da 422 \`PAGA_CON_SOLO_CONTRA_ENTREGA\`.
 
 📡 Avisa en tiempo real con \`pedido:actualizado\`.`,
       parametros: idPedido,
@@ -618,7 +647,9 @@ quién lo lleva. Sus platos quedan \`entregado\` y la comanda sale del tablero d
   \`DOMICILIO_SIN_ENVIAR\`) y sin platos pendientes ni en preparación (si no, 409
   \`DOMICILIO_EN_PREPARACION\`).
 - El domiciliario debe existir (404) y estar activo (409 \`DOMICILIARIO_INACTIVO\`).
-- Se puede despachar antes de cobrar (contra entrega) o después (pago por adelantado).
+- **Pago anticipado:** solo sale cobrado (409 \`DOMICILIO_SIN_PAGAR\`). **Contra entrega:** sale
+  sin cobrar; el domiciliario cobra al entregar.
+- Si el domiciliario tiene acceso a Zenda, el domicilio le aparece en vivo en su celular.
 
 📡 Avisa en tiempo real con \`pedido:actualizado\`.`,
       parametros: idPedido,
@@ -642,11 +673,13 @@ quién lo lleva. Sus platos quedan \`entregado\` y la comanda sale del tablero d
     post: operacion({
       etiqueta: 'Pedidos',
       resumen: 'Marcar entregado un pedido sin mesa',
-      roles: [...COBRAN],
+      roles: [...COBRAN, 'domiciliario'],
       descripcion: `
 - **Domicilio:** el cliente lo recibió (\`entrega.entregadoEn\`). Debe haber salido antes con un
-  domiciliario (si no, 409 \`DOMICILIO_SIN_DESPACHAR\`). Si es contra entrega, cóbralo
-  primero con \`POST /pedidos/{id}/cobrar\`.
+  domiciliario (si no, 409 \`DOMICILIO_SIN_DESPACHAR\`). Lo marca la caja o el domiciliario
+  que lo lleva (otro domiciliario: 404). De pago anticipado, termina aquí; contra entrega y
+  sin cobrar, queda **por liquidar** hasta que la caja reciba el dinero
+  (\`POST /domiciliarios/{id}/liquidar\`).
 - **Mostrador:** el cliente lo recogió; lo que quedara en la cocina sale con él.
 - **Mesa:** no aplica (409 \`ENTREGA_EN_MESA\`): el mesero marca cada plato como entregado.
 

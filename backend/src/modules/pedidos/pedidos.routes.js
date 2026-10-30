@@ -5,7 +5,8 @@
 //   cocina marca "preparando" y "listo"; el mesero, "entregado".
 // - Cobrar: cajero, administrador y dueño (el mesero no cobra).
 // - Domicilios (corregir sus datos y despacharlos) y entregar pedidos sin mesa: cajero,
-//   administrador y dueño. Registrar un domicilio también (lo revisa el servicio).
+//   administrador y dueño. Registrar un domicilio también (lo revisa el servicio). El
+//   domiciliario consulta y entrega solo los domicilios que lleva él (lo revisa el servicio).
 // - Anular: administrador y dueño.
 import { Router } from 'express';
 import { esquemaParamsId } from '../../lib/esquemas.js';
@@ -29,6 +30,7 @@ import {
 const atienden = permitirRoles('dueno', 'administrador', 'cajero', 'mesero');
 const cobran = permitirRoles('dueno', 'administrador', 'cajero');
 const anulan = permitirRoles('dueno', 'administrador');
+const entregan = permitirRoles('dueno', 'administrador', 'cajero', 'domiciliario');
 
 export const rutasPedidos = Router();
 rutasPedidos.use(autenticar);
@@ -102,7 +104,7 @@ rutasPedidos.post(
 );
 rutasPedidos.post(
   '/:id/entregar',
-  cobran,
+  entregan,
   validar({ params: esquemaParamsId }),
   controlador.entregar,
 );

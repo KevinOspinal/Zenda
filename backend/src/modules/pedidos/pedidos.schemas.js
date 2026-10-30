@@ -17,6 +17,54 @@ export const TIPOS_PEDIDO = /** @type {const} */ (['mesa', 'mostrador', 'domicil
 /** Por dónde llegó el pedido. */
 export const ORIGENES_PEDIDO = /** @type {const} */ (['local', 'whatsapp', 'telefono', 'otro']);
 
+/**
+ * Cómo paga el cliente un domicilio: antes de que salga o al recibirlo. Decide su recorrido
+ * (ver el comienzo de pedidos.service.js).
+ */
+export const FORMAS_PAGO_DOMICILIO = /** @type {const} */ (['anticipado', 'contra_entrega']);
+
+/** Con qué se paga una cuenta. */
+const METODOS_PAGO = /** @type {const} */ (['efectivo', 'tarjeta', 'transferencia', 'otro']);
+
+/**
+ * Sitios de los que se acepta el enlace de ubicación del cliente: Google Maps y Waze. Así un
+ * enlace pegado por error, o uno malicioso, no termina abierto en el celular del domiciliario.
+ */
+const SITIOS_DE_MAPAS = Object.freeze([
+  'maps.google.com',
+  'www.google.com',
+  'google.com',
+  'maps.app.goo.gl',
+  'goo.gl',
+  'waze.com',
+  'www.waze.com',
+  'ul.waze.com',
+]);
+
+/**
+ * Si el texto es un enlace https de Google Maps o de Waze.
+ * @param {string} texto
+ */
+function esEnlaceDeMapa(texto) {
+  let url;
+  try {
+    url = new URL(texto);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'https:' || !SITIOS_DE_MAPAS.includes(url.hostname)) return false;
+  // En google.com y goo.gl solo las direcciones de Maps.
+  const soloMaps = ['www.google.com', 'google.com', 'goo.gl'].includes(url.hostname);
+  return !soloMaps || url.pathname.startsWith('/maps');
+}
+
+/** Enlace con la ubicación que mandó el cliente, por ejemplo por WhatsApp. */
+const esquemaUbicacionUrl = z
+  .string()
+  .trim()
+  .max(500, 'máximo 500 caracteres')
+  .refine(esEnlaceDeMapa, 'debe ser un enlace de Google Maps o de Waze');
+
 /** Nombre con el que se llama o se busca al cliente (no es el de la factura). */
 const esquemaNombreCliente = textoObligatorio(80);
 
@@ -26,9 +74,15 @@ const camposEntrega = {
   direccion: textoObligatorio(200),
   // Por ejemplo: "Apto 302, timbre dañado".
   indicaciones: z.string().trim().max(300, 'máximo 300 caracteres'),
+  formaPago: z.enum(FORMAS_PAGO_DOMICILIO, 'la forma de pago debe ser anticipado o contra_entrega'),
   // Con cuánto paga el cliente en efectivo, para que el domiciliario lleve el cambio.
+  // Solo contra entrega.
   pagaCon: esquemaMonto,
+  ubicacionUrl: esquemaUbicacionUrl,
 };
+
+/** Mensaje cuando llega "paga con" en un domicilio de pago anticipado. */
+const PAGA_CON_SOLO_CONTRA_ENTREGA = '"paga con" solo aplica a los domicilios contra entrega';
 
 /**
  * Cantidad de un ítem: mayor que cero y con máximo 3 decimales (por ejemplo 0.5 porción).
@@ -69,6 +123,7 @@ export const esquemaCrearPedido = z
         ...camposEntrega,
         indicaciones: camposEntrega.indicaciones.optional(),
         pagaCon: camposEntrega.pagaCon.optional(),
+        ubicacionUrl: camposEntrega.ubicacionUrl.optional(),
       })
       .optional(),
     // Solo domicilios. Si no llega, se usa el valor por defecto del negocio.
@@ -97,6 +152,13 @@ export const esquemaCrearPedido = z
       if (!datos.nombreCliente)
         error('nombreCliente', 'un domicilio necesita el nombre del cliente');
       if (!datos.entrega) error('entrega', 'un domicilio necesita el teléfono y la dirección');
+      if (datos.entrega?.formaPago === 'anticipado' && datos.entrega.pagaCon !== undefined) {
+        contexto.addIssue({
+          code: 'custom',
+          path: ['entrega', 'pagaCon'],
+          message: PAGA_CON_SOLO_CONTRA_ENTREGA,
+        });
+      }
     } else {
       if (datos.entrega) error('entrega', 'solo los domicilios llevan datos de entrega');
       if (datos.valorDomicilio !== undefined) {
@@ -105,7 +167,10 @@ export const esquemaCrearPedido = z
     }
   });
 
-/** PATCH /pedidos/:id/domicilio: los datos que se pueden corregir de un domicilio. */
+/**
+ * PATCH /pedidos/:id/domicilio: los datos que se pueden corregir de un domicilio. La forma de
+ * pago solo cambia antes de que salga (lo revisa el servicio).
+ */
 export const esquemaActualizarDomicilio = alMenosUnCampo(
   z
     .object({
@@ -114,11 +179,37 @@ export const esquemaActualizarDomicilio = alMenosUnCampo(
       // null borra el dato.
       indicaciones: camposEntrega.indicaciones.nullable(),
       pagaCon: camposEntrega.pagaCon.nullable(),
+      ubicacionUrl: camposEntrega.ubicacionUrl.nullable(),
       // Se ajusta si es lejos. Solo mientras el pedido no se haya cobrado.
       valorDomicilio: esquemaMonto,
     })
     .partial(),
-);
+).refine((datos) => !(datos.formaPago === 'anticipado' && datos.pagaCon), {
+  path: ['pagaCon'],
+  message: PAGA_CON_SOLO_CONTRA_ENTREGA,
+});
+
+/**
+ * POST /domiciliarios/:id/liquidar: los domicilios contra entrega que el domiciliario ya
+ * entregó y cuyo dinero trae a la caja, con el método con que pagó cada cliente.
+ */
+export const esquemaLiquidar = z.object({
+  pedidos: z
+    .array(
+      z.object({
+        pedidoId: esquemaId,
+        metodo: z.enum(METODOS_PAGO).default('efectivo'),
+        // Por ejemplo, el número de la transferencia.
+        referencia: z.string().trim().max(100).optional(),
+      }),
+    )
+    .min(1, 'indique al menos un domicilio')
+    .max(50)
+    .refine(
+      (pedidos) => new Set(pedidos.map((pedido) => pedido.pedidoId)).size === pedidos.length,
+      'cada domicilio puede aparecer una sola vez',
+    ),
+});
 
 /** POST /pedidos/:id/despachar */
 export const esquemaDespachar = z.object({ domiciliarioId: esquemaId });
@@ -164,7 +255,7 @@ export const esquemaEstadoCocinaPedido = z.object({
 /** Un pago dentro del cobro. */
 const esquemaPago = z
   .object({
-    metodo: z.enum(['efectivo', 'tarjeta', 'transferencia', 'otro']),
+    metodo: z.enum(METODOS_PAGO),
     // Lo que se abona a la cuenta con este pago.
     monto: esquemaMonto.refine(
       (valor) => aDecimal(valor).greaterThan(0),

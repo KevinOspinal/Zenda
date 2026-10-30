@@ -22,6 +22,9 @@ export const ACCIONES = Object.freeze({
   CAMBIAR_PROPINA_SUGERIDA: 'cambiar_propina_sugerida',
   CAMBIAR_VALOR_DOMICILIO: 'cambiar_valor_domicilio',
   CAMBIAR_REGIMEN_IMPUESTO: 'cambiar_regimen_impuesto',
+  DAR_ACCESO_DOMICILIARIO: 'dar_acceso_domiciliario',
+  QUITAR_ACCESO_DOMICILIARIO: 'quitar_acceso_domiciliario',
+  LIQUIDAR_DOMICILIARIO: 'liquidar_domiciliario',
 });
 
 /**

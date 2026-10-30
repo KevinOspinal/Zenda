@@ -117,19 +117,29 @@ export async function actualizarUsuario(sesion, id, datos) {
       );
     }
 
-    // 3. Guardar los cambios.
+    // 3. El acceso de un domiciliario se maneja desde Domiciliarios: su usuario no cambia de
+    //    rol (quedaría un domiciliario sin acceso o un empleado con entregas asignadas).
+    if (actual.rol === 'domiciliario' && cambiaRol) {
+      throw new AppError(
+        422,
+        'ROL_DOMICILIARIO',
+        'El acceso de un domiciliario se maneja desde Domiciliarios',
+      );
+    }
+
+    // 4. Guardar los cambios.
     const actualizado = await tx.usuario.update({
       where: { id },
       data: datos,
       select: CAMPOS_PUBLICOS,
     });
 
-    // 4. Cerrar sus sesiones si perdió acceso o cambiaron sus permisos.
+    // 5. Cerrar sus sesiones si perdió acceso o cambiaron sus permisos.
     if (cambiaRol || datos.activo === false) {
       await revocarSesionesDeUsuario(tx, id);
     }
 
-    // 5. Auditoría con lo que cambió (antes y después).
+    // 6. Auditoría con lo que cambió (antes y después).
     /** @type {Record<string, { antes: unknown, despues: unknown }>} */
     const cambios = {};
     for (const campo of /** @type {const} */ (['nombre', 'rol', 'activo'])) {
