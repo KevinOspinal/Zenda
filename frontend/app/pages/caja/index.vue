@@ -60,6 +60,14 @@ function cobrarYEntregar(domicilio) {
   entregarAlCobrar.value = domicilio.id;
   cobrando.value = true;
 }
+/**
+ * Domicilio de pago anticipado: se cobra antes de que salga (solo sale pagado).
+ * @param {any} domicilio
+ */
+function cobrarDomicilio(domicilio) {
+  seleccionadoId.value = domicilio.id;
+  cobrando.value = true;
+}
 watch(cobrando, (abierto) => {
   if (!abierto) entregarAlCobrar.value = '';
 });
@@ -206,7 +214,7 @@ defineShortcuts({
         :por-cobrar="pedidos.lista"
       />
 
-      <DomiciliosEnCurso @cobrar-y-entregar="cobrarYEntregar" />
+      <DomiciliosEnCurso @cobrar-y-entregar="cobrarYEntregar" @cobrar="cobrarDomicilio" />
 
       <div class="grid grid-cols-1 gap-5 lg:grid-cols-5">
         <PedidosDeCaja
