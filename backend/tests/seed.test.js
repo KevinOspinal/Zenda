@@ -29,7 +29,7 @@ afterAll(async () => {
 });
 
 describe('seed de datos de ejemplo', () => {
-  it('crea La Industria con su menú, usuarios de los 5 roles y mesas', async () => {
+  it('crea La Industria con su menú, usuarios de todos los roles y mesas', async () => {
     const conteos = await conNegocio(laIndustria.id, async (tx) => ({
       categorias: await tx.categoria.count(),
       productos: await tx.producto.count(),
@@ -43,8 +43,19 @@ describe('seed de datos de ejemplo', () => {
       categorias: menuLaIndustria.length,
       productos: totalProductosMenu,
       mesas: 10,
-      roles: ['administrador', 'cajero', 'cocina', 'dueno', 'mesero'],
+      roles: ['administrador', 'cajero', 'cocina', 'domiciliario', 'dueno', 'mesero'],
     });
+  });
+
+  it('el domiciliario con acceso queda vinculado a su usuario', async () => {
+    const pedro = await conNegocio(laIndustria.id, (tx) =>
+      tx.domiciliario.findFirstOrThrow({
+        where: { nombre: 'Pedro Gómez' },
+        include: { usuario: { select: { email: true, rol: true } } },
+      }),
+    );
+
+    expect(pedro.usuario).toEqual({ email: 'pedro@laindustria.test', rol: 'domiciliario' });
   });
 
   it('no duplica nada si se ejecuta otra vez', async () => {
