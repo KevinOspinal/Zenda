@@ -5,6 +5,8 @@
 // del pedido; en mostrador y domicilio, a la caja, que es quien los entrega. Los avisos no
 // saturan: uno por mesa, que se actualiza, y el sonido como máximo una vez cada pocos
 // segundos (utils/avisos.js). Y suena en la cocina cuando llega una comanda nueva.
+// El domiciliario solo atiende sus entregas: cada cambio de un domicilio se le consulta al API,
+// que solo le responde los suyos (ver stores/entregas.js).
 export default defineNuxtPlugin(() => {
   const socket = useTiempoReal();
   const sesion = useSesionStore();
@@ -12,6 +14,7 @@ export default defineNuxtPlugin(() => {
   const pedidos = usePedidosStore();
   const caja = useCajaStore();
   const domicilios = useDomiciliosStore();
+  const entregas = useEntregasStore();
   const preferencias = usePreferenciasStore();
   const sonidos = useSonidos();
   const toast = useToast();
@@ -85,11 +88,19 @@ export default defineNuxtPlugin(() => {
     toast.remove(`listo-${pedidoId}`);
   }
 
+  /** El dispositivo es de un domiciliario: solo le importan sus entregas. */
+  const esDomiciliario = () => sesion.rol === 'domiciliario';
+
   /**
-   * Un pedido cambió: se actualizan los pedidos activos y, si es domicilio, la lista de la caja.
+   * Un pedido cambió: se actualizan los pedidos activos y, si es domicilio, la lista de la caja
+   * (o las entregas del domiciliario).
    * @param {{ id: string, tipo?: string }} datos
    */
   function alCambiarPedido(datos) {
+    if (esDomiciliario()) {
+      if (datos.tipo === 'domicilio') entregas.alCambiarPedido(datos);
+      return;
+    }
     pedidos.alCambiarPedido(datos);
     if (datos.tipo === 'domicilio') domicilios.alCambiarPedido(datos);
   }
@@ -130,11 +141,13 @@ export default defineNuxtPlugin(() => {
     if (datos.estadoCocina === 'entregado') quitarAvisoSiYaSeEntrego(datos.pedidoId);
   });
   socket.on(E.PEDIDO_PAGADO, (datos) => {
+    if (esDomiciliario()) return alCambiarPedido(datos);
     pedidos.alCerrarPedido(datos);
     caja.alCambiarVentas();
     if (datos.tipo === 'domicilio') domicilios.alCambiarPedido(datos);
   });
   socket.on(E.PEDIDO_ANULADO, (datos) => {
+    if (esDomiciliario()) return alCambiarPedido(datos);
     pedidos.alCerrarPedido(datos);
     caja.alCambiarVentas();
     if (datos.tipo === 'domicilio') domicilios.alCambiarPedido(datos);
@@ -145,6 +158,11 @@ export default defineNuxtPlugin(() => {
   // del mesero funcionen desde que entra; las mesas, solo si alguna pantalla ya las usó.
   socket.on('connect', () => {
     if (!sesion.activa) return;
+    // El domiciliario solo ve sus entregas: el API no le da los demás pedidos.
+    if (esDomiciliario()) {
+      entregas.cargar();
+      return;
+    }
     pedidos.cargarActivos();
     caja.cargarEstado();
     if (mesas.estadoCarga === 'listo') mesas.cargar();

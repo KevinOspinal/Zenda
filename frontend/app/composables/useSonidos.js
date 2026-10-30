@@ -67,5 +67,22 @@ export function useSonidos() {
         { frecuencia: 987.8, inicio: 0.4, duracion: 0.35 },
       ]);
     },
+    /** Al domiciliario le asignaron un domicilio: tres notas que suben, alegres. */
+    domicilioAsignado() {
+      if (!preferencias.sonidos) return;
+      tocar([
+        { frecuencia: 523.3, inicio: 0, duracion: 0.14 },
+        { frecuencia: 659.3, inicio: 0.12, duracion: 0.14 },
+        { frecuencia: 784, inicio: 0.24, duracion: 0.4 },
+      ]);
+    },
+    /** El domiciliario confirmó una entrega: un toque corto y suave. */
+    entregaHecha() {
+      if (!preferencias.sonidos) return;
+      tocar([
+        { frecuencia: 1046.5, inicio: 0, duracion: 0.12 },
+        { frecuencia: 1568, inicio: 0.1, duracion: 0.28 },
+      ]);
+    },
   };
 }

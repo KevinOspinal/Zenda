@@ -5,7 +5,7 @@
 // backend (ver la skill, contrato-api.md). Ocultar un botón mejora la experiencia, pero la
 // seguridad la pone el backend: toda pantalla debe manejar el error 403 igual.
 
-/** @typedef {'dueno' | 'administrador' | 'cajero' | 'mesero' | 'cocina'} Rol */
+/** @typedef {'dueno' | 'administrador' | 'cajero' | 'mesero' | 'cocina' | 'domiciliario'} Rol */
 
 /** @type {Readonly<Record<Rol, { etiqueta: string, icono: string }>>} */
 export const ROLES = Object.freeze({
@@ -14,9 +14,17 @@ export const ROLES = Object.freeze({
   cajero: { etiqueta: 'Cajero', icono: 'i-lucide-calculator' },
   mesero: { etiqueta: 'Mesero', icono: 'i-lucide-hand-platter' },
   cocina: { etiqueta: 'Cocina', icono: 'i-lucide-chef-hat' },
+  domiciliario: { etiqueta: 'Domiciliario', icono: 'i-lucide-bike' },
 });
 
-const TODOS = /** @type {Rol[]} */ (['dueno', 'administrador', 'cajero', 'mesero', 'cocina']);
+const TODOS = /** @type {Rol[]} */ ([
+  'dueno',
+  'administrador',
+  'cajero',
+  'mesero',
+  'cocina',
+  'domiciliario',
+]);
 /** Los que atienden a los clientes: todos menos la cocina. */
 const ATIENDEN = /** @type {Rol[]} */ (['dueno', 'administrador', 'cajero', 'mesero']);
 const GERENCIA = /** @type {Rol[]} */ (['dueno', 'administrador']);
@@ -43,6 +51,8 @@ export const PERMISOS = Object.freeze({
   registrarInventario: GERENCIA, // compras y ajustes
   verUsuarios: GERENCIA,
   gestionarDomiciliarios: GERENCIA,
+  darAccesoDomiciliarios: SOLO_DUENO, // su usuario para entrar a Zenda
+  liquidarDomiciliarios: CAJA, // recibir el dinero de sus domicilios contra entrega
   gestionarUsuarios: SOLO_DUENO,
   configurarNegocio: SOLO_DUENO, // propina sugerida
   verAuditoria: SOLO_DUENO,
@@ -182,6 +192,13 @@ export const SECCIONES = Object.freeze([
     oculta: true,
   },
   {
+    id: 'entregas',
+    etiqueta: 'Entregas',
+    icono: 'i-lucide-bike',
+    ruta: '/entregas',
+    roles: ['domiciliario'],
+  },
+  {
     id: 'perfil',
     etiqueta: 'Perfil',
     icono: 'i-lucide-circle-user',
@@ -192,6 +209,8 @@ export const SECCIONES = Object.freeze([
 
 /** Las únicas pantallas de la cuenta de la cocina. */
 const RUTAS_DE_LA_COCINA = Object.freeze(['/cocina', '/perfil']);
+/** Las únicas pantallas del domiciliario. */
+const RUTAS_DEL_DOMICILIARIO = Object.freeze(['/entregas', '/perfil']);
 
 /** Pantalla con la que empieza cada rol al ingresar. */
 export const INICIO_POR_ROL = Object.freeze({
@@ -200,6 +219,7 @@ export const INICIO_POR_ROL = Object.freeze({
   cajero: '/caja',
   mesero: '/mesas',
   cocina: '/cocina',
+  domiciliario: '/entregas',
 });
 
 /**
@@ -249,8 +269,10 @@ export function redireccionNecesaria({ ruta, publica = false, seccion, rol }) {
   const datosSeccion = SECCIONES.find((s) => s.id === seccion);
   if (datosSeccion && !datosSeccion.roles.includes(rol)) return inicioDe(rol);
 
-  // 4. La cuenta de la cocina solo ve su tablero y su perfil (por ejemplo, no abre un pedido).
+  // 4. La cuenta de la cocina solo ve su tablero y su perfil (por ejemplo, no abre un pedido),
+  //    y el domiciliario, sus entregas y su perfil.
   if (rol === 'cocina' && !RUTAS_DE_LA_COCINA.includes(ruta)) return inicioDe(rol);
+  if (rol === 'domiciliario' && !RUTAS_DEL_DOMICILIARIO.includes(ruta)) return inicioDe(rol);
 
   return null;
 }

@@ -29,6 +29,7 @@ describe('secciones por rol', () => {
       'cajero',
       'mesero',
       'cocina',
+      'domiciliario',
     ])) {
       expect(idsDeSecciones(rol)).toContain('perfil');
     }
@@ -42,6 +43,7 @@ describe('inicio por rol', () => {
     expect(inicioDe('administrador')).toBe('/reportes');
     expect(inicioDe('dueno')).toBe('/reportes');
     expect(inicioDe('cocina')).toBe('/cocina');
+    expect(inicioDe('domiciliario')).toBe('/entregas');
   });
 });
 
@@ -51,6 +53,33 @@ describe('domiciliarios', () => {
     expect(idsDeSecciones('administrador')).toContain('domiciliarios');
     expect(idsDeSecciones('cajero')).not.toContain('domiciliarios');
     expect(puede('cajero', 'gestionarDomiciliarios')).toBe(false);
+  });
+});
+
+describe('el domiciliario', () => {
+  it('solo ve sus entregas y su perfil, ni siquiera un pedido', () => {
+    const entrar = (/** @type {string} */ ruta, /** @type {string} */ seccion) =>
+      redireccionNecesaria({ ruta, seccion, rol: 'domiciliario' });
+
+    expect(idsDeSecciones('domiciliario')).toEqual(['entregas', 'perfil']);
+    expect(entrar('/entregas', 'entregas')).toBeNull();
+    expect(entrar('/perfil', 'perfil')).toBeNull();
+    expect(entrar('/caja', 'caja')).toBe('/entregas');
+    expect(redireccionNecesaria({ ruta: '/pedidos/abc', rol: 'domiciliario' })).toBe('/entregas');
+  });
+
+  it('nadie más ve sus entregas', () => {
+    expect(redireccionNecesaria({ ruta: '/entregas', seccion: 'entregas', rol: 'cajero' })).toBe(
+      '/caja',
+    );
+  });
+
+  it('el dueño le da acceso a Zenda; la caja lo liquida', () => {
+    expect(puede('dueno', 'darAccesoDomiciliarios')).toBe(true);
+    expect(puede('administrador', 'darAccesoDomiciliarios')).toBe(false);
+    expect(puede('cajero', 'liquidarDomiciliarios')).toBe(true);
+    expect(puede('domiciliario', 'cobrar')).toBe(false);
+    expect(puede('domiciliario', 'tomarPedidos')).toBe(false);
   });
 });
 

@@ -1,12 +1,16 @@
 <!--
-  Domiciliarios del negocio: quienes llevan los domicilios. No inician sesión: la caja les
-  asigna los pedidos al despacharlos. No se borran; se desactivan para conservar su historial.
+  Domiciliarios del negocio: quienes llevan los domicilios. La caja les asigna los pedidos al
+  despacharlos. No se borran; se desactivan para conservar su historial.
+  El dueño les puede dar acceso a Zenda: entran desde su celular, ven sus entregas con el mapa
+  y las marcan como entregadas. Sin acceso, la caja maneja sus domicilios como siempre.
 -->
 <script setup>
 definePageMeta({ seccion: 'domiciliarios' });
 
 const toast = useToast();
+const sesion = useSesionStore();
 const pantallaGrande = useMediaQuery('(min-width: 1024px)');
+const daAccesos = computed(() => puede(sesion.rol, 'darAccesoDomiciliarios'));
 
 const domiciliarios = ref(/** @type {any[]} */ ([]));
 const cargando = ref(true);
@@ -37,6 +41,43 @@ function alGuardar() {
   panelAbierto.value = false;
   toast.add({ title: 'Domiciliario guardado', icon: 'i-lucide-circle-check', color: 'success' });
   cargar();
+}
+
+// Acceso a Zenda (solo el dueño).
+const accesoAbierto = ref(false);
+const conAcceso = ref(/** @type {any} */ (null));
+/** @param {any} domiciliario */
+function darAcceso(domiciliario) {
+  conAcceso.value = domiciliario;
+  accesoAbierto.value = true;
+}
+function alDarAcceso() {
+  toast.add({
+    title: `${conAcceso.value?.nombre} ya puede entrar a Zenda`,
+    description: 'Entrégale el NIT del negocio, su correo y su contraseña.',
+    icon: 'i-lucide-key-round',
+    color: 'success',
+  });
+  cargar();
+}
+/** @param {any} domiciliario */
+async function quitarAcceso(domiciliario) {
+  try {
+    await useApi().eliminar(`/domiciliarios/${domiciliario.id}/acceso`);
+    toast.add({
+      title: `${domiciliario.nombre} ya no entra a Zenda`,
+      description: 'Sigue siendo domiciliario: la caja le puede asignar domicilios.',
+      icon: 'i-lucide-user-x',
+      color: 'neutral',
+    });
+    cargar();
+  } catch (fallo) {
+    toast.add({
+      title: fallo instanceof ErrorApi ? fallo.message : MENSAJE_ERROR_GENERICO,
+      icon: 'i-lucide-circle-alert',
+      color: 'error',
+    });
+  }
 }
 </script>
 
@@ -91,12 +132,46 @@ function alGuardar() {
             <UIcon name="i-lucide-phone" class="size-4" />
             {{ domiciliario.telefono }}
           </a>
-          <UBadge
-            :color="domiciliario.activo ? 'success' : 'neutral'"
-            variant="subtle"
-            :icon="domiciliario.activo ? 'i-lucide-circle-check' : 'i-lucide-circle-pause'"
-            :label="domiciliario.activo ? 'Activo' : 'Inactivo'"
-          />
+          <div class="flex flex-wrap gap-1.5">
+            <UBadge
+              :color="domiciliario.activo ? 'success' : 'neutral'"
+              variant="subtle"
+              :icon="domiciliario.activo ? 'i-lucide-circle-check' : 'i-lucide-circle-pause'"
+              :label="domiciliario.activo ? 'Activo' : 'Inactivo'"
+            />
+            <UBadge
+              v-if="domiciliario.acceso?.activo"
+              color="primary"
+              variant="subtle"
+              icon="i-lucide-smartphone"
+              label="Entra a Zenda"
+            />
+          </div>
+          <p v-if="domiciliario.acceso?.activo" class="truncate text-xs text-muted">
+            {{ domiciliario.acceso.email }}
+          </p>
+          <template v-if="daAccesos && domiciliario.activo">
+            <UButton
+              v-if="domiciliario.acceso?.activo"
+              size="sm"
+              color="neutral"
+              variant="link"
+              class="px-0"
+              icon="i-lucide-user-x"
+              label="Quitar acceso"
+              loading-auto
+              @click="quitarAcceso(domiciliario)"
+            />
+            <UButton
+              v-else
+              size="sm"
+              variant="link"
+              class="px-0"
+              icon="i-lucide-key-round"
+              label="Dar acceso a Zenda"
+              @click="darAcceso(domiciliario)"
+            />
+          </template>
         </div>
         <UButton
           color="neutral"
@@ -122,5 +197,11 @@ function alGuardar() {
         />
       </template>
     </USlideover>
+
+    <AccesoDomiciliario
+      v-model:abierto="accesoAbierto"
+      :domiciliario="conAcceso"
+      @guardado="alDarAcceso"
+    />
   </div>
 </template>
