@@ -56,18 +56,28 @@ por negocio y la auditoría solo admita inserciones. Hazlo antes del primer desp
 
 3. Al final debe mostrar `zenda_app | f | f` (no es superusuario y no se salta RLS).
 
-Si se conecta pero se queja de SSL, agrega `?sslmode=require` al final de la URL.
+Seenode solo acepta conexiones cifradas: con psql agrega `-e PGSSLMODE=require` al
+`docker run`, o `?sslmode=require` al final de la URL.
 
 **Plan B**: si el script se detiene con _"no puede crear usuarios (CREATE ROLE)"_, la app usará
 el usuario dueño (en el paso 4, `DATABASE_URL` igual a `DATABASE_URL_MIGRACIONES`). RLS sigue
 filtrando por negocio porque las tablas tienen `FORCE ROW LEVEL SECURITY`, siempre que ese
-usuario no sea superusuario ni tenga `BYPASSRLS`. Revísalo con:
+usuario no sea superusuario ni tenga `BYPASSRLS`. Revísalo (con psql o pgAdmin) con:
 
 ```sql
-SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user;
+SELECT rolsuper AS superusuario,
+       rolbypassrls AS se_salta_rls,
+       has_schema_privilege('public', 'CREATE') AS puede_crear_tablas
+FROM pg_roles
+WHERE rolname = current_user;
 ```
 
-Ambos deben ser `f`. Lo que se pierde es que la auditoría sea de solo inserción.
+Deben dar `false`, `false` y `true`. Lo que se pierde es que la auditoría sea de solo inserción
+y que la app no pueda cambiar la estructura de las tablas; las copias diarias cubren el riesgo.
+
+> **En Seenode (octubre de 2026) aplica el plan B**: el usuario de la base no puede crear
+> usuarios, no es superusuario y no se salta RLS. El servidor de PostgreSQL es compartido: en
+> pgAdmin se ven las bases de otros clientes, pero solo se entra a la propia.
 
 ## Paso 4. Crear el API
 
@@ -91,19 +101,24 @@ Ambos deben ser `f`. Lo que se pierde es que la auditoría sea de solo inserció
 
 Variables de entorno:
 
-| Variable                   | Valor                                                                                              |
-| -------------------------- | -------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`                 | `production`                                                                                       |
-| `PORT`                     | `3000`                                                                                             |
-| `DATABASE_URL`             | `postgresql://zenda_app:CONTRASENA_DE_LA_APP@HOST:PUERTO/BASE` (host privado si Seenode lo ofrece) |
-| `DATABASE_URL_MIGRACIONES` | La URL del usuario dueño (paso 2)                                                                  |
-| `JWT_SECRET`               | Una clave generada (mínimo 32 caracteres)                                                          |
-| `CORS_ORIGENES`            | Por ahora `http://localhost:3001`; en el paso 6 va la URL del frontend                             |
-| `CONFIAR_EN_PROXY`         | `true` (Seenode pone un proxy delante del API)                                                     |
-| `LOG_LEVEL`                | `info`                                                                                             |
+| Variable                   | Valor                                                                                  |
+| -------------------------- | -------------------------------------------------------------------------------------- |
+| `NODE_ENV`                 | `production`                                                                           |
+| `PORT`                     | `3000`                                                                                 |
+| `DATABASE_URL`             | `postgresql://USUARIO:CONTRASENA@HOST:PUERTO/BASE?uselibpqcompat=true&sslmode=require` |
+| `DATABASE_URL_MIGRACIONES` | La URL del usuario dueño, con los mismos parámetros al final                           |
+| `JWT_SECRET`               | Una clave generada (mínimo 32 caracteres)                                              |
+| `CORS_ORIGENES`            | Por ahora `http://localhost:3001`; en el paso 6 va la URL del frontend                 |
+| `CONFIAR_EN_PROXY`         | `true` (Seenode pone un proxy delante del API)                                         |
+| `LOG_LEVEL`                | `info`                                                                                 |
 
-No configures `REDIS_URL` ni `DOCS_HABILITADA`. El registro de negocios queda cerrado en
-producción.
+- En el plan B, `USUARIO` es el usuario dueño y las dos URL quedan iguales. Si se pudo crear
+  el usuario de la app, `DATABASE_URL` usa `zenda_app` y su contraseña.
+- `?uselibpqcompat=true&sslmode=require` cifra la conexión sin exigir un certificado de una
+  autoridad pública: el de Seenode es autofirmado. Con solo `sslmode=require`, la librería `pg`
+  del API lo trata como `verify-full` y no se conecta (_unable to verify the first certificate_).
+- No configures `REDIS_URL` ni `DOCS_HABILITADA`. El registro de negocios queda cerrado en
+  producción.
 
 **Comprobar**: abre `https://URL-DEL-API/health`. Debe responder:
 
@@ -170,10 +185,10 @@ está la opción de volver a un despliegue anterior (rollback).
 
 ## Problemas comunes
 
-| Síntoma                                                   | Causa probable                                                                |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `/health` responde 503 con `baseDeDatos: "caido"`         | `DATABASE_URL` mal escrita, host equivocado o falta `?sslmode=require`        |
-| El navegador muestra errores de CORS                      | `CORS_ORIGENES` no coincide exacto con la URL del frontend                    |
-| Todo el restaurante recibe "Demasiados intentos" a la vez | El API ve la IP del proxy y no la de cada persona: revisar `CONFIAR_EN_PROXY` |
-| El frontend llama a `localhost:3000`                      | Falta `NUXT_PUBLIC_API_URL` al construir el frontend                          |
-| El API se reinicia por memoria                            | Subir el API al plan Standard (1 GB)                                          |
+| Síntoma                                                   | Causa probable                                                                             |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `/health` responde 503 con `baseDeDatos: "caido"`         | `DATABASE_URL` mal escrita, host equivocado o falta `?uselibpqcompat=true&sslmode=require` |
+| El navegador muestra errores de CORS                      | `CORS_ORIGENES` no coincide exacto con la URL del frontend                                 |
+| Todo el restaurante recibe "Demasiados intentos" a la vez | El API ve la IP del proxy y no la de cada persona: revisar `CONFIAR_EN_PROXY`              |
+| El frontend llama a `localhost:3000`                      | Falta `NUXT_PUBLIC_API_URL` al construir el frontend                                       |
+| El API se reinicia por memoria                            | Subir el API al plan Standard (1 GB)                                                       |
