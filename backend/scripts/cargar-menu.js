@@ -68,7 +68,8 @@ function preguntarOculto(texto) {
   // Sin terminal (por ejemplo, con la entrada redirigida) no hay nada que ocultar.
   if (!entrada.isTTY) return preguntar(texto);
 
-  // En modo "raw" la terminal no muestra las teclas: se leen una por una.
+  // En modo "raw" la terminal no muestra las teclas: se leen una por una y se muestra un *
+  // por cada letra, para saber cuántas van.
   process.stdout.write(texto);
   entrada.setRawMode(true);
   entrada.resume();
@@ -76,7 +77,11 @@ function preguntarOculto(texto) {
     let valor = '';
     /** @param {Buffer} datos */
     function alEscribir(datos) {
-      for (const tecla of datos.toString('utf8')) {
+      // Fuera las teclas especiales (flechas, Inicio, Supr) y las marcas que algunas
+      // terminales agregan al pegar: no son parte de la contraseña.
+      // eslint-disable-next-line no-control-regex -- esas teclas empiezan con el carácter ESC.
+      const teclas = datos.toString('utf8').replace(/\x1b\[[0-9;]*[~A-Za-z]|\x1bO./g, '');
+      for (const tecla of teclas) {
         if (tecla === '\r' || tecla === '\n') {
           terminar();
           resolver(valor);
@@ -87,8 +92,14 @@ function preguntarOculto(texto) {
           terminar();
           process.exit(130);
         }
-        // Borrar la última letra o agregar la nueva.
-        valor = tecla === '\u007f' || tecla === '\b' ? valor.slice(0, -1) : valor + tecla;
+        if (tecla === '\u007f' || tecla === '\b') {
+          // Borrar la última letra (y su *).
+          if (valor) process.stdout.write('\b \b');
+          valor = valor.slice(0, -1);
+        } else if (tecla >= ' ') {
+          valor += tecla;
+          process.stdout.write('*');
+        }
       }
     }
     function terminar() {
