@@ -18,6 +18,9 @@ registrarServidorSocket(io);
 // Empieza a recibir peticiones en el puerto configurado.
 server.listen(env.PORT, () => {
   logger.info({ port: env.PORT, env: env.NODE_ENV }, 'API escuchando');
+  if (!redis) {
+    logger.warn('Sin Redis: los límites de peticiones se guardan en memoria (un solo proceso)');
+  }
 });
 
 /**
@@ -29,7 +32,7 @@ function cerrarServidor(signal) {
   // Cierra las conexiones de Socket.IO y deja de aceptar peticiones nuevas; espera a que
   // terminen las que están en curso y libera las conexiones a la base de datos.
   io.close(async (err) => {
-    await Promise.allSettled([prisma.$disconnect(), redis.quit()]);
+    await Promise.allSettled([prisma.$disconnect(), redis?.quit()]);
     if (err) {
       logger.error({ err }, 'Error al cerrar el servidor');
       process.exit(1);

@@ -33,6 +33,9 @@ Comprueba que el API responde y que puede hablar con **PostgreSQL** y **Redis**.
 - **503**: el API está vivo pero algún servicio no responde (en \`servicios\` se ve cuál).
   Revisa que Docker esté encendido: \`docker compose up -d\`.
 
+Redis es opcional: si \`REDIS_URL\` no está configurada, \`servicios.redis\` dice
+\`sin_configurar\` y no cuenta como falla (los límites de peticiones van en memoria).
+
 Los servidores (Docker, balanceadores) usan este endpoint para saber si deben reiniciar
 el proceso o dejar de enviarle tráfico.`,
       respuestas: {

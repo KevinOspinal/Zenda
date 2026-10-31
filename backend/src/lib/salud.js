@@ -1,5 +1,6 @@
 // @ts-check
-// Estado de salud del API: comprueba que PostgreSQL y Redis respondan.
+// Estado de salud del API: comprueba que PostgreSQL y Redis respondan. Si Redis no está
+// configurado (es opcional), se informa como "sin_configurar" y no cuenta como falla.
 //
 // Lo usa GET /health. Si algo está caído responde 503, para que el servidor (Docker,
 // el balanceador) sepa que este proceso no puede atender y lo reinicie o lo saque.
@@ -12,7 +13,7 @@ const ESPERA_MAXIMA_MS = 2000;
 /**
  * @typedef {object} EstadoSalud
  * @property {'ok' | 'error'} status
- * @property {{ baseDeDatos: 'ok' | 'caido', redis: 'ok' | 'caido' }} servicios
+ * @property {{ baseDeDatos: 'ok' | 'caido', redis: 'ok' | 'caido' | 'sin_configurar' }} servicios
  */
 
 /**
@@ -22,10 +23,10 @@ const ESPERA_MAXIMA_MS = 2000;
 export async function revisarSalud() {
   const [baseDeDatos, cache] = await Promise.all([
     comprobar(() => prisma.$queryRaw`SELECT 1`),
-    comprobar(() => redis.ping()),
+    redis ? comprobar(() => redis.ping()) : /** @type {const} */ ('sin_configurar'),
   ]);
 
-  const todoBien = baseDeDatos === 'ok' && cache === 'ok';
+  const todoBien = baseDeDatos === 'ok' && cache !== 'caido';
   return { status: todoBien ? 'ok' : 'error', servicios: { baseDeDatos, redis: cache } };
 }
 

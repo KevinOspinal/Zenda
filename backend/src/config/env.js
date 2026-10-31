@@ -7,7 +7,9 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
-  REDIS_URL: z.url({ protocol: /^rediss?$/ }),
+  // Opcional. Sin Redis, los límites de peticiones se guardan en la memoria del proceso: sirve
+  // mientras corra un solo proceso del API (el piloto). La cola de facturación sí lo exigirá.
+  REDIS_URL: z.url({ protocol: /^rediss?$/ }).optional(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
   // Clave para firmar los tokens de acceso (JWT). Debe ser larga y aleatoria; nunca va en el repositorio.

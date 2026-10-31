@@ -4,7 +4,8 @@
 // en masa. Al pasarse, responde 429 con el formato de error uniforme.
 //
 // Los contadores viven en Redis: así el límite se respeta aunque haya varios procesos
-// del API, y no se reinicia al reiniciar el servidor.
+// del API, y no se reinicia al reiniciar el servidor. Sin Redis (REDIS_URL vacía) viven
+// en la memoria del proceso: con un solo proceso del API el límite protege igual.
 import { rateLimit } from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
 import { env } from '../config/env.js';
@@ -18,7 +19,7 @@ const UNA_HORA = 60 * UN_MINUTO;
 /**
  * Crea un limitador.
  * @param {object} opciones
- * @param {string} opciones.nombre Identifica el contador en Redis, por ejemplo "login".
+ * @param {string} opciones.nombre Identifica el contador, por ejemplo "login".
  * @param {number} opciones.maximo Peticiones permitidas por IP en la ventana.
  * @param {number} opciones.ventanaMs Duración de la ventana en milisegundos.
  * @returns {import('express').RequestHandler}
@@ -30,11 +31,8 @@ export function crearLimitador({ nombre, maximo, ventanaMs }) {
     // Encabezados estándar RateLimit y Retry-After para que la app sepa cuánto esperar.
     standardHeaders: 'draft-8',
     legacyHeaders: false,
-    store: new RedisStore({
-      prefix: `zenda:limite:${nombre}:`,
-      sendCommand: (comando, ...argumentos) =>
-        /** @type {Promise<any>} */ (redis.call(comando, ...argumentos)),
-    }),
+    // Sin Redis, express-rate-limit usa su almacén en memoria (uno por limitador).
+    store: redis ? almacenEnRedis(redis, nombre) : undefined,
     // Si Redis está caído, se deja pasar la petición en lugar de bloquear el login
     // de todo el restaurante. Se registra para enterarse.
     passOnStoreError: true,
@@ -49,6 +47,19 @@ export function crearLimitador({ nombre, maximo, ventanaMs }) {
         ),
       );
     },
+  });
+}
+
+/**
+ * Contadores de un limitador guardados en Redis.
+ * @param {import('ioredis').Redis} cliente
+ * @param {string} nombre
+ */
+function almacenEnRedis(cliente, nombre) {
+  return new RedisStore({
+    prefix: `zenda:limite:${nombre}:`,
+    sendCommand: (comando, ...argumentos) =>
+      /** @type {Promise<any>} */ (cliente.call(comando, ...argumentos)),
   });
 }
 

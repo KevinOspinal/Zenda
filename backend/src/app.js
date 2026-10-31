@@ -37,7 +37,8 @@ export function createApp() {
   // Lee cuerpos JSON con un límite de tamaño para evitar abusos.
   app.use(express.json({ limit: '1mb' }));
 
-  // Estado del servicio: 200 si PostgreSQL y Redis responden; 503 si alguno está caído.
+  // Estado del servicio: 200 si PostgreSQL y Redis (si está configurado) responden; 503 si
+  // alguno está caído.
   app.get('/health', async (_req, res) => {
     const salud = await revisarSalud();
     res.status(salud.status === 'ok' ? 200 : 503).json(salud);

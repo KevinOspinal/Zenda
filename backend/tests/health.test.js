@@ -49,6 +49,13 @@ describe('parseEnv', () => {
     expect(env.NODE_ENV).toBe('development');
   });
 
+  it('Redis es opcional, pero si se indica debe ser una URL de Redis', () => {
+    const sinRedis = { DATABASE_URL: base.DATABASE_URL, JWT_SECRET: base.JWT_SECRET };
+
+    expect(parseEnv(sinRedis).REDIS_URL).toBeUndefined();
+    expect(() => parseEnv({ ...base, REDIS_URL: 'http://localhost:6379' })).toThrow(/REDIS_URL/);
+  });
+
   it('falla si falta DATABASE_URL, sin mostrar valores', () => {
     expect(() => parseEnv({ REDIS_URL: base.REDIS_URL })).toThrow(/DATABASE_URL/);
   });

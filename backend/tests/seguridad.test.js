@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  await Promise.allSettled([prisma.$disconnect(), redis.quit()]);
+  await Promise.allSettled([prisma.$disconnect(), redis?.quit()]);
 });
 
 describe('cabeceras de seguridad (helmet)', () => {
@@ -86,7 +86,10 @@ describe('límite de peticiones por IP', () => {
 
 describe('GET /health con un servicio caído', () => {
   it('responde 503 e indica cuál servicio no responde', async () => {
-    vi.spyOn(redis, 'ping').mockRejectedValue(new Error('Redis caído'));
+    // Las pruebas corren con REDIS_URL, así que el cliente existe.
+    vi.spyOn(/** @type {import('ioredis').Redis} */ (redis), 'ping').mockRejectedValue(
+      new Error('Redis caído'),
+    );
 
     const res = await request(app).get('/health');
 
