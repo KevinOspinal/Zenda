@@ -34,12 +34,40 @@ async function enviarCredenciales(pagina) {
 }
 
 describe('pantalla de ingreso', () => {
-  it('con el negocio recordado, muestra su nombre y no pide el NIT', async () => {
+  it('con el negocio recordado, saluda, muestra sus iniciales y no pide el NIT', async () => {
     const pagina = await mountSuspended(PaginaIngresar);
 
+    expect(pagina.text()).toContain('¡Hola de nuevo!');
+    expect(pagina.text()).toContain('LI');
     expect(pagina.text()).toContain('La Industria');
     expect(pagina.text()).toContain('NIT 900111222');
     expect(pagina.find('input[inputmode="numeric"]').exists()).toBe(false);
+  });
+
+  it('la primera vez en el dispositivo, pide el NIT', async () => {
+    const sesion = useSesionStore();
+    sesion.nitRecordado = '';
+    sesion.negocioRecordado = '';
+
+    const pagina = await mountSuspended(PaginaIngresar);
+
+    expect(pagina.text()).toContain('Ingresa a tu negocio');
+    expect(pagina.find('input[inputmode="numeric"]').exists()).toBe(true);
+  });
+
+  it('avisa si Bloq Mayús está activado al escribir la contraseña', async () => {
+    const pagina = await mountSuspended(PaginaIngresar);
+    const contrasena = pagina.find('input[autocomplete="current-password"]');
+
+    // Una tecla con Bloq Mayús activado.
+    const tecla = new KeyboardEvent('keyup', { key: 'A' });
+    Object.defineProperty(tecla, 'getModifierState', { value: () => true });
+    contrasena.element.dispatchEvent(tecla);
+    await vi.waitFor(() => expect(pagina.text()).toContain('Bloq Mayús está activado'));
+
+    // Al salir del campo, el aviso se quita.
+    await contrasena.trigger('blur');
+    await vi.waitFor(() => expect(pagina.text()).not.toContain('Bloq Mayús está activado'));
   });
 
   it('ingresa y lleva al inicio del rol', async () => {
@@ -51,6 +79,8 @@ describe('pantalla de ingreso', () => {
 
     await enviarCredenciales(pagina);
 
+    // Primero saluda en el botón y un instante después pasa a su pantalla.
+    await vi.waitFor(() => expect(pagina.text()).toContain('¡Listo, Laura!'));
     await vi.waitFor(() => expect(navegarFalso).toHaveBeenCalledWith('/mesas', { replace: true }));
     const [, opciones] = fetchFalso.mock.calls.find(([ruta]) => ruta === '/auth/login') ?? [];
     expect(opciones.body).toEqual({

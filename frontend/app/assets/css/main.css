@@ -6,6 +6,46 @@
   /* Tipografía de toda la interfaz. @nuxt/fonts (incluido en Nuxt UI) la descarga y la
      sirve desde la propia app, así no depende de internet al usarse. */
   --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+
+  /* Animaciones del ingreso. Se usan con motion-safe: (animate-flotar, por ejemplo) para que
+     no se muevan si el dispositivo pide reducir el movimiento. */
+  --animate-flotar: flotar 7s ease-in-out infinite; /* tarjetas de ejemplo del panel de marca */
+  --animate-aparecer: aparecer 400ms ease-out both; /* entrada suave, de abajo hacia arriba */
+  --animate-sacudir: sacudir 350ms ease-in-out; /* "no": datos de ingreso incorrectos */
+
+  @keyframes flotar {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-8px);
+    }
+  }
+  @keyframes aparecer {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes sacudir {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    20%,
+    60% {
+      transform: translateX(-6px);
+    }
+    40%,
+    80% {
+      transform: translateX(6px);
+    }
+  }
 }
 
 :root {
