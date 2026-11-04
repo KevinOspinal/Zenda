@@ -10,6 +10,8 @@
 // - Cada acción guarda el pedido completo que responde el API: los totales e impuestos los
 //   calcula siempre el backend.
 // - Los eventos en vivo los mantienen al día (ver plugins/02.eventos-en-vivo.client.js).
+// - Las acciones que se hacen en este dispositivo suenan al terminar bien (enviar a la cocina,
+//   entregar, cobrar). Entregar suena al instante, junto con el cambio en pantalla.
 
 /** Estados de un pedido que todavía se puede modificar o cobrar. */
 const ESTADOS_ACTIVOS = Object.freeze(['abierto', 'enviado_a_cocina']);
@@ -20,6 +22,7 @@ const ESTADOS_ACTIVOS = Object.freeze(['abierto', 'enviado_a_cocina']);
  */
 
 export const usePedidosStore = defineStore('pedidos', () => {
+  const sonidos = useSonidos();
   /** Pedidos activos por id. */
   const porId = ref(/** @type {Record<string, any>} */ ({}));
   /** Pedidos cobrados con platos en la cocina, por id. */
@@ -171,6 +174,7 @@ export const usePedidosStore = defineStore('pedidos', () => {
   async function enviarACocina(pedidoId) {
     const pedido = await useApi().post(`/pedidos/${pedidoId}/enviar-cocina`);
     guardar(pedido);
+    sonidos.enviadoACocina();
     return pedido;
   }
 
@@ -182,6 +186,7 @@ export const usePedidosStore = defineStore('pedidos', () => {
   async function entregarSinCocina(pedidoId) {
     const pedido = await useApi().post(`/pedidos/${pedidoId}/entregar`);
     guardar(pedido);
+    sonidos.entregaHecha();
     return pedido;
   }
 
@@ -196,6 +201,7 @@ export const usePedidosStore = defineStore('pedidos', () => {
     const item = buscar(pedidoId)?.items?.find((/** @type {any} */ i) => i.id === itemId);
     const anterior = item?.estadoCocina;
     if (item) item.estadoCocina = estadoCocina;
+    if (estadoCocina === 'entregado') sonidos.entregaHecha();
     try {
       const pedido = await useApi().patch(`/pedidos/${pedidoId}/items/${itemId}/cocina`, {
         estadoCocina,
@@ -222,6 +228,7 @@ export const usePedidosStore = defineStore('pedidos', () => {
     );
     const anteriores = cambiados.map((/** @type {any} */ item) => item.estadoCocina);
     for (const item of cambiados) item.estadoCocina = estadoCocina;
+    if (estadoCocina === 'entregado') sonidos.entregaHecha();
     try {
       const pedido = await useApi().patch(`/pedidos/${pedidoId}/cocina`, { estadoCocina });
       guardar(pedido);
@@ -242,6 +249,7 @@ export const usePedidosStore = defineStore('pedidos', () => {
   async function cobrar(pedidoId, datos) {
     const respuesta = await useApi().post(`/pedidos/${pedidoId}/cobrar`, datos);
     guardar(respuesta.pedido);
+    sonidos.cobroRegistrado();
     return respuesta;
   }
 

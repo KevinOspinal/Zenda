@@ -5,7 +5,8 @@
 // del pedido (o a todos los meseros, si lo tomó el dueño, el administrador o el cajero); en
 // mostrador y domicilio, a la caja, que es quien los entrega. Los avisos no
 // saturan: uno por mesa, que se actualiza, y el sonido como máximo una vez cada pocos
-// segundos (utils/avisos.js). Y suena en la cocina cuando llega una comanda nueva.
+// segundos (utils/avisos.js). Y avisa a la cocina, cada cosa con su sonido, cuando llega una
+// comanda nueva, cuando le agregan platos a una que ya tenía o cuando anulan una de su tablero.
 // El domiciliario solo atiende sus entregas: cada cambio de un domicilio se le consulta al API,
 // que solo le responde los suyos (ver stores/entregas.js).
 export default defineNuxtPlugin(() => {
@@ -91,6 +92,50 @@ export default defineNuxtPlugin(() => {
     toast.remove(`listo-${pedidoId}`);
   }
 
+  /** Tiempo que se ven los avisos de la cocina: hay que alcanzar a leerlos de lejos. */
+  const DURACION_AVISO_COCINA_MS = 10_000;
+
+  /**
+   * En la cocina: a una comanda que ya estaba en la cocina le agregaron platos. Suena distinto
+   * a una comanda nueva y dice qué llegó, para que no pase desapercibido.
+   * Se compara con el pedido que tenía este dispositivo, antes de traer el nuevo.
+   * @param {{ id: string, items?: { id: string, producto: string, cantidad: string }[] }} datos
+   */
+  function avisarPlatosAgregados(datos) {
+    if (!enLaCocina()) return;
+    const anterior = pedidos.buscar(datos.id);
+    const nuevos = platosAgregadosALaComanda(anterior, datos);
+    if (!nuevos.length) return;
+    sonidos.comandaActualizada();
+    toast.add({
+      id: `agregados-${datos.id}`,
+      title: `Más para ${nombreDelPedido(anterior)}`,
+      description: listaDePlatos(nuevos),
+      icon: 'i-lucide-list-plus',
+      color: 'warning',
+      duration: DURACION_AVISO_COCINA_MS,
+    });
+  }
+
+  /**
+   * En la cocina: anularon un pedido que estaba en el tablero. Sale del tablero; suena y se
+   * avisa para que no lo sigan preparando.
+   * @param {{ id: string }} datos
+   */
+  function avisarAnuladoEnLaCocina(datos) {
+    if (!enLaCocina()) return;
+    const pedido = pedidos.buscar(datos.id);
+    if (!pedido || !estaEnElTablero(pedido)) return;
+    sonidos.pedidoAnulado();
+    toast.add({
+      title: 'Pedido anulado',
+      description: `${nombreDelPedido(pedido)}: ya no hay que prepararlo.`,
+      icon: 'i-lucide-ban',
+      color: 'error',
+      duration: DURACION_AVISO_COCINA_MS,
+    });
+  }
+
   /** El dispositivo es de un domiciliario: solo le importan sus entregas. */
   const esDomiciliario = () => sesion.rol === 'domiciliario';
 
@@ -116,6 +161,7 @@ export default defineNuxtPlugin(() => {
 
   socket.on(E.PEDIDO_CREADO, alCambiarPedido);
   socket.on(E.PEDIDO_ACTUALIZADO, (datos) => {
+    avisarPlatosAgregados(datos);
     alCambiarPedido(datos);
     if (datos.mesa) mesas.resaltar(datos.mesa.id);
   });
@@ -151,6 +197,7 @@ export default defineNuxtPlugin(() => {
   });
   socket.on(E.PEDIDO_ANULADO, (datos) => {
     if (esDomiciliario()) return alCambiarPedido(datos);
+    avisarAnuladoEnLaCocina(datos);
     pedidos.alCerrarPedido(datos);
     caja.alCambiarVentas();
     if (datos.tipo === 'domicilio') domicilios.alCambiarPedido(datos);

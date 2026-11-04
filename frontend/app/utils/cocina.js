@@ -1,6 +1,8 @@
 // @ts-check
 // Reglas del tablero de cocina: en qué columna va cada comanda, cuánto lleva esperando y
-// cuál es el siguiente paso de cada plato.
+// cuál es el siguiente paso de cada plato. También, qué cambios de un pedido se le avisan a
+// la cocina (platos agregados a una comanda o un pedido anulado).
+import { formatearCantidad } from './dinero.js';
 import { minutosTranscurridos } from './fechas.js';
 
 /** @typedef {'pendiente' | 'preparando' | 'listo' | 'entregado'} EstadoCocina */
@@ -109,4 +111,39 @@ export function armarTablero(pedidos, ahora = new Date()) {
 
   for (const comandas of Object.values(tablero)) comandas.sort((a, b) => b.minutos - a.minutos);
   return tablero;
+}
+
+/**
+ * La comanda está en el tablero de la cocina: se envió (aunque ya esté cobrada) y le falta
+ * algún plato por entregar.
+ * @param {any} pedido Pedido con sus ítems (forma del API).
+ */
+export function estaEnElTablero(pedido) {
+  const enviado =
+    pedido.estado === 'enviado_a_cocina' ||
+    (pedido.estado === 'pagado' && Boolean(pedido.enviadoACocinaEn));
+  return enviado && columnaDeComanda(pedido.items ?? []) !== null;
+}
+
+/**
+ * Platos que llegaron a una comanda que ya estaba en la cocina (se agregaron después de
+ * enviarla): van directo al tablero, así que la cocina recibe un aviso. Vacío si el pedido no
+ * estaba en la cocina o si no llegó nada nuevo (por ejemplo, si quitaron un plato).
+ * @template {{ id: string }} Item
+ * @param {any | null} anterior El pedido como lo tenía este dispositivo.
+ * @param {{ items?: Item[] }} actualizado La comanda que llegó en vivo.
+ * @returns {Item[]}
+ */
+export function platosAgregadosALaComanda(anterior, actualizado) {
+  if (anterior?.estado !== 'enviado_a_cocina') return [];
+  const yaEstaban = new Set((anterior.items ?? []).map((/** @type {any} */ item) => item.id));
+  return (actualizado.items ?? []).filter((item) => !yaEstaban.has(item.id));
+}
+
+/**
+ * Los platos en una línea, para un aviso: "2× Gaseosa personal · 1× Papas a la francesa".
+ * @param {{ producto: string, cantidad: string | number }[]} items Platos como llegan en vivo.
+ */
+export function listaDePlatos(items) {
+  return items.map((item) => `${formatearCantidad(item.cantidad)}× ${item.producto}`).join(' · ');
 }

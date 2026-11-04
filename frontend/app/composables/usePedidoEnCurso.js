@@ -6,6 +6,8 @@
 // - Las operaciones van en fila: así el primer producto crea el pedido y los siguientes se
 //   agregan a ese mismo, aunque el mesero toque varios productos muy rápido.
 // - El total siempre lo calcula el backend: se usa el pedido que responde el API.
+// - Agregar un producto suena al instante (como el contador de la tarjeta); quitarlo, cuando
+//   el API lo confirma.
 
 /**
  * @param {object} opciones
@@ -18,6 +20,7 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
   const mesas = useMesasStore();
   const caja = useCajaStore();
   const toast = useToast();
+  const sonidos = useSonidos();
 
   if (mesas.estadoCarga === 'sin_cargar') mesas.cargar();
 
@@ -153,6 +156,7 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
    */
   async function agregar(producto, { cantidad = 1, notas = '', opciones = [] } = {}) {
     sumarEnCamino(producto.id, cantidad);
+    sonidos.productoAgregado();
     try {
       await enFila(async () => {
         const item = {
@@ -183,6 +187,7 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
   async function quitar(item) {
     try {
       await enFila(() => pedidos.quitarItem(idActual.value, item.id));
+      sonidos.productoQuitado();
       toast.add({
         title: `Quitaste ${item.producto.nombre}`,
         icon: 'i-lucide-trash-2',

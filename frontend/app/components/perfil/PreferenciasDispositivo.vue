@@ -1,6 +1,7 @@
 <!--
-  Preferencias de este dispositivo: tema (claro, oscuro o automático), sonidos, vibración y,
-  si el negocio entrega recibo de venta, el ancho del papel de su impresora.
+  Preferencias de este dispositivo: tema (claro, oscuro o automático), sonidos de avisos,
+  sonidos al tocar, vibración y, si el negocio entrega recibo de venta, el ancho del papel de
+  su impresora.
   Se guardan en el dispositivo, no en la cuenta: cada equipo del negocio tiene las suyas.
 -->
 <script setup>
@@ -56,7 +57,13 @@ const TEMAS = Object.freeze([
       v-model="preferencias.sonidos"
       size="lg"
       label="Sonidos de avisos"
-      description="Suena cuando llega una comanda o un plato está listo."
+      description="Cuando llega una comanda o un cambio a la cocina, un plato está listo o te asignan un domicilio."
+    />
+    <USwitch
+      v-model="preferencias.sonidosAlTocar"
+      size="lg"
+      label="Sonidos al tocar"
+      description="Al agregar productos, enviar a la cocina, cobrar, entregar o si algo no se pudo hacer."
     />
     <USwitch
       v-model="preferencias.vibracion"

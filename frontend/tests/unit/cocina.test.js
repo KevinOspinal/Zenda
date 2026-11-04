@@ -1,11 +1,15 @@
 // @ts-check
-// Pruebas de las reglas del tablero de cocina y de los identificadores de pedidos.
+// Pruebas de las reglas del tablero de cocina, de los cambios que se le avisan a la cocina y
+// de los identificadores de pedidos.
 import { describe, expect, it, vi } from 'vitest';
 import {
   armarTablero,
   columnaDeComanda,
   esAgregadoDespues,
+  estaEnElTablero,
+  listaDePlatos,
   minutosDeEspera,
+  platosAgregadosALaComanda,
   siguienteEstadoCocina,
 } from '../../app/utils/cocina.js';
 import { generarUuid } from '../../app/utils/identificadores.js';
@@ -164,5 +168,56 @@ describe('armarTablero', () => {
     );
 
     expect(Object.values(tablero).flat()).toHaveLength(0);
+  });
+});
+
+describe('estaEnElTablero', () => {
+  it('una comanda enviada con platos por entregar está en el tablero, aunque ya se cobrara', () => {
+    const items = [plato('listo'), plato('preparando')];
+    expect(estaEnElTablero({ estado: 'enviado_a_cocina', items })).toBe(true);
+    expect(estaEnElTablero({ estado: 'pagado', enviadoACocinaEn: '2026-10-27', items })).toBe(true);
+  });
+
+  it('no lo está si ya se entregó todo, si no se ha enviado o si se cobró sin enviarlo', () => {
+    expect(estaEnElTablero({ estado: 'enviado_a_cocina', items: [plato('entregado')] })).toBe(
+      false,
+    );
+    expect(estaEnElTablero({ estado: 'abierto', items: [plato('pendiente')] })).toBe(false);
+    expect(
+      estaEnElTablero({ estado: 'pagado', enviadoACocinaEn: null, items: [plato('pendiente')] }),
+    ).toBe(false);
+  });
+});
+
+describe('platosAgregadosALaComanda', () => {
+  const enLaCocina = { estado: 'enviado_a_cocina', items: [{ id: 'i1' }, { id: 'i2' }] };
+
+  it('devuelve los platos que llegaron a una comanda que ya estaba en la cocina', () => {
+    const nuevo = { id: 'i3', producto: 'Gaseosa personal', cantidad: '2' };
+    const actualizado = { items: [{ id: 'i1' }, { id: 'i2' }, nuevo] };
+
+    expect(platosAgregadosALaComanda(enLaCocina, actualizado)).toEqual([nuevo]);
+  });
+
+  it('si quitaron un plato, no hay nada que avisar', () => {
+    expect(platosAgregadosALaComanda(enLaCocina, { items: [{ id: 'i1' }] })).toEqual([]);
+  });
+
+  it('un pedido que aún no va a la cocina (o que este dispositivo no tenía) no se avisa', () => {
+    const actualizado = { items: [{ id: 'i1' }, { id: 'i9' }] };
+
+    expect(platosAgregadosALaComanda({ estado: 'abierto', items: [] }, actualizado)).toEqual([]);
+    expect(platosAgregadosALaComanda(null, actualizado)).toEqual([]);
+  });
+});
+
+describe('listaDePlatos', () => {
+  it('muestra cada plato con su cantidad, en una línea', () => {
+    const platos = [
+      { producto: 'Gaseosa personal', cantidad: '2' },
+      { producto: 'Papas a la francesa', cantidad: '1.000' },
+    ];
+
+    expect(listaDePlatos(platos)).toBe('2× Gaseosa personal · 1× Papas a la francesa');
   });
 });

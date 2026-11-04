@@ -6,8 +6,10 @@
 // - En curso: sin entregar, o contra entrega entregados y sin cobrar ("por liquidar").
 // - Vienen de GET /pedidos?domicilios=true, con sus ítems y su entrega.
 // - Los eventos en vivo los mantienen al día (ver plugins/02.eventos-en-vivo.client.js).
+// - Despachar, entregar y liquidar suenan al terminar bien (ver useSonidos).
 
 export const useDomiciliosStore = defineStore('domicilios', () => {
+  const sonidos = useSonidos();
   /** Domicilios en curso, por id. */
   const porId = ref(/** @type {Record<string, any>} */ ({}));
   /** sin_cargar · cargando · listo · error */
@@ -90,6 +92,7 @@ export const useDomiciliosStore = defineStore('domicilios', () => {
   async function despachar(id, domiciliarioId) {
     const pedido = await useApi().post(`/pedidos/${id}/despachar`, { domiciliarioId });
     guardar(pedido);
+    sonidos.domicilioDespachado();
     return pedido;
   }
 
@@ -101,6 +104,7 @@ export const useDomiciliosStore = defineStore('domicilios', () => {
   async function entregar(id) {
     const pedido = await useApi().post(`/pedidos/${id}/entregar`);
     guardar(pedido);
+    sonidos.entregaHecha();
     return pedido;
   }
 
@@ -116,6 +120,7 @@ export const useDomiciliosStore = defineStore('domicilios', () => {
       pedidos,
     });
     for (const pedido of resultado.pedidos) guardar(pedido);
+    sonidos.cobroRegistrado();
     return resultado;
   }
 
