@@ -399,6 +399,17 @@ describe('venta de mostrador, pedido offline y anulación', () => {
     });
   });
 
+  it('cada pedido dice quién lo tomó y con qué rol, en el detalle y en la lista', async () => {
+    const creado = await llamar('post', '/pedidos', 'dueno', {
+      items: [{ productoId: ids.gaseosa, cantidad: 1 }],
+    });
+    const lista = await llamar('get', '/pedidos?activos=true&incluirItems=true', 'mesero');
+    const enLaLista = lista.body.find((/** @type {{ id: string }} */ p) => p.id === creado.body.id);
+
+    expect(creado.body.mesero).toEqual({ nombre: expect.any(String), rol: 'dueno' });
+    expect(enLaLista.mesero).toEqual(creado.body.mesero);
+  });
+
   it('anular un pedido cobrado lo saca del resumen de caja', async () => {
     const { body: pedido } = await llamar('post', '/pedidos', 'cajero', {
       items: [{ productoId: ids.hamburguesa, cantidad: 1 }],

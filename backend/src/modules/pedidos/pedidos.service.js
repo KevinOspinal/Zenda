@@ -101,6 +101,12 @@ const DETALLE_ENTREGA = /** @type {const} */ ({
  * Lo que se devuelve de un pedido: sus ítems con el nombre del producto, sus pagos y la mesa.
  * El porcentaje de propina del negocio se usa para calcular la propina sugerida (ver `presentarPedido`).
  */
+/**
+ * Quién tomó el pedido: su nombre y su rol. Si lo tomó el dueño, el administrador o el cajero,
+ * no tiene un mesero asignado y sus platos los puede llevar cualquier mesero.
+ */
+const TOMADO_POR = /** @type {const} */ ({ select: { nombre: true, rol: true } });
+
 const DETALLE_PEDIDO = /** @type {const} */ ({
   items: {
     // En el orden en que se agregaron.
@@ -117,6 +123,7 @@ const DETALLE_PEDIDO = /** @type {const} */ ({
   },
   pagos: { orderBy: { creadoEn: 'asc' } },
   mesa: { select: { id: true, nombre: true, estado: true } },
+  mesero: TOMADO_POR,
   cliente: { select: { id: true, nombre: true, tipoDocumento: true, numeroDocumento: true } },
   entrega: DETALLE_ENTREGA,
   // Solo en negocios que no facturan electrónicamente (ver recibos.js).
@@ -236,6 +243,7 @@ export function listarPedidos(
       take: 100,
       include: {
         mesa: { select: { id: true, nombre: true } },
+        mesero: TOMADO_POR,
         ...(incluirItems || domicilios ? { items: DETALLE_PEDIDO.items } : {}),
         // Los datos de entrega, solo para la caja (ver MANEJAN_DOMICILIOS).
         ...(veEntregas ? { entrega: DETALLE_ENTREGA } : {}),

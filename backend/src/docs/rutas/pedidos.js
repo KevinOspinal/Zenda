@@ -194,6 +194,9 @@ generó. Si el mismo pedido llega dos veces, la segunda vez **no se duplica**: r
       descripcion: `
 Los últimos 100 pedidos, del más reciente al más antiguo. Se pueden filtrar por estado y por mesa.
 
+Cada pedido trae \`mesero\`: el nombre y el rol de quien lo tomó. Si lo tomó el dueño, el
+administrador o el cajero, no tiene un mesero asignado: sus platos los puede llevar cualquiera.
+
 **Para el mapa de mesas:** \`?activos=true&incluirItems=true\` trae en una sola petición los
 pedidos que aún no se cobran ni se anulan, cada uno con sus ítems y el estado de cocina de
 cada ítem.
@@ -261,7 +264,8 @@ Solo se puede usar uno de estos filtros: \`estado\`, \`activos\`, \`cocina\` o \
       resumen: 'Ver un pedido completo',
       roles: TODOS,
       descripcion: `
-El pedido con sus ítems (en el orden en que se agregaron), pagos, mesa y cliente.
+El pedido con sus ítems (en el orden en que se agregaron), pagos, mesa, cliente y quién lo
+tomó (\`mesero\`: nombre y rol).
 
 Trae \`propinaSugerida\`: la propina que el mesero le sugiere al cliente antes de cobrar.
 Es el porcentaje del negocio (10 % por defecto, ver \`PATCH /negocios/actual\`) sobre el

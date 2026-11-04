@@ -103,6 +103,7 @@ export const PEDIDO = Object.freeze({
   mesaId: ID.mesa,
   turnoId: ID.turno,
   meseroId: ID.mesero,
+  mesero: { nombre: 'Laura Mesa', rol: 'mesero' },
   clienteId: null,
   estado: 'abierto',
   tipo: 'mesa',
