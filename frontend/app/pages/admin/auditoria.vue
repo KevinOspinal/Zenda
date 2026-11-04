@@ -54,6 +54,11 @@ const NOMBRES_DETALLE = Object.freeze({
   llaveNueva: 'Llave ahora',
   qrAnterior: 'QR antes',
   qrNuevo: 'QR ahora',
+  producto: 'Producto',
+  precioAnterior: 'Precio antes',
+  precioNuevo: 'Precio ahora',
+  productosActualizados: 'Productos ajustados',
+  opcionesActualizadas: 'Opciones ajustadas',
 });
 
 /**

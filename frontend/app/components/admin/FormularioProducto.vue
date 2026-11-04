@@ -1,7 +1,7 @@
 <!--
   Crear o editar un producto del menú: categoría, nombre, descripción, precio (con el
-  impuesto incluido), impuesto según el régimen del negocio, si controla inventario y si
-  está activo. Las reglas copian las del backend; un cambio de precio queda en la auditoría.
+  impuesto incluido), impuesto según el régimen del negocio, sus grupos de opciones
+  (término, adiciones...), si controla inventario y si está activo. Las reglas copian las del backend; un cambio de precio queda en la auditoría.
 -->
 <script setup>
 import { z } from 'zod';
@@ -13,6 +13,8 @@ const props = defineProps({
     type: /** @type {import('vue').PropType<{ id: string, nombre: string }[]>} */ (Array),
     required: true,
   },
+  /** Grupos de opciones del negocio (GET /grupos-opciones), en su orden. */
+  grupos: { type: /** @type {import('vue').PropType<any[]>} */ (Array), default: () => [] },
   /** Categoría propuesta para un producto nuevo. */
   categoriaInicial: { type: String, default: '' },
 });
@@ -34,6 +36,7 @@ const esquema = z.object({
   tipoImpuesto: z.enum(['impoconsumo', 'iva', 'exento']),
   controlaStock: z.boolean(),
   activo: z.boolean(),
+  gruposOpciones: z.array(z.string()).max(10, 'Máximo 10 grupos por producto'),
 });
 
 const datos = reactive({
@@ -44,6 +47,7 @@ const datos = reactive({
   tipoImpuesto: props.producto?.tipoImpuesto ?? permitidos.value[0],
   controlaStock: props.producto?.controlaStock ?? false,
   activo: props.producto?.activo ?? true,
+  gruposOpciones: /** @type {string[]} */ ([...(props.producto?.gruposOpciones ?? [])]),
 });
 const error = ref('');
 
@@ -57,6 +61,13 @@ const opcionesImpuesto = computed(() =>
     description: TIPOS_IMPUESTO[tipo].descripcion,
   })),
 );
+const opcionesGrupos = computed(() =>
+  props.grupos.map((grupo) => ({
+    value: grupo.id,
+    label: grupo.nombre,
+    description: `${grupo.minimo > 0 ? 'Obligatorio' : 'Opcional'} · ${describirRegla(grupo)}`,
+  })),
+);
 const cambiaPrecio = computed(
   () =>
     props.producto &&
@@ -66,7 +77,14 @@ const cambiaPrecio = computed(
 
 async function guardar() {
   error.value = '';
-  const cuerpo = { ...datos, descripcion: datos.descripcion.trim() || null };
+  const cuerpo = {
+    ...datos,
+    descripcion: datos.descripcion.trim() || null,
+    // En el orden de la lista de grupos: así se muestran al tomar el pedido.
+    gruposOpciones: props.grupos
+      .map((grupo) => grupo.id)
+      .filter((id) => datos.gruposOpciones.includes(id)),
+  };
   try {
     const guardado = props.producto
       ? await useApi().patch(`/productos/${props.producto.id}`, cuerpo)
@@ -119,6 +137,22 @@ async function guardar() {
       Sin impuesto: el negocio no factura electrónicamente (no es responsable de IVA ni del impuesto
       al consumo).
     </p>
+    <UFormField
+      label="Opciones al pedirlo"
+      name="gruposOpciones"
+      :help="
+        grupos.length
+          ? 'Lo que el mesero elige con el plato: término, adiciones, ingredientes para quitar.'
+          : 'Crea grupos como el término o las adiciones en la pestaña Opciones.'
+      "
+    >
+      <UCheckboxGroup
+        v-if="grupos.length"
+        v-model="datos.gruposOpciones"
+        :items="opcionesGrupos"
+        variant="card"
+      />
+    </UFormField>
     <USwitch
       v-model="datos.controlaStock"
       size="lg"

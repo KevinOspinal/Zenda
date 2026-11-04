@@ -11,7 +11,7 @@ const ESPERA_MAXIMA_MS = 15_000;
 
 /**
  * @typedef {object} OpcionesPeticion
- * @property {'GET' | 'POST' | 'PATCH' | 'DELETE'} [metodo]
+ * @property {'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'} [metodo]
  * @property {unknown} [cuerpo] Datos que se envían como JSON.
  * @property {Record<string, unknown>} [consulta] Parámetros de la URL (?desde=...).
  * @property {string | null} [token] Token de acceso. Sin él, la petición va sin sesión.
@@ -109,6 +109,12 @@ export function useApi() {
      * @param {unknown} cuerpo
      */
     patch: (ruta, cuerpo) => pedir(ruta, { metodo: 'PATCH', cuerpo }),
+    /**
+     * Reemplaza el registro completo (por ejemplo, un grupo de opciones con todas sus opciones).
+     * @param {string} ruta
+     * @param {unknown} cuerpo
+     */
+    put: (ruta, cuerpo) => pedir(ruta, { metodo: 'PUT', cuerpo }),
     /** @param {string} ruta */
     eliminar: (ruta) => pedir(ruta, { metodo: 'DELETE' }),
   };
