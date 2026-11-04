@@ -24,6 +24,8 @@ const DATOS_NEGOCIO = /** @type {const} */ ({
   direccion: true,
   telefono: true,
   pieRecibo: true,
+  llaveBreB: true,
+  qrBreB: true,
 });
 
 /** @typedef {import('../../config/impuestos.js').RegimenImpuesto} RegimenImpuesto */
@@ -122,20 +124,27 @@ const CAMBIOS_AUDITADOS = /** @type {const} */ ([
 
 /**
  * Cambia la configuración del negocio: propina sugerida, valor del domicilio, régimen de
- * impuestos y datos del recibo. La propina, el domicilio y el régimen quedan en la auditoría
- * con el valor anterior. Un régimen nuevo cambia el impuesto de los productos (ver
- * ajustarImpuestosDeProductos); las ventas pasadas y lo que ya se pidió no cambian.
+ * impuestos, datos del recibo y cobro por Bre-B. La propina, el domicilio, el régimen y el
+ * cobro por Bre-B quedan en la auditoría con el valor anterior. Un régimen nuevo cambia el
+ * impuesto de los productos (ver ajustarImpuestosDeProductos); las ventas pasadas y lo que ya
+ * se pidió no cambian.
  * @param {DatosSesion} sesion
  * @param {{ propinaSugerida?: string, valorDomicilio?: string,
  *   regimenImpuesto?: RegimenImpuesto, direccion?: string | null, telefono?: string | null,
- *   pieRecibo?: string | null }} datos
+ *   pieRecibo?: string | null, llaveBreB?: string | null, qrBreB?: string | null }} datos
  */
 export function actualizarNegocioActual(sesion, datos) {
   return conNegocio(sesion.tenantId, async (tx) => {
     // 1. Leer los valores anteriores para la auditoría.
     const anterior = await tx.tenant.findUniqueOrThrow({
       where: { id: sesion.tenantId },
-      select: { propinaSugerida: true, valorDomicilio: true, regimenImpuesto: true },
+      select: {
+        propinaSugerida: true,
+        valorDomicilio: true,
+        regimenImpuesto: true,
+        llaveBreB: true,
+        qrBreB: true,
+      },
     });
 
     // 2. Guardar el cambio.
@@ -156,7 +165,19 @@ export function actualizarNegocioActual(sesion, datos) {
       });
     }
 
-    // 4. Un régimen nuevo cambia el impuesto de los productos.
+    // 4. La llave o el QR de Bre-B: es por donde entra la plata de las transferencias. Si
+    //    alguien los cambia por los suyos, debe quedar quién fue y qué había antes.
+    const detalleBreB = cambiosDeBreB(anterior, negocio);
+    if (detalleBreB) {
+      await registrarAuditoria(tx, sesion, {
+        accion: ACCIONES.CAMBIAR_COBRO_BRE_B,
+        entidad: 'tenants',
+        entidadId: sesion.tenantId,
+        detalle: detalleBreB,
+      });
+    }
+
+    // 5. Un régimen nuevo cambia el impuesto de los productos.
     if (anterior.regimenImpuesto !== negocio.regimenImpuesto) {
       const productosActualizados = await ajustarImpuestosDeProductos(
         tx,
@@ -176,6 +197,26 @@ export function actualizarNegocioActual(sesion, datos) {
     }
     return presentarNegocio(negocio);
   });
+}
+
+/**
+ * Lo que cambió del cobro por Bre-B, para la auditoría: solo los datos que cambiaron, con el
+ * valor anterior y el nuevo. null si no cambió nada.
+ * @param {{ llaveBreB: string | null, qrBreB: string | null }} anterior
+ * @param {{ llaveBreB: string | null, qrBreB: string | null }} nuevo
+ */
+function cambiosDeBreB(anterior, nuevo) {
+  /** @type {Record<string, string | null>} */
+  const detalle = {};
+  if (anterior.llaveBreB !== nuevo.llaveBreB) {
+    detalle.llaveAnterior = anterior.llaveBreB;
+    detalle.llaveNueva = nuevo.llaveBreB;
+  }
+  if (anterior.qrBreB !== nuevo.qrBreB) {
+    detalle.qrAnterior = anterior.qrBreB;
+    detalle.qrNuevo = nuevo.qrBreB;
+  }
+  return Object.keys(detalle).length ? detalle : null;
 }
 
 /**

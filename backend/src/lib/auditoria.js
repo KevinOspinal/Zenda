@@ -22,6 +22,8 @@ export const ACCIONES = Object.freeze({
   CAMBIAR_PROPINA_SUGERIDA: 'cambiar_propina_sugerida',
   CAMBIAR_VALOR_DOMICILIO: 'cambiar_valor_domicilio',
   CAMBIAR_REGIMEN_IMPUESTO: 'cambiar_regimen_impuesto',
+  // La llave o el QR de Bre-B: es por donde entra la plata de las transferencias.
+  CAMBIAR_COBRO_BRE_B: 'cambiar_cobro_bre_b',
   DAR_ACCESO_DOMICILIARIO: 'dar_acceso_domiciliario',
   QUITAR_ACCESO_DOMICILIARIO: 'quitar_acceso_domiciliario',
   LIQUIDAR_DOMICILIARIO: 'liquidar_domiciliario',

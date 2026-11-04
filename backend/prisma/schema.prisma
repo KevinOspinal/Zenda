@@ -176,6 +176,12 @@ model Tenant {
   pieRecibo       String?         @map("pie_recibo") @db.VarChar(200)
   // Último número de recibo de venta que se dio (numeración propia y continua).
   ultimoRecibo    Int             @default(0) @map("ultimo_recibo")
+  // Cobro por Bre-B (transferencias inmediatas): salen en la precuenta y en el cobro por
+  // transferencia. La llave es la del negocio en su banco (celular, correo, documento,
+  // @alfanumérica o código de comercio). Del QR se guarda su contenido (el texto que lleva el
+  // código), no la imagen: así se dibuja nítido en pantalla y en papel.
+  llaveBreB       String?         @map("llave_bre_b") @db.VarChar(100)
+  qrBreB          String?         @map("qr_bre_b") @db.VarChar(512)
   creadoEn        DateTime        @default(now()) @map("creado_en") @db.Timestamptz(6)
 
   usuarios              Usuario[]
