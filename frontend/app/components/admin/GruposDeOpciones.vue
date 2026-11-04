@@ -1,10 +1,11 @@
 <!--
   Grupos de opciones del negocio (término, adiciones, quitar ingredientes...). Cada tarjeta
   muestra la regla, sus opciones con el precio extra y en cuántos productos se usa. Crear y
-  editar se hace en un panel lateral; si no hay grupos, se ofrecen plantillas para empezar.
+  editar se hace en un panel lateral. Las plantillas (término, adiciones, quitar) se ofrecen
+  mientras el negocio no tenga un grupo con ese nombre.
 -->
 <script setup>
-defineProps({
+const props = defineProps({
   /** Grupos como los entrega GET /grupos-opciones. */
   grupos: { type: /** @type {import('vue').PropType<any[]>} */ (Array), required: true },
 });
@@ -16,6 +17,16 @@ const emit = defineEmits({
 
 const toast = useToast();
 const pantallaGrande = useMediaQuery('(min-width: 1024px)');
+
+/** Plantillas de los grupos que el negocio todavía no tiene (se comparan por nombre). */
+const plantillasDisponibles = computed(() =>
+  PLANTILLAS_DE_GRUPO.filter(
+    (plantilla) =>
+      !props.grupos.some(
+        (grupo) => grupo.nombre.trim().toLowerCase() === plantilla.nombre.toLowerCase(),
+      ),
+  ),
+);
 
 const panelAbierto = ref(false);
 const grupoEditado = ref(/** @type {any} */ (null));
@@ -80,7 +91,18 @@ function textoDeOpcion(opcion) {
         <p class="text-muted">
           {{ grupos.length }} {{ grupos.length === 1 ? 'grupo' : 'grupos' }} de opciones
         </p>
-        <UButton icon="i-lucide-plus" label="Nuevo grupo" @click="abrir(null)" />
+        <div class="flex flex-wrap gap-2">
+          <UButton
+            v-for="plantilla in plantillasDisponibles"
+            :key="plantilla.nombre"
+            :icon="plantilla.icono"
+            :label="plantilla.nombre"
+            color="neutral"
+            variant="outline"
+            @click="abrir(null, plantilla)"
+          />
+          <UButton icon="i-lucide-plus" label="Nuevo grupo" @click="abrir(null)" />
+        </div>
       </div>
 
       <ul class="grid gap-3 md:grid-cols-2">

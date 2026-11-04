@@ -180,6 +180,16 @@ describe('grupos de opciones', () => {
     expect(texto).toContain('Aún no está en ningún producto');
   });
 
+  it('con grupos creados, sigue ofreciendo solo las plantillas que faltan', async () => {
+    const lista = await mountSuspended(GruposDeOpciones, { props: { grupos: [TERMINO] } });
+    const botones = lista.findAll('button').map((boton) => boton.text());
+
+    expect(botones).toContain('Adiciones');
+    expect(botones).toContain('Quitar ingredientes');
+    expect(botones).toContain('Nuevo grupo');
+    expect(botones).not.toContain('Término de la carne');
+  });
+
   it('sin grupos, ofrece las plantillas para empezar', async () => {
     const lista = await mountSuspended(GruposDeOpciones, { props: { grupos: [] } });
 
