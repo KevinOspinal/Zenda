@@ -12,6 +12,7 @@ import { documentacionInventarioReportesAuditoria } from './rutas/inventarioRepo
 import { documentacionMenu } from './rutas/menu.js';
 import { documentacionMesasYClientes } from './rutas/mesasYClientes.js';
 import { documentacionNegocios } from './rutas/negocios.js';
+import { documentacionOpciones } from './rutas/opciones.js';
 import { documentacionPedidos } from './rutas/pedidos.js';
 import { documentacionRecibos } from './rutas/recibos.js';
 import { documentacionUsuarios } from './rutas/usuarios.js';
@@ -307,6 +308,7 @@ export const documentoOpenApi = {
     ...documentacionAuth,
     ...documentacionUsuarios,
     ...documentacionMenu,
+    ...documentacionOpciones,
     ...documentacionMesasYClientes,
     ...documentacionCaja,
     ...documentacionPedidos,

@@ -126,7 +126,7 @@ const CAMBIOS_AUDITADOS = /** @type {const} */ ([
  * Cambia la configuración del negocio: propina sugerida, valor del domicilio, régimen de
  * impuestos, datos del recibo y cobro por Bre-B. La propina, el domicilio, el régimen y el
  * cobro por Bre-B quedan en la auditoría con el valor anterior. Un régimen nuevo cambia el
- * impuesto de los productos (ver ajustarImpuestosDeProductos); las ventas pasadas y lo que ya
+ * impuesto de los productos y de las opciones (ver ajustarImpuestos); las ventas pasadas y lo que ya
  * se pidió no cambian.
  * @param {DatosSesion} sesion
  * @param {{ propinaSugerida?: string, valorDomicilio?: string,
@@ -179,8 +179,14 @@ export function actualizarNegocioActual(sesion, datos) {
 
     // 5. Un régimen nuevo cambia el impuesto de los productos.
     if (anterior.regimenImpuesto !== negocio.regimenImpuesto) {
-      const productosActualizados = await ajustarImpuestosDeProductos(
-        tx,
+      const productosActualizados = await ajustarImpuestos(
+        tx.producto,
+        anterior.regimenImpuesto,
+        negocio.regimenImpuesto,
+      );
+      // Las opciones con precio (adiciones) tienen su propio impuesto: siguen la misma regla.
+      const opcionesActualizadas = await ajustarImpuestos(
+        tx.opcion,
         anterior.regimenImpuesto,
         negocio.regimenImpuesto,
       );
@@ -192,6 +198,7 @@ export function actualizarNegocioActual(sesion, datos) {
           anterior: anterior.regimenImpuesto,
           nuevo: negocio.regimenImpuesto,
           productosActualizados,
+          opcionesActualizadas,
         },
       });
     }
@@ -220,28 +227,29 @@ function cambiosDeBreB(anterior, nuevo) {
 }
 
 /**
- * Ajusta el impuesto de los productos al régimen nuevo.
+ * Ajusta el impuesto de los productos (o de las opciones) al régimen nuevo.
  * ⚠️ Regla para validar con un contador.
- * - No responsable: ningún producto lleva impuesto.
+ * - No responsable: ninguno lleva impuesto.
  * - De no responsable a INC o IVA: todos llevan el impuesto del régimen; el dueño revisa
  *   después los que no lo causan (por ejemplo, alimentos que se venden sin preparación).
  * - Entre INC e IVA: los que llevaban el impuesto anterior pasan al nuevo; los exentos siguen.
- * @param {import('../../lib/negocio.js').TransaccionPrisma} tx
+ * @param {{ updateMany: (argumentos: { where: object, data: object }) => Promise<{ count: number }> }} tabla
+ *   `tx.producto` o `tx.opcion`.
  * @param {RegimenImpuesto} anterior
  * @param {RegimenImpuesto} nuevo
- * @returns {Promise<number>} Cuántos productos cambiaron.
+ * @returns {Promise<number>} Cuántos cambiaron.
  */
-async function ajustarImpuestosDeProductos(tx, anterior, nuevo) {
+async function ajustarImpuestos(tabla, anterior, nuevo) {
   const impuestoNuevo = IMPUESTO_POR_REGIMEN[nuevo];
   if (!impuestoNuevo) {
-    const { count } = await tx.producto.updateMany({
+    const { count } = await tabla.updateMany({
       where: { tipoImpuesto: { not: 'exento' } },
       data: { tipoImpuesto: 'exento' },
     });
     return count;
   }
   const impuestoAnterior = IMPUESTO_POR_REGIMEN[anterior];
-  const { count } = await tx.producto.updateMany({
+  const { count } = await tabla.updateMany({
     where: impuestoAnterior ? { tipoImpuesto: impuestoAnterior } : {},
     data: { tipoImpuesto: impuestoNuevo },
   });

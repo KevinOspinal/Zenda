@@ -22,6 +22,10 @@ export const ID = Object.freeze({
   domiciliario: '5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e',
   entrega: '0a1b2c3d-4e5f-4a6b-9c8d-7e6f5a4b3c2d',
   recibo: '6c7d8e9f-a0b1-4c2d-9e3f-4a5b6c7d8e9f',
+  grupoTermino: '2b3c4d5e-6f70-4a81-92a3-b4c5d6e7f809',
+  opcionTresCuartos: '7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b',
+  grupoAdiciones: '4d5e6f70-8192-4a3b-9c4d-5e6f7a8b9c0d',
+  opcionQueso: '9a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d',
 });
 
 /** Un token de ejemplo (recortado). Usa el que te entrega POST /auth/login. */
@@ -45,6 +49,32 @@ export const PRODUCTO_HAMBURGUESA = Object.freeze({
   controlaStock: false,
   stock: '0',
   activo: true,
+  // Ids de sus grupos de opciones, en el orden en que se muestran al pedirla.
+  gruposOpciones: [ID.grupoTermino, ID.grupoAdiciones],
+});
+
+/** Grupo de opciones con precio: varias, opcional. */
+export const GRUPO_ADICIONES = Object.freeze({
+  id: ID.grupoAdiciones,
+  tenantId: ID.negocio,
+  nombre: 'Adiciones',
+  minimo: 0,
+  maximo: null,
+  orden: 1,
+  opciones: [
+    {
+      id: ID.opcionQueso,
+      tenantId: ID.negocio,
+      grupoId: ID.grupoAdiciones,
+      nombre: 'Queso',
+      precioExtra: '3000',
+      tipoImpuesto: 'impoconsumo',
+      activo: true,
+      orden: 0,
+    },
+  ],
+  // En cuántos productos se usa.
+  productos: 10,
 });
 
 export const MESA = Object.freeze({
@@ -102,6 +132,15 @@ export const PEDIDO = Object.freeze({
       notas: 'Sin cebolla',
       creadoEn: '2026-10-26T22:15:03.140Z',
       producto: { nombre: 'IND Classic Artesanal' },
+      // Opciones elegidas, como se vendieron. Las que tienen precio ya suman a precioUnitario.
+      opciones: [
+        {
+          id: 'e1f2a3b4-c5d6-4e7f-8a9b-0c1d2e3f4a5b',
+          grupo: 'Término de la carne',
+          nombre: '3/4',
+          precioExtra: '0',
+        },
+      ],
     },
     {
       id: ID.itemGaseosa,
@@ -115,6 +154,7 @@ export const PEDIDO = Object.freeze({
       notas: null,
       creadoEn: '2026-10-26T22:15:03.150Z',
       producto: { nombre: 'Gaseosa personal 400 ml' },
+      opciones: [],
     },
   ],
   pagos: [],

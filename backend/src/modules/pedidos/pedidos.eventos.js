@@ -19,7 +19,8 @@ import { EVENTOS, emitirANegocio } from '../../sockets/eventos.js';
  * @property {Date} abiertoEn
  * @property {{ id: string, nombre: string, estado: string } | null} mesa
  * @property {{ id: string, cantidad: import('@prisma/client').Prisma.Decimal, notas: string | null,
- *   estadoCocina: string, producto: { nombre: string } }[]} items
+ *   estadoCocina: string, producto: { nombre: string },
+ *   opciones?: { id: string, grupo: string, nombre: string }[] }[]} items
  */
 
 /**
@@ -49,6 +50,8 @@ function itemsDeComanda(pedido) {
     producto: item.producto.nombre,
     cantidad: item.cantidad,
     notas: item.notas,
+    // Término, adiciones, lo que hay que quitar...: la cocina los necesita para prepararlo.
+    opciones: (item.opciones ?? []).map(({ id, grupo, nombre }) => ({ id, grupo, nombre })),
     estadoCocina: item.estadoCocina,
   }));
 }

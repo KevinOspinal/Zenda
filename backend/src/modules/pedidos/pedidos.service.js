@@ -31,13 +31,18 @@ import {
   descontarInventarioPorVenta,
   devolverInventarioPorAnulacion,
 } from '../inventario/movimientos.js';
+import {
+  GRUPOS_DEL_PRODUCTO,
+  gruposParaPedir,
+  revisarOpcionesElegidas,
+} from '../opciones/opcionesDeProductos.js';
 import { calcularLinea, calcularTotalesPedido, obtenerTasaImpuesto } from './calculoImpuestos.js';
 import { calcularPropinaSugerida } from './propina.js';
 import { emitirReciboSiNoFactura } from './recibos.js';
 
 /** @typedef {import('../../lib/tokens.js').DatosSesion} DatosSesion */
 /** @typedef {import('../../lib/negocio.js').TransaccionPrisma} TransaccionPrisma */
-/** @typedef {{ productoId: string, cantidad: string, notas?: string }} DatosItem */
+/** @typedef {{ productoId: string, cantidad: string, notas?: string, opciones?: string[] }} DatosItem */
 /** @typedef {'efectivo' | 'tarjeta' | 'transferencia' | 'otro'} MetodoPago */
 /** @typedef {{ metodo: MetodoPago, monto: string, referencia?: string, recibido?: string }} DatosPago */
 /** @typedef {'pendiente' | 'preparando' | 'listo' | 'entregado'} EstadoCocina */
@@ -100,7 +105,14 @@ const DETALLE_PEDIDO = /** @type {const} */ ({
   items: {
     // En el orden en que se agregaron.
     orderBy: [{ creadoEn: 'asc' }, { id: 'asc' }],
-    include: { producto: { select: { nombre: true } } },
+    include: {
+      producto: { select: { nombre: true } },
+      // Las opciones elegidas (término, adiciones...), como se vendieron.
+      opciones: {
+        orderBy: { orden: 'asc' },
+        select: { id: true, grupo: true, nombre: true, precioExtra: true },
+      },
+    },
   },
   pagos: { orderBy: { creadoEn: 'asc' } },
   mesa: { select: { id: true, nombre: true, estado: true } },
@@ -408,7 +420,7 @@ export function enviarACocina(sesion, pedidoId) {
  * Divide la cuenta: pasa ítems (completos o parte de sus unidades) a un pedido nuevo en la
  * misma mesa. Cada cuenta se cobra por separado, y así cada persona puede tener su factura.
  *
- * Los ítems conservan su precio, impuesto, notas y estado de cocina. Los totales de ambos
+ * Los ítems conservan su precio, impuesto, notas, opciones y estado de cocina. Los totales de ambos
  * pedidos se recalculan. La mesa sigue ocupada hasta que se cobren todas sus cuentas.
  *
  * @param {DatosSesion} sesion
@@ -425,7 +437,10 @@ export function dividirPedido(sesion, pedidoId, { items }) {
     if (original.tipo === 'domicilio') {
       throw new AppError(409, 'DOMICILIO_NO_SE_DIVIDE', 'Un domicilio se cobra completo');
     }
-    const itemsDelPedido = await tx.itemPedido.findMany({ where: { pedidoId } });
+    const itemsDelPedido = await tx.itemPedido.findMany({
+      where: { pedidoId },
+      include: { opciones: true },
+    });
 
     // 2. Validar cada ítem y las unidades que se mueven.
     const movimientos = items.map(({ itemId, cantidad }) => {
@@ -492,6 +507,10 @@ export function dividirPedido(sesion, pedidoId, { items }) {
             tasaImpuesto: item.tasaImpuesto,
             estadoCocina: item.estadoCocina,
             notas: item.notas,
+            // Las unidades que pasan llevan las mismas opciones, con el mismo precio.
+            opciones: {
+              create: item.opciones.map(({ id: _id, itemId: _itemId, ...opcion }) => opcion),
+            },
           },
         });
       }
@@ -958,8 +977,11 @@ export function liquidarDomiciliario(sesion, domiciliarioId, { pedidos }) {
 // ───────────────────────────── Funciones internas ─────────────────────────────
 
 /**
- * Agrega ítems a un pedido: valida cada producto, copia su precio y tasa del momento
- * y al final recalcula los totales.
+ * Agrega ítems a un pedido: valida cada producto y sus opciones, copia el precio y el impuesto
+ * del momento y al final recalcula los totales.
+ *
+ * El precio del ítem es el del plato más el de sus opciones (por ejemplo, la hamburguesa más
+ * el queso adicional). Cada opción guarda su propio impuesto (ver recalcularTotales).
  * @param {TransaccionPrisma} tx
  * @param {string} tenantId
  * @param {string} pedidoId
@@ -970,9 +992,12 @@ async function agregarItems(tx, tenantId, pedidoId, items) {
 
   const negocio = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId } });
 
-  for (const { productoId, cantidad, notas } of items) {
+  for (const { productoId, cantidad, notas, opciones: idsOpciones = [] } of items) {
     // 1. El producto debe ser del negocio y estar activo.
-    const producto = await tx.producto.findUnique({ where: { id: productoId } });
+    const producto = await tx.producto.findUnique({
+      where: { id: productoId },
+      include: { grupos: GRUPOS_DEL_PRODUCTO },
+    });
     if (!producto) {
       throw new AppError(404, 'PRODUCTO_NO_ENCONTRADO', 'El producto no existe');
     }
@@ -984,7 +1009,18 @@ async function agregarItems(tx, tenantId, pedidoId, items) {
       );
     }
 
-    // 2. Copiar precio y tasa: si mañana cambia el menú, esta venta no se altera.
+    // 2. Las opciones elegidas deben ser del producto y cumplir cada grupo (el término es
+    //    obligatorio, máximo una salsa...).
+    const elegidas = revisarOpcionesElegidas(
+      producto.nombre,
+      gruposParaPedir(producto.grupos),
+      idsOpciones,
+    );
+
+    // 3. Copiar precio, impuesto y opciones: si mañana cambia el menú, esta venta no se altera.
+    const precioUnitario = aDecimal(producto.precio).plus(
+      sumar(elegidas.map(({ opcion }) => opcion.precioExtra)),
+    );
     await tx.itemPedido.create({
       data: {
         tenantId,
@@ -992,13 +1028,53 @@ async function agregarItems(tx, tenantId, pedidoId, items) {
         productoId,
         cantidad,
         notas,
-        precioUnitario: producto.precio,
+        precioUnitario,
         tasaImpuesto: obtenerTasaImpuesto(negocio.regimenImpuesto, producto.tipoImpuesto),
+        opciones: {
+          create: elegidas.map(({ grupo, opcion }, orden) => ({
+            tenantId,
+            opcionId: opcion.id,
+            grupo: grupo.nombre,
+            nombre: opcion.nombre,
+            precioExtra: opcion.precioExtra,
+            tasaImpuesto: obtenerTasaImpuesto(negocio.regimenImpuesto, opcion.tipoImpuesto),
+            orden,
+          })),
+        },
       },
     });
   }
 
   await recalcularTotales(tx, pedidoId);
+}
+
+/**
+ * Líneas de impuesto de un ítem: el plato con su impuesto y cada opción con precio con el
+ * suyo (por ejemplo, la hamburguesa con INC y una adición que el negocio marcó sin impuesto).
+ * El precio del plato es el del ítem menos lo que suman sus opciones.
+ * ⚠️ Pendiente de validar con un contador: cómo van las adiciones en la factura electrónica.
+ * @param {{ precioUnitario: Prisma.Decimal, cantidad: Prisma.Decimal, tasaImpuesto: Prisma.Decimal,
+ *   opciones: { precioExtra: Prisma.Decimal, tasaImpuesto: Prisma.Decimal }[] }} item
+ */
+function lineasDelItem(item) {
+  const conPrecio = item.opciones.filter((opcion) => opcion.precioExtra.greaterThan(0));
+  const precioDelPlato = aDecimal(item.precioUnitario).minus(
+    sumar(conPrecio.map((opcion) => opcion.precioExtra)),
+  );
+  return [
+    calcularLinea({
+      precioConImpuesto: precioDelPlato,
+      cantidad: item.cantidad,
+      tasaImpuesto: item.tasaImpuesto,
+    }),
+    ...conPrecio.map((opcion) =>
+      calcularLinea({
+        precioConImpuesto: opcion.precioExtra,
+        cantidad: item.cantidad,
+        tasaImpuesto: opcion.tasaImpuesto,
+      }),
+    ),
+  ];
 }
 
 /**
@@ -1008,18 +1084,12 @@ async function agregarItems(tx, tenantId, pedidoId, items) {
  * @param {string} pedidoId
  */
 async function recalcularTotales(tx, pedidoId) {
-  const items = await tx.itemPedido.findMany({ where: { pedidoId } });
+  const items = await tx.itemPedido.findMany({ where: { pedidoId }, include: { opciones: true } });
   const { valorDomicilio } = await tx.pedido.findUniqueOrThrow({
     where: { id: pedidoId },
     select: { valorDomicilio: true },
   });
-  const lineas = items.map((item) =>
-    calcularLinea({
-      precioConImpuesto: item.precioUnitario,
-      cantidad: item.cantidad,
-      tasaImpuesto: item.tasaImpuesto,
-    }),
-  );
+  const lineas = items.flatMap(lineasDelItem);
   // El domicilio suma como una línea más, por ahora sin impuesto: el contador debe confirmar
   // cuál lleva. Así subtotal + impuestos + ajuste sigue dando el total.
   if (valorDomicilio.greaterThan(0)) {

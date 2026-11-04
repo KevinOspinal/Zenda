@@ -42,7 +42,11 @@ BEGIN
     'domiciliarios',
     'entregas_domicilio',
     'contadores_pedidos',
-    'recibos_venta'
+    'recibos_venta',
+    'grupos_opciones',
+    'opciones',
+    'productos_grupos_opciones',
+    'items_pedido_opciones'
   ]
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', tabla);

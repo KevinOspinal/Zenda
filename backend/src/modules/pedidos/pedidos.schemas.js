@@ -104,6 +104,12 @@ export const esquemaItem = z.object({
   cantidad: esquemaCantidad,
   // Indicaciones para la cocina, por ejemplo "sin cebolla".
   notas: z.string().trim().max(200).optional(),
+  // Ids de las opciones elegidas (término, adiciones...). Las adiciones suman a su precio.
+  opciones: z
+    .array(esquemaId)
+    .max(30)
+    .refine((ids) => new Set(ids).size === ids.length, 'hay opciones repetidas')
+    .default([]),
 });
 
 /**

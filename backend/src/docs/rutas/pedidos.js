@@ -35,6 +35,8 @@ const DESCRIPCIONES_ITEM = {
   productoId: 'Producto del menú (sácalo de `GET /menu`). Debe estar activo.',
   cantidad: 'Unidades, mayor que cero. Admite hasta 3 decimales (por ejemplo `0.5` porción).',
   notas: 'Indicaciones para la cocina, por ejemplo "Sin cebolla". Opcional.',
+  opciones:
+    'Ids de las opciones elegidas (término, adiciones...), de los grupos del producto en `GET /menu`. Los grupos obligatorios deben venir; las opciones con precio suman al precio del ítem.',
 };
 
 /** El pedido de ejemplo ya cobrado. */
@@ -286,10 +288,23 @@ la cocina recibe el cambio en tiempo real.
 No se puede agregar a un pedido cobrado o anulado (409 \`PEDIDO_CERRADO\`), ni un
 producto inactivo (422 \`PRODUCTO_INACTIVO\`).
 
+**Opciones** (\`opciones\`): las del producto en \`GET /menu\`.
+- El precio del ítem es el del plato **más sus adiciones** (\`precioUnitario\`), y cada opción
+  queda en \`opciones\` del ítem con el precio con que se vendió.
+- Cada adición lleva **su propio impuesto**. ⚠️ Pendiente de validar con un contador.
+- 422 \`FALTAN_OPCIONES\` si falta un grupo obligatorio (por ejemplo, el término);
+  422 \`DEMASIADAS_OPCIONES\` si se pasa del máximo; 422 \`OPCION_NO_VALIDA\` si una opción no
+  es del producto o está inactiva.
+
 📡 Avisa en tiempo real con \`pedido:actualizado\`, que incluye la comanda completa.`,
       parametros: idPedido,
       cuerpo: cuerpo(esquemaItem, {
-        ejemplo: { productoId: ID.hamburguesa, cantidad: 1, notas: 'Término medio' },
+        ejemplo: {
+          productoId: ID.hamburguesa,
+          cantidad: 1,
+          opciones: [ID.opcionTresCuartos, ID.opcionQueso],
+          notas: 'Sin cebolla',
+        },
         descripciones: DESCRIPCIONES_ITEM,
       }),
       respuestas: {
@@ -414,7 +429,7 @@ propia factura**.
 **Cómo funciona**
 - Indica qué ítems pasan y **cuántas unidades** de cada uno. Ejemplo: de un ítem con
   2 hamburguesas puedes pasar 1; la otra se queda en la cuenta original.
-- Los productos conservan su **precio, impuesto, notas y estado de cocina**.
+- Los productos conservan su **precio, impuesto, notas, opciones y estado de cocina**.
 - Los totales de ambas cuentas se recalculan; sumados, dan lo mismo que antes.
 - La mesa sigue **ocupada** hasta que se cobren todas sus cuentas.
 - Se puede dividir varias veces (por ejemplo, en tres cuentas).

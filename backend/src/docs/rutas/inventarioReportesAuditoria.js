@@ -205,7 +205,8 @@ ${REGLAS_REPORTES}`,
       descripcion: `
 Los productos del que **más vendió al que menos**, con la cantidad, el total y su
 **participación** (porcentaje del total). El total usa el precio con que se vendió cada
-producto, no el precio actual del menú.
+producto, no el precio actual del menú, e **incluye sus adiciones** (el detalle está en
+\`/reportes/por-opcion\`).
 ${REGLAS_REPORTES}`,
       parametros: parametrosRango,
       respuestas: {
@@ -229,6 +230,36 @@ ${REGLAS_REPORTES}`,
               total: '12000.00',
               participacion: '20.69',
             },
+          ],
+        }),
+      },
+      errores: ['400'],
+    }),
+  },
+
+  '/reportes/por-opcion': {
+    get: operacion({
+      etiqueta: 'Reportes',
+      resumen: 'Adiciones y opciones vendidas',
+      roles: [...VEN_REPORTES],
+      descripcion: `
+Las opciones que se eligieron en los platos vendidos (adiciones, término, lo que se quitó...):
+cuántas veces (\`cantidad\`, las unidades de sus platos) y cuánto dinero extra dejaron
+(\`total\`). Van de la que más dinero dejó a la que menos y, entre las que no cuestan, de la
+más pedida a la menos.
+- Se agrupan por el grupo y el nombre con que se vendieron: cuentan aunque después se hayan
+  cambiado o borrado del menú.
+- Su valor **ya está incluido** en las ventas de cada producto (\`/reportes/por-producto\`):
+  es el detalle, no se suma aparte.
+${REGLAS_REPORTES}`,
+      parametros: parametrosRango,
+      respuestas: {
+        200: respuesta('Opciones vendidas.', {
+          rango: RANGO,
+          total: '9000.00',
+          opciones: [
+            { grupo: 'Adiciones', nombre: 'Queso', cantidad: '3', total: '9000.00' },
+            { grupo: 'Término de la carne', nombre: '3/4', cantidad: '2', total: '0.00' },
           ],
         }),
       },

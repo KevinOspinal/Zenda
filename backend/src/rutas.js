@@ -12,6 +12,7 @@ import { rutasInventario } from './modules/inventario/inventario.routes.js';
 import { rutasCategorias, rutasMenu, rutasProductos } from './modules/menu/menu.routes.js';
 import { rutasMesas } from './modules/mesas/mesas.routes.js';
 import { rutasNegocios } from './modules/negocios/negocios.routes.js';
+import { rutasGruposOpciones } from './modules/opciones/opciones.routes.js';
 import { rutasPedidos } from './modules/pedidos/pedidos.routes.js';
 import { rutasRecibos } from './modules/recibos/recibos.routes.js';
 import { rutasReportes } from './modules/reportes/reportes.routes.js';
@@ -25,6 +26,7 @@ export const MODULOS = Object.freeze([
   ['/menu', rutasMenu],
   ['/categorias', rutasCategorias],
   ['/productos', rutasProductos],
+  ['/grupos-opciones', rutasGruposOpciones],
   ['/mesas', rutasMesas],
   ['/clientes', rutasClientes],
   ['/caja', rutasCaja],

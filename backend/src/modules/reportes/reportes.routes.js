@@ -28,3 +28,8 @@ rutasReportes.get('/por-producto', validarRango, async (_req, res) => {
 rutasReportes.get('/por-metodo-pago', validarRango, async (_req, res) => {
   res.json(await servicio.obtenerVentasPorMetodoPago(obtenerSesion(res), res.locals.entrada.query));
 });
+
+// GET /reportes/por-opcion
+rutasReportes.get('/por-opcion', validarRango, async (_req, res) => {
+  res.json(await servicio.obtenerVentasPorOpcion(obtenerSesion(res), res.locals.entrada.query));
+});
