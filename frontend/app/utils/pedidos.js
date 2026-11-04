@@ -41,6 +41,82 @@ export function nombreDelPedido(pedido) {
   return pedido.numero ? `#${pedido.numero} · ${quien}` : quien;
 }
 
+/** @param {any} pedido */
+function tienePlatosPorEntregar(pedido) {
+  return (pedido.items ?? []).some((/** @type {any} */ item) => item.estadoCocina !== 'entregado');
+}
+
+/**
+ * Se cobró sin pasar por la cocina y tiene productos por entregar: falta decidir si se envía a
+ * la cocina o si no va a cocina (por ejemplo, unas gaseosas). Mientras tanto, si es de mesa, la
+ * mesa sigue ocupada.
+ * @param {any} pedido Pedido completo (forma del API).
+ */
+export function faltaDecidirCocina(pedido) {
+  return pedido.estado === 'pagado' && !pedido.enviadoACocinaEn && tienePlatosPorEntregar(pedido);
+}
+
+/**
+ * Se cobró con platos en la cocina que aún no se entregan (el cliente pagó antes de que
+ * salieran): la cocina lo sigue viendo y, si es de mesa, la mesa sigue ocupada.
+ * @param {any} pedido Pedido completo (forma del API).
+ */
+export function esCobradoEnCocina(pedido) {
+  return (
+    pedido.estado === 'pagado' && Boolean(pedido.enviadoACocinaEn) && tienePlatosPorEntregar(pedido)
+  );
+}
+
+/**
+ * @typedef {object} AvisoDelPedido
+ * @property {'error' | 'warning' | 'info' | 'success'} color
+ * @property {string} icono
+ * @property {string} titulo
+ * @property {string} descripcion
+ */
+
+/**
+ * El aviso de un pedido ya cobrado o anulado: qué pasó y, si falta algo, qué hacer.
+ * @param {any} pedido Pedido completo (forma del API).
+ * @returns {AvisoDelPedido}
+ */
+export function avisoDelPedidoCerrado(pedido) {
+  if (pedido.estado === 'anulado') {
+    return {
+      color: 'error',
+      icono: 'i-lucide-ban',
+      titulo: 'Pedido anulado',
+      descripcion: 'No se cobró y ya no se le pueden hacer cambios.',
+    };
+  }
+  if (faltaDecidirCocina(pedido)) {
+    return {
+      color: 'warning',
+      icono: 'i-lucide-chef-hat',
+      titulo: 'Falta enviarlo a la cocina',
+      descripcion:
+        tipoDelPedido(pedido) === 'domicilio'
+          ? 'Ya se cobró, pero la cocina todavía no lo ha visto. Envíalo para que lo preparen; cuando esté listo, lo despachas.'
+          : 'Ya se cobró, pero la cocina todavía no lo ha visto. Si no hay nada que preparar (por ejemplo, solo bebidas), elige «No va a cocina».',
+    };
+  }
+  if (tipoDelPedido(pedido) === 'mesa' && esCobradoEnCocina(pedido)) {
+    return {
+      color: 'info',
+      icono: 'i-lucide-utensils',
+      titulo: 'Cobrado · faltan platos por llevar',
+      descripcion:
+        'La mesa sigue ocupada hasta que se entreguen todos. Si piden algo más, va en un pedido nuevo.',
+    };
+  }
+  return {
+    color: 'success',
+    icono: 'i-lucide-circle-check',
+    titulo: 'Pedido cobrado',
+    descripcion: 'Ya no se le pueden agregar productos.',
+  };
+}
+
 /**
  * @typedef {object} PasoDelPedido
  * @property {string} id

@@ -3,7 +3,8 @@
 // - agrega el token de acceso de la sesión;
 // - si el token venció, lo renueva (una sola vez aunque fallen varias peticiones a la vez)
 //   y repite la petición;
-// - convierte cualquier error en un ErrorApi con un mensaje amable (ver utils/errores.js).
+// - convierte cualquier error en un ErrorApi con un mensaje amable (ver utils/errores.js);
+// - si falla algo que hizo la persona (guardar, cobrar, enviar...), suena el error.
 // Las pantallas no llaman al API directo: usan los stores, y los stores usan useApi.
 
 /** Tiempo máximo de espera de una petición: sin límite, una red caída dejaría la pantalla esperando. */
@@ -11,7 +12,7 @@ const ESPERA_MAXIMA_MS = 15_000;
 
 /**
  * @typedef {object} OpcionesPeticion
- * @property {'GET' | 'POST' | 'PATCH' | 'DELETE'} [metodo]
+ * @property {'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'} [metodo]
  * @property {unknown} [cuerpo] Datos que se envían como JSON.
  * @property {Record<string, unknown>} [consulta] Parámetros de la URL (?desde=...).
  * @property {string | null} [token] Token de acceso. Sin él, la petición va sin sesión.
@@ -73,13 +74,15 @@ function convertirError(error) {
  */
 export function useApi() {
   const sesion = useSesionStore();
+  const sonidos = useSonidos();
 
   /**
+   * Hace la petición con el token de la sesión; si el token venció, lo renueva y la repite.
    * @param {string} ruta
-   * @param {OpcionesPeticion} [opciones]
+   * @param {OpcionesPeticion} opciones
    * @returns {Promise<any>}
    */
-  async function pedir(ruta, opciones = {}) {
+  async function pedirConSesion(ruta, opciones) {
     const tokenUsado = sesion.tokenAcceso;
     try {
       return await peticionAlApi(ruta, { ...opciones, token: tokenUsado });
@@ -90,6 +93,22 @@ export function useApi() {
       // si no, se renueva (todas las renovaciones simultáneas comparten una sola).
       if (sesion.tokenAcceso === tokenUsado) await sesion.renovar();
       return peticionAlApi(ruta, { ...opciones, token: sesion.tokenAcceso });
+    }
+  }
+
+  /**
+   * @param {string} ruta
+   * @param {OpcionesPeticion} [opciones]
+   * @returns {Promise<any>}
+   */
+  async function pedir(ruta, opciones = {}) {
+    try {
+      return await pedirConSesion(ruta, opciones);
+    } catch (error) {
+      // Falló algo que hizo la persona: además del mensaje en pantalla, suena el error. Las
+      // consultas no suenan: si falla una carga, la pantalla lo muestra con "Reintentar".
+      if (opciones.metodo && opciones.metodo !== 'GET') sonidos.error();
+      throw error;
     }
   }
 
@@ -109,6 +128,12 @@ export function useApi() {
      * @param {unknown} cuerpo
      */
     patch: (ruta, cuerpo) => pedir(ruta, { metodo: 'PATCH', cuerpo }),
+    /**
+     * Reemplaza el registro completo (por ejemplo, un grupo de opciones con todas sus opciones).
+     * @param {string} ruta
+     * @param {unknown} cuerpo
+     */
+    put: (ruta, cuerpo) => pedir(ruta, { metodo: 'PUT', cuerpo }),
     /** @param {string} ruta */
     eliminar: (ruta) => pedir(ruta, { metodo: 'DELETE' }),
   };

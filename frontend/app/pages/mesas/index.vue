@@ -1,6 +1,7 @@
 <!--
   Mapa de mesas en vivo: libres, ocupadas (con su tiempo y su total) y con platos listos.
-  Tocar una mesa libre empieza un pedido; tocar una ocupada abre su pedido.
+  Tocar una mesa libre empieza un pedido; tocar una ocupada abre su pedido. Una mesa que ya
+  pagó sigue ocupada hasta que le entreguen los platos: tocarla abre ese pedido cobrado.
   Sin caja abierta no se pueden tomar pedidos: se avisa arriba.
 -->
 <script setup>
@@ -26,16 +27,27 @@ const mesasVisibles = computed(() =>
     : mesas.lista.filter((mesa) => (mesa.zona || SIN_ZONA) === zonaActiva.value),
 );
 
-/** Lo que muestra la tarjeta de cada mesa, según su pedido activo. */
+/**
+ * Lo que muestra la tarjeta de cada mesa: su pedido activo o, si ya pagó y espera platos de la
+ * cocina, ese pedido cobrado.
+ */
 const datosPorMesa = computed(() => {
+  // Mesas con platos listos para llevar, de pedidos por cobrar o ya cobrados.
+  const mesasConPlatosListos = new Set(
+    pedidos.pedidosConPlatosListos().map(({ pedido }) => pedido.mesaId),
+  );
   const datos = new Map();
   for (const mesa of mesas.lista) {
-    const pedido = pedidos.pedidoDeMesa(mesa.id);
+    const activo = pedidos.pedidoDeMesa(mesa.id);
+    const cobrado =
+      activo || mesa.estado !== 'ocupada' ? null : pedidos.pedidoCobradoDeMesa(mesa.id);
+    const pedido = activo ?? cobrado;
     datos.set(mesa.id, {
       pedido,
+      pagada: Boolean(cobrado),
       minutos: pedido ? minutosTranscurridos(pedido.abiertoEn, ahora.value) : null,
-      total: pedido?.total ?? null,
-      platosListos: Boolean(pedido?.items?.some((i) => i.estadoCocina === 'listo')),
+      total: activo?.total ?? null,
+      platosListos: Boolean(pedido) && mesasConPlatosListos.has(mesa.id),
     });
   }
   return datos;
@@ -48,14 +60,15 @@ const conPlatosListos = computed(
 );
 
 /** @param {import('~/stores/mesas.js').Mesa} mesa */
-function abrirMesa(mesa) {
-  const { pedido } = datosPorMesa.value.get(mesa.id) ?? {};
-  if (pedido) return navigateTo(`/pedidos/${pedido.id}`);
-  if (mesa.estado === 'ocupada') {
-    // Ocupada en otro dispositivo hace un instante: se trae su pedido.
-    pedidos.cargarActivos();
-    return;
+async function abrirMesa(mesa) {
+  let { pedido } = datosPorMesa.value.get(mesa.id) ?? {};
+  if (!pedido && mesa.estado === 'ocupada') {
+    // Ocupada sin pedido a la vista: quizá se ocupó en otro dispositivo hace un instante. Si
+    // tampoco aparece al traer los pedidos, no tiene nada en curso y se puede tomar uno nuevo.
+    await pedidos.cargarActivos();
+    pedido = datosPorMesa.value.get(mesa.id)?.pedido;
   }
+  if (pedido) return navigateTo(`/pedidos/${pedido.id}`);
   if (caja.abierta === false) {
     toast.add({
       title: 'La caja está cerrada',
@@ -165,6 +178,7 @@ function abrirMesa(mesa) {
           :tiene-platos-listos="datosPorMesa.get(mesa.id)?.platosListos"
           :minutos-abierta="datosPorMesa.get(mesa.id)?.minutos ?? null"
           :total="datosPorMesa.get(mesa.id)?.total ?? null"
+          :pagada="datosPorMesa.get(mesa.id)?.pagada"
           :resaltada="mesas.resaltadas.has(mesa.id)"
           @seleccionar="abrirMesa"
         />

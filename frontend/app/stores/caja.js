@@ -3,6 +3,7 @@
 // turno abierto con su resumen de ventas, la apertura y el cierre con arqueo.
 // Se mantiene al día con los eventos caja:abierta, caja:cerrada, pedido:pagado y
 // pedido:anulado (ver plugins/02.eventos-en-vivo.client.js).
+// Abrir y cerrar la caja suenan al terminar bien (ver useSonidos).
 
 /**
  * @typedef {object} ResumenTurno
@@ -15,6 +16,7 @@
  */
 
 export const useCajaStore = defineStore('caja', () => {
+  const sonidos = useSonidos();
   /** null mientras no se sabe (por ejemplo, antes de la primera consulta). */
   const abierta = ref(/** @type {boolean | null} */ (null));
   /** Turno abierto con su resumen (solo para quien maneja la caja). */
@@ -59,6 +61,7 @@ export const useCajaStore = defineStore('caja', () => {
   async function abrir(montoInicial) {
     await useApi().post('/caja/abrir', { montoInicial });
     abierta.value = true;
+    sonidos.cajaAbierta();
     await cargarTurno();
   }
 
@@ -70,6 +73,7 @@ export const useCajaStore = defineStore('caja', () => {
     const cerrado = await useApi().post('/caja/cerrar', { montoContado });
     abierta.value = false;
     turno.value = null;
+    sonidos.cajaCerrada();
     return cerrado;
   }
 

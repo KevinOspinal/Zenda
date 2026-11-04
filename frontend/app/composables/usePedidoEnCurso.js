@@ -6,6 +6,8 @@
 // - Las operaciones van en fila: así el primer producto crea el pedido y los siguientes se
 //   agregan a ese mismo, aunque el mesero toque varios productos muy rápido.
 // - El total siempre lo calcula el backend: se usa el pedido que responde el API.
+// - Agregar un producto suena al instante (como el contador de la tarjeta); quitarlo, cuando
+//   el API lo confirma.
 
 /**
  * @param {object} opciones
@@ -18,6 +20,7 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
   const mesas = useMesasStore();
   const caja = useCajaStore();
   const toast = useToast();
+  const sonidos = useSonidos();
 
   if (mesas.estadoCarga === 'sin_cargar') mesas.cargar();
 
@@ -45,6 +48,15 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
     }
   }
   watch(pedidoId, cargarPedido, { immediate: true });
+
+  // Un pedido cobrado que sigue en la cocina se mantiene al día con los eventos en vivo
+  // (platos listos o entregados): mientras el store lo tenga, se muestra esa versión.
+  watch(
+    () => pedidoCerrado.value && pedidos.buscar(pedidoCerrado.value.id),
+    (enVivo) => {
+      if (enVivo && enVivo !== pedidoCerrado.value) pedidoCerrado.value = enVivo;
+    },
+  );
 
   // Si el pedido se cierra mientras está en pantalla (se cobró o se anuló aquí o en otro
   // dispositivo), se trae de nuevo para mostrar cómo quedó.
@@ -139,13 +151,20 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
   /**
    * Agrega un producto. Si el pedido aún no existe, lo crea con este primer producto.
    * @param {{ id: string, nombre: string }} producto
-   * @param {{ cantidad?: number, notas?: string | null }} [opciones]
+   * @param {{ cantidad?: number, notas?: string | null, opciones?: string[] }} [detalle]
+   *   `opciones`: ids de las opciones elegidas (término, adiciones...).
    */
-  async function agregar(producto, { cantidad = 1, notas = '' } = {}) {
+  async function agregar(producto, { cantidad = 1, notas = '', opciones = [] } = {}) {
     sumarEnCamino(producto.id, cantidad);
+    sonidos.productoAgregado();
     try {
       await enFila(async () => {
-        const item = { productoId: producto.id, cantidad, ...(notas ? { notas } : {}) };
+        const item = {
+          productoId: producto.id,
+          cantidad,
+          ...(notas ? { notas } : {}),
+          ...(opciones.length ? { opciones } : {}),
+        };
         if (idActual.value) {
           await pedidos.agregarItem(idActual.value, item);
           return;
@@ -168,6 +187,7 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
   async function quitar(item) {
     try {
       await enFila(() => pedidos.quitarItem(idActual.value, item.id));
+      sonidos.productoQuitado();
       toast.add({
         title: `Quitaste ${item.producto.nombre}`,
         icon: 'i-lucide-trash-2',
@@ -178,10 +198,17 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
             icon: 'i-lucide-undo-2',
             color: 'neutral',
             variant: 'outline',
+            // Vuelve a pedir el plato igual, con sus mismas opciones.
             onClick: () =>
               agregar(
                 { id: item.productoId, nombre: item.producto.nombre },
-                { cantidad: Number(item.cantidad), notas: item.notas },
+                {
+                  cantidad: Number(item.cantidad),
+                  notas: item.notas,
+                  opciones: (item.opciones ?? [])
+                    .map((/** @type {{ opcionId: string | null }} */ o) => o.opcionId)
+                    .filter(Boolean),
+                },
               ),
           },
         ],

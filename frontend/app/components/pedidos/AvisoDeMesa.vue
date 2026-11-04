@@ -2,6 +2,7 @@
   Aviso de una mesa con platos listos para llevar: la mesa en grande, sus platos listos (con
   cantidad y notas) y "Entregar todo". Si son varios, cada plato conserva su "Entregado" por
   si se llevan por partes. Si algo sigue en la cocina, lo dice: se avisa cuando esté listo.
+  Si el pedido lo tomó otra persona (otro mesero, el dueño o la caja), dice quién.
 -->
 <script setup>
 const props = defineProps({
@@ -21,6 +22,15 @@ const emit = defineEmits({
   entregar: (_item) => true,
   entregarTodo: () => true,
 });
+
+const sesion = useSesionStore();
+
+/** Quién tomó el pedido, por su primer nombre, si no fue quien tiene la sesión. */
+const tomadoPor = computed(() =>
+  props.pedido.meseroId === sesion.usuario?.id
+    ? ''
+    : (props.pedido.mesero?.nombre ?? '').split(' ')[0],
+);
 
 /** Platos de la mesa que todavía se están preparando. */
 const enLaCocina = computed(
@@ -47,6 +57,7 @@ const entregandoTodo = computed(() =>
           {{ items.length }} {{ items.length === 1 ? 'plato listo' : 'platos listos' }}
           <span v-if="enLaCocina" class="text-muted">· {{ enLaCocina }} aún en la cocina</span>
         </p>
+        <p v-if="tomadoPor" class="text-sm text-muted">Lo tomó {{ tomadoPor }}</p>
       </div>
     </header>
 

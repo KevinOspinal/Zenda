@@ -1,7 +1,7 @@
 // @ts-check
 // Pruebas de la caja con un backend simulado: abrir la caja, la pantalla con el turno (sus
-// tarjetas, la lista con filtros y cómo va el turno) y el cobro completo con propina, efectivo
-// y cambio.
+// tarjetas, la lista con filtros y cómo va el turno), el cobro completo con propina, efectivo
+// y cambio, y qué pasa con la cocina si se cobra antes de enviar el pedido.
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AbrirCaja from '~/components/caja/AbrirCaja.vue';
@@ -24,6 +24,7 @@ const PEDIDO = {
   mesa: { id: 'm4', nombre: 'Mesa 4' },
   meseroId: 'laura',
   estado: 'enviado_a_cocina',
+  enviadoACocinaEn: new Date().toISOString(),
   subtotal: '35185.18',
   impuestos: '2814.82',
   total: '38000',
@@ -265,5 +266,117 @@ describe('cobrar', () => {
 
     await vi.waitFor(() => expect(document.body.textContent).toContain('No alcanza para'));
     expect(botonConTexto('Confirmar cobro')?.disabled).toBe(true);
+  });
+});
+
+describe('cobrado antes de ir a la cocina', () => {
+  /**
+   * El pedido por cobrar, sin enviar a la cocina.
+   * @param {Record<string, unknown>} cambios Su id, tipo, mesa o cliente.
+   */
+  const sinEnviar = (cambios) => ({
+    ...PEDIDO,
+    estado: 'abierto',
+    enviadoACocinaEn: null,
+    items: PEDIDO.items.map((item) => ({ ...item, estadoCocina: 'pendiente' })),
+    ...cambios,
+  });
+  const DE_MESA = sinEnviar({ tipo: 'mesa' });
+  const DE_MOSTRADOR = sinEnviar({ id: 'p2', tipo: 'mostrador', mesaId: null, mesa: null });
+  const DOMICILIO = sinEnviar({ id: 'p3', tipo: 'domicilio', mesaId: null, mesa: null });
+
+  /**
+   * Simula el cobro del pedido y lo que se decida después con la cocina.
+   * @param {any} pedido
+   */
+  function simularCobro(pedido) {
+    const pagado = { ...pedido, estado: 'pagado', cerradoEn: new Date().toISOString() };
+    simularBackend(fetchFalso, {
+      [`GET /pedidos/${pedido.id}`]: () => pedido,
+      [`POST /pedidos/${pedido.id}/cobrar`]: () => ({
+        pedido: pagado,
+        cambio: '0.00',
+        advertencias: [],
+      }),
+      [`POST /pedidos/${pedido.id}/enviar-cocina`]: () => ({
+        ...pagado,
+        enviadoACocinaEn: new Date().toISOString(),
+      }),
+      [`POST /pedidos/${pedido.id}/entregar`]: () => ({
+        ...pagado,
+        items: pagado.items.map((item) => ({ ...item, estadoCocina: 'entregado' })),
+      }),
+    });
+  }
+
+  /**
+   * Abre el cobro del pedido y lo confirma con el valor exacto.
+   * @param {string} pedidoId
+   */
+  async function cobrar(pedidoId) {
+    const modal = await mountSuspended(ModalCobro, { props: { pedidoId, abierto: true } });
+    await vi.waitFor(() => expect(botonConTexto('Confirmar cobro')?.disabled).toBe(false));
+    botonConTexto('Confirmar cobro')?.click();
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Cobro registrado'));
+    return modal;
+  }
+
+  /** La X de la ventana (su texto depende del idioma de Nuxt UI). */
+  const BOTON_CERRAR =
+    '[role="dialog"] button[aria-label="Cerrar"], [role="dialog"] button[aria-label="Close"]';
+
+  /** Rutas que se llamaron con POST. */
+  const rutasPost = () =>
+    fetchFalso.mock.calls
+      .filter(([, opciones]) => opciones?.method === 'POST')
+      .map(([ruta]) => ruta);
+
+  it('de una mesa: pide enviarlo y no deja cerrar la ventana sin decidir', async () => {
+    simularCobro(DE_MESA);
+    const modal = await cobrar('p1');
+
+    expect(document.body.textContent).toContain('Falta enviarlo a la cocina');
+    expect(botonConTexto('No va a cocina')).toBeDefined();
+    // Ni «Listo» ni la X: solo las dos decisiones.
+    expect(botonConTexto('Listo')).toBeUndefined();
+    expect(document.querySelector(BOTON_CERRAR)).toBeNull();
+
+    // La caja suelta el pedido elegido al cobrar: igual se envía el que se cobró.
+    await modal.setProps({ pedidoId: '' });
+    botonConTexto('Enviar a cocina')?.click();
+
+    await vi.waitFor(() => expect(modal.emitted('update:abierto')).toContainEqual([false]));
+    expect(rutasPost()).toContain('/pedidos/p1/enviar-cocina');
+  });
+
+  it('de mostrador: «No va a cocina» lo entrega de una vez', async () => {
+    simularCobro(DE_MOSTRADOR);
+    const modal = await cobrar('p2');
+
+    botonConTexto('No va a cocina')?.click();
+
+    await vi.waitFor(() => expect(modal.emitted('update:abierto')).toContainEqual([false]));
+    expect(rutasPost()).toContain('/pedidos/p2/entregar');
+    expect(rutasPost()).not.toContain('/pedidos/p2/enviar-cocina');
+  });
+
+  it('un domicilio solo puede ir a la cocina', async () => {
+    simularCobro(DOMICILIO);
+    await cobrar('p3');
+
+    expect(document.body.textContent).toContain('Falta enviarlo a la cocina');
+    expect(botonConTexto('Enviar a cocina')).toBeDefined();
+    expect(botonConTexto('No va a cocina')).toBeUndefined();
+  });
+
+  it('si ya estaba en la cocina, «Listo» cierra como siempre', async () => {
+    simularCobro(PEDIDO);
+    const modal = await cobrar('p1');
+
+    expect(document.body.textContent).not.toContain('Falta enviarlo a la cocina');
+    expect(document.querySelector(BOTON_CERRAR)).not.toBeNull();
+    botonConTexto('Listo')?.click();
+
+    await vi.waitFor(() => expect(modal.emitted('update:abierto')).toContainEqual([false]));
   });
 });

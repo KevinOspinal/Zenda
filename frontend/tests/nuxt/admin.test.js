@@ -62,6 +62,7 @@ describe('menú', () => {
     simularBackend(fetchFalso, {
       'GET /categorias': () => CATEGORIAS,
       'GET /productos': () => structuredClone(PRODUCTOS),
+      'GET /grupos-opciones': () => [],
       'PATCH /productos/p1': (opciones) => ({ ...PRODUCTOS[0], ...opciones.body }),
       'GET /menu': () => [],
     });

@@ -271,7 +271,7 @@ describe('ciclo de una venta en mesa', () => {
     expect(res.body.error.code).toBe('PAGO_NO_CUADRA');
   });
 
-  it('cobra con efectivo y tarjeta, calcula el cambio y libera la mesa', async () => {
+  it('cobra con efectivo y tarjeta y calcula el cambio; la mesa espera sus platos', async () => {
     const res = await llamar('post', `/pedidos/${pedidoId}/cobrar`, 'cajero', {
       pagos: [
         { metodo: 'efectivo', monto: 20000, recibido: 50000 },
@@ -284,7 +284,8 @@ describe('ciclo de una venta en mesa', () => {
     expect(res.body.pedido.estado).toBe('pagado');
     expect(res.body.pedido.cerradoEn).not.toBeNull();
     expect(res.body.pedido.pagos).toHaveLength(2);
-    expect(await estadoMesa(ids.mesa1)).toBe('libre');
+    // La hamburguesa y la gaseosa no han llegado: el cliente sigue en la mesa.
+    expect(await estadoMesa(ids.mesa1)).toBe('ocupada');
   });
 
   it('un pedido cobrado no se cobra de nuevo ni admite más ítems', async () => {
@@ -311,16 +312,21 @@ describe('ciclo de una venta en mesa', () => {
     expect(res.body.resumen.efectivoEsperado).toBe('120000.00');
   });
 
-  it('el mesero puede marcar un plato entregado aunque el pedido ya esté pagado', async () => {
+  it('el mesero entrega los platos aunque el pedido esté pagado; con el último, la mesa queda libre', async () => {
     const { body: pedido } = await llamar('get', `/pedidos/${pedidoId}`, 'mesero');
-    const res = await llamar(
-      'patch',
-      `/pedidos/${pedidoId}/items/${pedido.items[0].id}/cocina`,
-      'mesero',
-      { estadoCocina: 'entregado' },
-    );
+    const [primero, ultimo] = pedido.items;
+    const entregar = (/** @type {{ id: string }} */ item) =>
+      llamar('patch', `/pedidos/${pedidoId}/items/${item.id}/cocina`, 'mesero', {
+        estadoCocina: 'entregado',
+      });
+
+    const res = await entregar(primero);
+    const conUnPlatoPorEntregar = await estadoMesa(ids.mesa1);
+    await entregar(ultimo);
 
     expect(res.status).toBe(200);
+    expect(conUnPlatoPorEntregar).toBe('ocupada');
+    expect(await estadoMesa(ids.mesa1)).toBe('libre');
   });
 });
 
@@ -391,6 +397,17 @@ describe('venta de mostrador, pedido offline y anulación', () => {
       usuarioId: negocio.usuarios.administrador,
       detalle: { motivo: 'El cliente se fue sin pedir', estadoAnterior: 'abierto' },
     });
+  });
+
+  it('cada pedido dice quién lo tomó y con qué rol, en el detalle y en la lista', async () => {
+    const creado = await llamar('post', '/pedidos', 'dueno', {
+      items: [{ productoId: ids.gaseosa, cantidad: 1 }],
+    });
+    const lista = await llamar('get', '/pedidos?activos=true&incluirItems=true', 'mesero');
+    const enLaLista = lista.body.find((/** @type {{ id: string }} */ p) => p.id === creado.body.id);
+
+    expect(creado.body.mesero).toEqual({ nombre: expect.any(String), rol: 'dueno' });
+    expect(enLaLista.mesero).toEqual(creado.body.mesero);
   });
 
   it('anular un pedido cobrado lo saca del resumen de caja', async () => {

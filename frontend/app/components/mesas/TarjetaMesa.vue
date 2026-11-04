@@ -2,7 +2,8 @@
   Tarjeta de una mesa en el mapa: nombre, estado (color + ícono + texto), capacidad y, si
   está ocupada, cuánto tiempo lleva y su total. Toda la tarjeta es un botón grande.
 
-  Una mesa ocupada con platos listos se resalta en azul con un punto que late.
+  Una mesa ocupada con platos listos se resalta en azul con un punto que late. Si ya se pagó y
+  espera platos de la cocina, sigue ocupada y en lugar del total dice «Pagada».
   Cuando cambia por un evento en vivo, `resaltada` la marca con un anillo por un momento.
 -->
 <script setup>
@@ -20,6 +21,8 @@ const props = defineProps({
   minutosAbierta: { type: Number, default: null },
   /** Total actual de su pedido, en pesos (texto del API). */
   total: { type: String, default: null },
+  /** Ya se cobró: la mesa sigue ocupada hasta que se entreguen sus platos. */
+  pagada: { type: Boolean, default: false },
   /** Cambió hace un instante por un evento en vivo. */
   resaltada: { type: Boolean, default: false },
 });
@@ -44,12 +47,13 @@ const ANILLO = Object.freeze({
   con_platos_listos: 'ring-2 ring-info/60 hover:ring-info',
 });
 
-/** Resumen para lectores de pantalla: "Mesa 4, Ocupada, 32 min, $ 38.000". */
+/** Resumen para lectores de pantalla: "Mesa 4, Ocupada, 32 min, $ 38.000" o "…, Pagada". */
 const descripcionAccesible = computed(() =>
   [
     props.mesa.nombre,
     apariencia.value.etiqueta,
     props.minutosAbierta !== null ? duracionCorta(props.minutosAbierta) : null,
+    props.pagada ? 'Pagada' : null,
     props.total ? formatearPesos(props.total) : null,
   ]
     .filter(Boolean)
@@ -89,7 +93,11 @@ const descripcionAccesible = computed(() =>
       </span>
     </span>
 
-    <span v-if="total" class="cifra font-semibold text-highlighted">
+    <span v-if="pagada" class="inline-flex items-center gap-1 font-semibold text-success">
+      <UIcon name="i-lucide-circle-check" class="size-4" />
+      Pagada
+    </span>
+    <span v-else-if="total" class="cifra font-semibold text-highlighted">
       {{ formatearPesos(total) }}
     </span>
   </button>

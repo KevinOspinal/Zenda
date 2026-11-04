@@ -1,5 +1,6 @@
 <!--
-  La cuenta de un pedido: cada producto con su cantidad, notas, estado de cocina y valor.
+  La cuenta de un pedido: cada producto con su cantidad, opciones (término, adiciones con su
+  precio...), notas, estado de cocina y valor.
   Los ítems tienen la forma que envía el API (GET /pedidos/:id).
   Un ítem se puede quitar mientras la cocina no haya empezado a prepararlo.
 -->
@@ -8,7 +9,7 @@
  * Ítem de un pedido tal como lo envía el API.
  * @typedef {{ id: string, cantidad: string, precioUnitario: string, notas?: string | null,
  *   estadoCocina: 'pendiente' | 'preparando' | 'listo' | 'entregado',
- *   producto: { nombre: string } }} ItemPedido
+ *   producto: { nombre: string }, opciones?: { nombre: string, precioExtra: string }[] }} ItemPedido
  */
 
 defineProps({
@@ -49,6 +50,9 @@ function valorDeLinea(item) {
 
       <div class="min-w-0 flex-1 space-y-1.5">
         <p class="leading-snug font-medium text-highlighted">{{ item.producto.nombre }}</p>
+        <p v-if="item.opciones?.length" class="cifra text-sm text-toned">
+          {{ textoDeOpciones(item.opciones) }}
+        </p>
         <p v-if="item.notas" class="flex items-start gap-1 text-sm font-medium text-warning">
           <UIcon name="i-lucide-message-square-text" class="mt-0.5 size-4 shrink-0" />
           {{ item.notas }}

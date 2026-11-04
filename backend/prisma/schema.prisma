@@ -176,6 +176,12 @@ model Tenant {
   pieRecibo       String?         @map("pie_recibo") @db.VarChar(200)
   // Último número de recibo de venta que se dio (numeración propia y continua).
   ultimoRecibo    Int             @default(0) @map("ultimo_recibo")
+  // Cobro por Bre-B (transferencias inmediatas): salen en la precuenta y en el cobro por
+  // transferencia. La llave es la del negocio en su banco (celular, correo, documento,
+  // @alfanumérica o código de comercio). Del QR se guarda su contenido (el texto que lleva el
+  // código), no la imagen: así se dibuja nítido en pantalla y en papel.
+  llaveBreB       String?         @map("llave_bre_b") @db.VarChar(100)
+  qrBreB          String?         @map("qr_bre_b") @db.VarChar(512)
   creadoEn        DateTime        @default(now()) @map("creado_en") @db.Timestamptz(6)
 
   usuarios              Usuario[]
@@ -197,6 +203,10 @@ model Tenant {
   entregasDomicilio     EntregaDomicilio[]
   contadoresPedidos     ContadorPedidos[]
   recibosVenta          ReciboVenta[]
+  gruposOpciones        GrupoOpciones[]
+  opciones              Opcion[]
+  productosGrupos       ProductoGrupoOpciones[]
+  opcionesItems         ItemPedidoOpcion[]
 
   @@map("tenants")
 }
@@ -297,10 +307,12 @@ model Producto {
   stock         Decimal      @default(0) @db.Decimal(12, 3)
   activo        Boolean      @default(true)
 
-  tenant      Tenant                 @relation(fields: [tenantId], references: [id])
-  categoria   Categoria              @relation(fields: [categoriaId], references: [id])
+  tenant      Tenant                  @relation(fields: [tenantId], references: [id])
+  categoria   Categoria               @relation(fields: [categoriaId], references: [id])
   movimientos MovimientoInventario[]
   itemsPedido ItemPedido[]
+  // Grupos de opciones que se eligen al pedirlo (término, adiciones...).
+  grupos      ProductoGrupoOpciones[]
 
   @@index([tenantId, categoriaId])
   @@map("productos")
@@ -324,6 +336,68 @@ model MovimientoInventario {
 
   @@index([tenantId, productoId, fecha])
   @@map("movimientos_inventario")
+}
+
+// ───────────────────────────── Opciones de los productos ─────────────────────────────
+
+/// Grupo de opciones que se eligen al pedir un producto, por ejemplo "Término de la carne"
+/// (elegir 1, obligatorio) o "Adiciones" (varias, opcional). Un mismo grupo se puede usar en
+/// varios productos.
+model GrupoOpciones {
+  id       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId String @map("tenant_id") @db.Uuid
+  nombre   String @db.VarChar(60)
+  // Cuántas opciones hay que elegir como mínimo: 0 = opcional; 1 o más = obligatorio.
+  minimo   Int    @default(0)
+  // Cuántas se pueden elegir como máximo. 1 = elegir una sola; null = sin límite.
+  maximo   Int?
+  // Posición en la que se muestra el grupo al pedir el producto.
+  orden    Int    @default(0)
+
+  tenant    Tenant                  @relation(fields: [tenantId], references: [id])
+  opciones  Opcion[]
+  productos ProductoGrupoOpciones[]
+
+  @@index([tenantId, orden])
+  @@map("grupos_opciones")
+}
+
+/// Una opción de un grupo, por ejemplo "3/4", "Sin cebolla" o "Queso" (+$3.000).
+model Opcion {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String       @map("tenant_id") @db.Uuid
+  grupoId      String       @map("grupo_id") @db.Uuid
+  nombre       String       @db.VarChar(60)
+  // Lo que suma al precio del plato, con el impuesto incluido. 0 si no cuesta (3/4, sin cebolla).
+  precioExtra  Decimal      @default(0) @map("precio_extra") @db.Decimal(14, 2)
+  // Impuesto propio de la opción, como el de los productos.
+  tipoImpuesto TipoImpuesto @map("tipo_impuesto")
+  // Si es false, no se ofrece (por ejemplo, si se acabó la tocineta).
+  activo       Boolean      @default(true)
+  orden        Int          @default(0)
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id])
+  grupo       GrupoOpciones      @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+  itemsPedido ItemPedidoOpcion[]
+
+  @@index([tenantId, grupoId, orden])
+  @@map("opciones")
+}
+
+/// Qué grupos de opciones lleva cada producto, y en qué orden se muestran.
+model ProductoGrupoOpciones {
+  tenantId   String @map("tenant_id") @db.Uuid
+  productoId String @map("producto_id") @db.Uuid
+  grupoId    String @map("grupo_id") @db.Uuid
+  orden      Int    @default(0)
+
+  tenant   Tenant        @relation(fields: [tenantId], references: [id])
+  producto Producto      @relation(fields: [productoId], references: [id], onDelete: Cascade)
+  grupo    GrupoOpciones @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+
+  @@id([productoId, grupoId])
+  @@index([tenantId, grupoId])
+  @@map("productos_grupos_opciones")
 }
 
 // ───────────────────────────── Clientes y caja ─────────────────────────────
@@ -500,8 +574,10 @@ model ItemPedido {
   pedidoId       String       @map("pedido_id") @db.Uuid
   productoId     String       @map("producto_id") @db.Uuid
   cantidad       Decimal      @db.Decimal(12, 3)
+  // Precio de una unidad con el impuesto incluido: el del plato más el de sus opciones
+  // (ver `opciones`). Así el total, el cobro, la caja y el recibo no cambian sus cuentas.
   precioUnitario Decimal      @map("precio_unitario") @db.Decimal(14, 2)
-  // Porcentaje, por ejemplo 19.00 para IVA del 19 %.
+  // Porcentaje del plato, por ejemplo 19.00 para IVA del 19 %. Cada opción lleva el suyo.
   tasaImpuesto   Decimal      @map("tasa_impuesto") @db.Decimal(5, 2)
   estadoCocina   EstadoCocina @default(pendiente) @map("estado_cocina")
   notas          String?
@@ -509,12 +585,39 @@ model ItemPedido {
   // agregados en una misma transacción conserven su orden. La cocina los atiende así.
   creadoEn       DateTime     @default(dbgenerated("clock_timestamp()")) @map("creado_en") @db.Timestamptz(6)
 
-  tenant   Tenant   @relation(fields: [tenantId], references: [id])
-  pedido   Pedido   @relation(fields: [pedidoId], references: [id])
-  producto Producto @relation(fields: [productoId], references: [id])
+  tenant   Tenant             @relation(fields: [tenantId], references: [id])
+  pedido   Pedido             @relation(fields: [pedidoId], references: [id])
+  producto Producto           @relation(fields: [productoId], references: [id])
+  opciones ItemPedidoOpcion[]
 
   @@index([tenantId, pedidoId])
   @@map("items_pedido")
+}
+
+/// Opción elegida en un plato del pedido. Copia el grupo, el nombre, el precio y el impuesto
+/// del momento: si mañana cambia el menú (o se borra la opción), esta venta no se altera.
+model ItemPedidoOpcion {
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String  @map("tenant_id") @db.Uuid
+  itemId       String  @map("item_id") @db.Uuid
+  // null si la opción se borró del menú después de la venta.
+  opcionId     String? @map("opcion_id") @db.Uuid
+  grupo        String  @db.VarChar(60)
+  nombre       String  @db.VarChar(60)
+  // Lo que sumó a una unidad del plato, con el impuesto incluido.
+  precioExtra  Decimal @map("precio_extra") @db.Decimal(14, 2)
+  // Porcentaje del impuesto de la opción, por ejemplo 8.00 para INC.
+  tasaImpuesto Decimal @map("tasa_impuesto") @db.Decimal(5, 2)
+  // Posición en que se muestra (la del grupo y la opción al venderse).
+  orden        Int     @default(0)
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id])
+  item   ItemPedido @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  opcion Opcion?    @relation(fields: [opcionId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, itemId])
+  @@index([opcionId])
+  @@map("items_pedido_opciones")
 }
 
 /// Un pedido puede pagarse con varios pagos (por ejemplo, parte en efectivo y parte con tarjeta).

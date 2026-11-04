@@ -1,10 +1,14 @@
 <!--
-  Panel para agregar un producto con cantidad y notas para la cocina.
-  En el celular sube desde abajo; en pantallas grandes sale por la derecha.
+  Panel para agregar un producto con sus opciones (término, adiciones, quitar...), cantidad
+  y notas para la cocina. En el celular sube desde abajo; en pantallas grandes sale por la
+  derecha. Mientras falte un grupo obligatorio, el botón dice qué falta y no deja agregar.
   Las notas rápidas se tocan como chips; también se puede escribir una nota libre.
 -->
 <script setup>
-/** @typedef {{ id: string, nombre: string, descripcion?: string | null, precio: string }} Producto */
+/**
+ * @typedef {{ id: string, nombre: string, descripcion?: string | null, precio: string,
+ *   grupos?: import('~/utils/opciones.js').GrupoDelMenu[] }} Producto
+ */
 /** @typedef {{ icono: string, fondo: string, texto: string }} AparienciaCategoria */
 
 const props = defineProps({
@@ -21,7 +25,7 @@ const props = defineProps({
 const abierto = defineModel('abierto', { type: Boolean, default: false });
 
 const emit = defineEmits({
-  /** @param {{ producto: Producto, cantidad: number, notas: string }} _datos */
+  /** @param {{ producto: Producto, cantidad: number, notas: string, opciones: string[] }} _datos */
   agregar: (_datos) => true,
 });
 
@@ -39,6 +43,7 @@ const NOTAS_RAPIDAS = Object.freeze([
 const LARGO_MAXIMO_NOTAS = 200;
 
 const cantidad = ref(1);
+const opcionesElegidas = ref(/** @type {string[]} */ ([]));
 const notasElegidas = ref(/** @type {string[]} */ ([]));
 const notaLibre = ref('');
 
@@ -46,6 +51,7 @@ const notaLibre = ref('');
 watch(abierto, (estaAbierto) => {
   if (!estaAbierto) return;
   cantidad.value = 1;
+  opcionesElegidas.value = [];
   notasElegidas.value = [];
   notaLibre.value = '';
 });
@@ -67,14 +73,27 @@ const notas = computed(() =>
     .slice(0, LARGO_MAXIMO_NOTAS),
 );
 
-/** Valor de lo que se va a agregar (precio × cantidad), solo para mostrar en el botón. */
-const valor = computed(() =>
-  props.producto ? aDecimal(props.producto.precio).times(cantidad.value || 1) : aDecimal(0),
+const grupos = computed(() => props.producto?.grupos ?? []);
+/** Grupos obligatorios sin elegir: mientras haya alguno, no se puede agregar. */
+const pendientes = computed(() => gruposPendientes(grupos.value, opcionesElegidas.value));
+
+/** Precio de una unidad con las adiciones elegidas, solo para mostrar. */
+const precioUnidad = computed(() =>
+  props.producto
+    ? precioConOpciones(props.producto.precio, grupos.value, opcionesElegidas.value)
+    : aDecimal(0),
 );
+/** Valor de lo que se va a agregar (precio × cantidad), solo para mostrar en el botón. */
+const valor = computed(() => precioUnidad.value.times(cantidad.value || 1));
 
 function agregar() {
-  if (!props.producto) return;
-  emit('agregar', { producto: props.producto, cantidad: cantidad.value, notas: notas.value });
+  if (!props.producto || pendientes.value.length) return;
+  emit('agregar', {
+    producto: props.producto,
+    cantidad: cantidad.value,
+    notas: notas.value,
+    opciones: opcionesElegidas.value,
+  });
   abierto.value = false;
 }
 </script>
@@ -84,7 +103,12 @@ function agregar() {
     v-model:open="abierto"
     :direction="pantallaGrande ? 'right' : 'bottom'"
     :title="producto?.nombre ?? ''"
-    :description="producto?.descripcion ?? 'Elige la cantidad y agrega notas para la cocina.'"
+    :description="
+      producto?.descripcion ??
+      (grupos.length
+        ? 'Elige las opciones, la cantidad y las notas para la cocina.'
+        : 'Elige la cantidad y agrega notas para la cocina.')
+    "
   >
     <template #body>
       <div v-if="producto" class="space-y-6 lg:w-96">
@@ -97,9 +121,11 @@ function agregar() {
             <UIcon :name="apariencia.icono" class="size-8" :class="apariencia.texto" />
           </span>
           <span class="cifra text-2xl font-bold text-highlighted">
-            {{ formatearPesos(producto.precio) }}
+            {{ formatearPesos(precioUnidad) }}
           </span>
         </div>
+
+        <ElegirOpciones v-if="grupos.length" v-model="opcionesElegidas" :grupos="grupos" />
 
         <UFormField label="Cantidad">
           <UInputNumber v-model="cantidad" :min="1" :max="99" size="xl" class="w-40" />
@@ -136,8 +162,13 @@ function agregar() {
       <UButton
         block
         size="xl"
-        icon="i-lucide-plus"
-        :label="`Agregar · ${formatearPesos(valor)}`"
+        :icon="pendientes.length ? 'i-lucide-list-checks' : 'i-lucide-plus'"
+        :label="
+          pendientes.length
+            ? `Elige: ${pendientes.map((grupo) => grupo.nombre).join(', ')}`
+            : `Agregar · ${formatearPesos(valor)}`
+        "
+        :disabled="pendientes.length > 0"
         @click="agregar"
       />
     </template>

@@ -1,6 +1,7 @@
 // @ts-check
 // Avisos de platos listos sin saturar: los de una misma mesa se juntan en uno solo, y el
-// sonido y la vibración suenan como máximo una vez cada pocos segundos.
+// sonido y la vibración suenan como máximo una vez cada pocos segundos. También, a quién le
+// toca llevar los platos de una mesa.
 
 /** Tiempo que el aviso de una mesa sigue en pantalla y suma los platos que van saliendo. */
 export const VENTANA_AVISO_MS = 8000;
@@ -60,4 +61,13 @@ export function textoDeAvisoListo(nombrePedido, cantidad, producto) {
   return cantidad === 1
     ? `${nombrePedido} · ${producto}`
     : `${nombrePedido} · ${cantidad} platos listos`;
+}
+
+/**
+ * El pedido lo tomó el dueño, el administrador o el cajero: no tiene un mesero asignado, así
+ * que sus platos listos se le avisan a todos los meseros.
+ * @param {{ mesero?: { rol: string } | null }} pedido Pedido con quién lo tomó (forma del API).
+ */
+export function esDeTodosLosMeseros(pedido) {
+  return Boolean(pedido.mesero) && pedido.mesero?.rol !== 'mesero';
 }

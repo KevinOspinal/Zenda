@@ -130,7 +130,15 @@ async function dividir() {
                 <span class="cifra min-w-7 font-bold text-highlighted">
                   {{ formatearCantidad(linea.cantidad) }}
                 </span>
-                <span class="min-w-0 flex-1 truncate">{{ linea.item.producto.nombre }}</span>
+                <span class="min-w-0 flex-1">
+                  <span class="block truncate">{{ linea.item.producto.nombre }}</span>
+                  <span
+                    v-if="linea.item.opciones?.length"
+                    class="block truncate text-sm text-muted"
+                  >
+                    {{ textoDeOpciones(linea.item.opciones, { conPrecio: false }) }}
+                  </span>
+                </span>
                 <UIcon
                   :name="cuenta.sentido > 0 ? 'i-lucide-arrow-right' : 'i-lucide-arrow-left'"
                   class="size-5 text-muted"

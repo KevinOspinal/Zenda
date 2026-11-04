@@ -1,5 +1,6 @@
 // @ts-check
-// Reportes de ventas: resumen del periodo, ventas por producto y por método de pago.
+// Reportes de ventas: resumen del periodo, ventas por producto, por opción (adiciones,
+// término...) y por método de pago.
 //
 // Reglas:
 // - Una venta cuenta en el día y la hora en que se cobró (`cerrado_en`), en hora de Colombia.
@@ -178,6 +179,49 @@ export function obtenerVentasPorProducto(sesion, rango) {
         cantidad: aDecimal(fila.cantidad).toString(),
         total: redondearMonto(fila.total).toFixed(2),
         participacion: porcentaje(fila.total, totalGeneral),
+      })),
+    };
+  });
+}
+
+/**
+ * Opciones vendidas en el periodo (adiciones, término, lo que se quitó...), de la que más
+ * dinero dejó a la que menos y, entre las que no cuestan, de la más pedida a la menos.
+ *
+ * Se agrupan por el grupo y el nombre con que se vendieron (la copia del pedido): así cuentan
+ * aunque después se hayan cambiado o borrado del menú. Su valor ya está incluido en las ventas
+ * de cada producto: este reporte es el detalle, no se suma aparte.
+ * @param {DatosSesion} sesion
+ * @param {Rango} rango
+ */
+export function obtenerVentasPorOpcion(sesion, rango) {
+  const { inicio, fin } = rangoDeDias(rango.desde, rango.hasta);
+  const { tenantId } = sesion;
+
+  return conNegocio(tenantId, async (tx) => {
+    // Cada opción se vendió tantas veces como unidades tuvo su plato.
+    /** @type {{ grupo: string, nombre: string, cantidad: ValorNumerico,
+     *   total: ValorNumerico }[]} */
+    const filas = await tx.$queryRaw`
+      SELECT io.grupo, io.nombre,
+             sum(it.cantidad) AS cantidad,
+             sum(io.precio_extra * it.cantidad) AS total
+      FROM items_pedido_opciones io
+      JOIN items_pedido it ON it.id = io.item_id
+      JOIN pedidos pe      ON pe.id = it.pedido_id
+      WHERE pe.tenant_id = ${tenantId}::uuid AND pe.estado = 'pagado'
+        AND pe.cerrado_en >= ${inicio} AND pe.cerrado_en < ${fin}
+      GROUP BY io.grupo, io.nombre
+      ORDER BY total DESC, cantidad DESC, io.nombre`;
+
+    return {
+      rango,
+      total: redondearMonto(sumar(filas.map((fila) => fila.total))).toFixed(2),
+      opciones: filas.map((fila) => ({
+        grupo: fila.grupo,
+        nombre: fila.nombre,
+        cantidad: aDecimal(fila.cantidad).toString(),
+        total: redondearMonto(fila.total).toFixed(2),
       })),
     };
   });

@@ -32,6 +32,15 @@ describe('TarjetaMesa', () => {
     expect(tarjeta.attributes('aria-label')).toBe(`Mesa 4, Ocupada, 32 min, ${pesos('38.000')}`);
   });
 
+  it('una mesa que ya pagó y espera sus platos dice «Pagada» en lugar del total', async () => {
+    const tarjeta = await mountSuspended(TarjetaMesa, {
+      props: { mesa: mesaOcupada, minutosAbierta: 20, pagada: true },
+    });
+
+    expect(tarjeta.text()).toContain('Pagada');
+    expect(tarjeta.attributes('aria-label')).toBe('Mesa 4, Ocupada, 20 min, Pagada');
+  });
+
   it('se resalta cuando tiene platos listos para llevar', async () => {
     const tarjeta = await mountSuspended(TarjetaMesa, {
       props: { mesa: mesaOcupada, tienePlatosListos: true },

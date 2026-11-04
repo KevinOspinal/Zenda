@@ -64,6 +64,7 @@ const cliente = computed(() => props.pedido.cliente ?? null);
           <span>{{ formatearCantidad(linea.cantidad) }} x {{ linea.nombre }}</span>
           <span class="shrink-0">{{ formatearPesos(linea.valor) }}</span>
         </p>
+        <p v-if="linea.opciones" class="ps-3">{{ linea.opciones }}</p>
         <p v-if="linea.notas" class="ps-3">{{ linea.notas }}</p>
       </div>
       <p v-if="valorDomicilio.greaterThan(0)" class="flex justify-between gap-2">

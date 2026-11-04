@@ -5,7 +5,8 @@
   - Abajo, fijo y grande, "Entregado". Se puede deshacer unos segundos: la entrega se oculta
     enseguida, pero solo se confirma si no se deshace (perdonar un toque por error).
   - Lo que tiene por entregar en la caja: los contra entrega ya cobrados.
-  Cuando la caja le asigna un domicilio, suena, vibra y la tarjeta se resalta.
+  Cuando la caja le asigna un domicilio, suena, vibra y la tarjeta se resalta. "Entregado"
+  suena y vibra al tocarlo, aunque se confirme unos segundos después.
 -->
 <script setup>
 definePageMeta({ layout: 'domiciliario', seccion: 'entregas' });
@@ -65,6 +66,7 @@ function marcarEntregado(pedido) {
   const { id } = pedido;
   entregas.ocultar(id);
   elegidaId.value = '';
+  sonidos.entregaHecha();
   if (preferencias.vibracion) navigator.vibrate?.(30);
   const debe = porCobrarAlEntregar(pedido);
   toast.add({
@@ -108,7 +110,6 @@ async function confirmar(pedido) {
   porConfirmar.delete(pedido.id);
   try {
     await entregas.entregar(pedido.id);
-    sonidos.entregaHecha();
   } catch (fallo) {
     toast.add({
       title: fallo instanceof ErrorApi ? fallo.message : MENSAJE_ERROR_GENERICO,

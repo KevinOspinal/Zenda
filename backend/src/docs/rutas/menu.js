@@ -31,6 +31,8 @@ const DESCRIPCIONES_PRODUCTO = {
   controlaStock:
     '`true` si el producto descuenta inventario al venderse (por ejemplo, bebidas embotelladas).',
   activo: '`false` lo oculta del menú sin borrarlo. Así las ventas pasadas no se afectan.',
+  gruposOpciones:
+    'Ids de los grupos de opciones que se eligen al pedirlo (término, adiciones...), en el orden en que se muestran. Se envía la lista completa: reemplaza la anterior. Ver `/grupos-opciones`.',
 };
 
 export const documentacionMenu = {
@@ -42,6 +44,10 @@ export const documentacionMenu = {
       descripcion: `
 Las categorías en el orden del menú, cada una con sus **productos activos**.
 Es lo que ve el mesero al tomar un pedido.
+
+Cada producto trae sus **grupos de opciones** (\`grupos\`) con solo las opciones activas. Un
+grupo con \`minimo\` 1 o más es obligatorio (por ejemplo, el término): al agregar el producto
+al pedido hay que enviar sus opciones en \`opciones\`. \`precioExtra\` suma al precio del plato.
 
 💡 De aquí se sacan los \`id\` de los productos para crear pedidos. Cada \`id\` está
 **encima del nombre** del producto, dentro de las mismas llaves \`{ }\`.`,
@@ -55,6 +61,22 @@ Es lo que ve el mesero al tomar un pedido.
                 nombre: 'IND Classic Artesanal',
                 descripcion: 'Carne artesanal, queso y vegetales',
                 precio: '12000',
+                grupos: [
+                  {
+                    id: ID.grupoTermino,
+                    nombre: 'Término de la carne',
+                    minimo: 1,
+                    maximo: 1,
+                    opciones: [{ id: ID.opcionTresCuartos, nombre: '3/4', precioExtra: '0' }],
+                  },
+                  {
+                    id: ID.grupoAdiciones,
+                    nombre: 'Adiciones',
+                    minimo: 0,
+                    maximo: null,
+                    opciones: [{ id: ID.opcionQueso, nombre: 'Queso', precioExtra: '3000' }],
+                  },
+                ],
               },
             ],
           },

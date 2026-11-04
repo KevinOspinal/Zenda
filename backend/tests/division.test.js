@@ -120,7 +120,7 @@ describe('dividir la cuenta de una mesa', () => {
     expect(itemDe(nueva, 'Gaseosa')).toMatchObject({ cantidad: '2' });
   });
 
-  it('la mesa queda con dos cuentas abiertas y sigue ocupada hasta cobrar ambas', async () => {
+  it('la mesa sigue ocupada hasta cobrar ambas cuentas y entregar sus platos', async () => {
     await llamar('post', `/pedidos/${original.id}/cobrar`, 'cajero', {
       pagos: [{ metodo: 'efectivo', monto: 12000 }],
     });
@@ -131,8 +131,18 @@ describe('dividir la cuenta de una mesa', () => {
     });
     const despuesDeAmbas = await llamar('get', `/mesas/${ids.mesa}`, 'mesero');
 
+    // La cocina termina los platos de ambas cuentas y el mesero los lleva.
+    for (const cuenta of [original, nueva]) {
+      await llamar('patch', `/pedidos/${cuenta.id}/cocina`, 'cocina', { estadoCocina: 'listo' });
+      await llamar('patch', `/pedidos/${cuenta.id}/cocina`, 'mesero', {
+        estadoCocina: 'entregado',
+      });
+    }
+    const conTodoEntregado = await llamar('get', `/mesas/${ids.mesa}`, 'mesero');
+
     expect(despuesDeUna.body.estado).toBe('ocupada');
-    expect(despuesDeAmbas.body.estado).toBe('libre');
+    expect(despuesDeAmbas.body.estado).toBe('ocupada');
+    expect(conTodoEntregado.body.estado).toBe('libre');
   });
 
   it('entre ambas cuentas se cobró lo mismo que el pedido completo', async () => {

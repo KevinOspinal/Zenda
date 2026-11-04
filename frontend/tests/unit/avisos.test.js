@@ -1,7 +1,12 @@
 // @ts-check
-// Pruebas de los avisos de platos listos: uno por mesa y sin sonar a cada rato.
+// Pruebas de los avisos de platos listos: uno por mesa, sin sonar a cada rato, y a quién le
+// tocan los de un pedido sin mesero asignado.
 import { describe, expect, it } from 'vitest';
-import { crearAgrupadorDeAvisos, textoDeAvisoListo } from '../../app/utils/avisos.js';
+import {
+  crearAgrupadorDeAvisos,
+  esDeTodosLosMeseros,
+  textoDeAvisoListo,
+} from '../../app/utils/avisos.js';
 
 describe('crearAgrupadorDeAvisos', () => {
   it('junta en un solo aviso los platos de una mesa que salen seguidos', () => {
@@ -43,5 +48,18 @@ describe('textoDeAvisoListo', () => {
   it('nombra el plato si es uno solo, o dice cuántos son', () => {
     expect(textoDeAvisoListo('Mesa 4', 1, 'IND Classic')).toBe('Mesa 4 · IND Classic');
     expect(textoDeAvisoListo('Mesa 4', 3, 'IND Classic')).toBe('Mesa 4 · 3 platos listos');
+  });
+});
+
+describe('esDeTodosLosMeseros', () => {
+  it('un pedido del dueño, el administrador o el cajero es de todos los meseros', () => {
+    for (const rol of ['dueno', 'administrador', 'cajero']) {
+      expect(esDeTodosLosMeseros({ mesero: { rol } })).toBe(true);
+    }
+  });
+
+  it('el de un mesero es solo suyo; sin saber quién lo tomó, también', () => {
+    expect(esDeTodosLosMeseros({ mesero: { rol: 'mesero' } })).toBe(false);
+    expect(esDeTodosLosMeseros({})).toBe(false);
   });
 });

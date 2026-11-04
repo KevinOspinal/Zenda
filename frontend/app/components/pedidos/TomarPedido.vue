@@ -178,6 +178,7 @@ function personalizar(producto) {
       <CuentaDelPedido
         v-model:abierta="cuentaAbierta"
         :titulo="titulo"
+        :pedido-id="pedido?.id ?? ''"
         :items="items"
         :total="total"
         :estado-pedido="estadoPedido"
@@ -201,7 +202,10 @@ function personalizar(producto) {
       v-model:abierto="personalizando"
       :producto="productoElegido"
       :apariencia="productoElegido?.apariencia ?? null"
-      @agregar="({ producto, cantidad, notas }) => agregar(producto, { cantidad, notas })"
+      @agregar="
+        ({ producto, cantidad, notas, opciones }) =>
+          agregar(producto, { cantidad, notas, opciones })
+      "
     />
   </div>
 </template>

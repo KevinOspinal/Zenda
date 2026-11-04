@@ -18,6 +18,7 @@ const PEDIDO = {
       precioUnitario: '12000',
       notas: 'Sin cebolla',
       producto: { nombre: 'IND Classic' },
+      opciones: [{ grupo: 'Término de la carne', nombre: '3/4', precioExtra: '0' }],
     },
     { id: 'i2', cantidad: '1', precioUnitario: '4000', producto: { nombre: 'Gaseosa' } },
   ],
@@ -40,6 +41,10 @@ describe('recibo de venta', () => {
       ['IND Classic', '24000', 'Sin cebolla'],
       ['Gaseosa', '4000', null],
     ]);
+  });
+
+  it('cada línea trae el texto de sus opciones (vacío si no tiene)', () => {
+    expect(lineasDelRecibo(PEDIDO).map((linea) => linea.opciones)).toEqual(['3/4', '']);
   });
 
   it('el cambio sale solo del efectivo, cuando el cliente entregó más', () => {

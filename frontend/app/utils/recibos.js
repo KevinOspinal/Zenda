@@ -3,6 +3,7 @@
 // pagos con su cambio y el total pagado. Los valores vienen del API; aquí solo se multiplican y
 // se restan para mostrarlos.
 import { aDecimal } from './dinero.js';
+import { textoDeOpciones } from './opciones.js';
 
 /**
  * Número del recibo con seis cifras: 123 → "000123".
@@ -13,7 +14,8 @@ export function numeroDeRecibo(numero) {
 }
 
 /**
- * Cada producto del pedido con su valor (cantidad × precio).
+ * Cada producto del pedido con su valor (cantidad × precio, con las adiciones incluidas) y el
+ * texto de sus opciones ("3/4 · Queso +$ 2.160"; vacío si no tiene).
  * @param {any} pedido Pedido completo (forma del API).
  */
 export function lineasDelRecibo(pedido) {
@@ -21,6 +23,7 @@ export function lineasDelRecibo(pedido) {
     id: item.id,
     cantidad: item.cantidad,
     nombre: item.producto.nombre,
+    opciones: textoDeOpciones(item.opciones),
     notas: item.notas ?? null,
     valor: aDecimal(item.precioUnitario).times(item.cantidad),
   }));

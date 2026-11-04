@@ -2,7 +2,8 @@
   Tablero del dueño: cómo va el negocio en el periodo elegido.
   - Indicadores: ventas, número de ventas, ticket promedio, propinas y anulaciones.
   - Ventas por hora (con la hora pico) y, si el periodo tiene varios días, por día.
-  - Productos más vendidos, métodos de pago y ventas por canal (tipo de pedido y origen).
+  - Productos más vendidos, métodos de pago, ventas por canal (tipo de pedido y origen) y las
+    adiciones y opciones más pedidas (si se vendió alguna).
   Las cifras las calcula el backend (GET /reportes/*); aquí solo se muestran.
 -->
 <script setup>
@@ -12,6 +13,7 @@ const rango = ref(rangoDePeriodo('hoy'));
 const resumen = ref(/** @type {any} */ (null));
 const porProducto = ref(/** @type {any} */ (null));
 const porMetodo = ref(/** @type {any} */ (null));
+const porOpcion = ref(/** @type {any} */ (null));
 const cargando = ref(true);
 const error = ref('');
 
@@ -30,9 +32,10 @@ async function cargar() {
       api.get('/reportes/resumen', consulta),
       api.get('/reportes/por-producto', consulta),
       api.get('/reportes/por-metodo-pago', consulta),
+      api.get('/reportes/por-opcion', consulta),
     ]);
     if (estaCarga !== ultimaCarga) return;
-    [resumen.value, porProducto.value, porMetodo.value] = respuestas;
+    [resumen.value, porProducto.value, porMetodo.value, porOpcion.value] = respuestas;
   } catch (fallo) {
     if (estaCarga !== ultimaCarga) return;
     error.value = fallo instanceof ErrorApi ? fallo.message : MENSAJE_ERROR_GENERICO;
@@ -144,6 +147,11 @@ const porDia = computed(() =>
             v-if="resumen.porTipo && resumen.porOrigen"
             :por-tipo="resumen.porTipo"
             :por-origen="resumen.porOrigen"
+          />
+          <OpcionesMasPedidas
+            v-if="porOpcion.opciones.length"
+            :opciones="porOpcion.opciones"
+            :total="porOpcion.total"
           />
         </div>
       </template>

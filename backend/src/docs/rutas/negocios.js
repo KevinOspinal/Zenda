@@ -21,6 +21,9 @@ const NEGOCIO_ACTUAL = {
   direccion: 'Carrera 2 # 98-22',
   telefono: '3123334444',
   pieRecibo: '¡Gracias por tu compra!',
+  llaveBreB: '@laindustria',
+  // Contenido del QR que el banco le dio al negocio (no la imagen).
+  qrBreB: '00020101021126...6304A1B2',
   // Calculado: los no responsables de IVA ni del impuesto al consumo no facturan electrónicamente.
   facturaElectronica: true,
 };
@@ -109,12 +112,14 @@ la **sesión iniciada** del dueño para que empiece a configurarlo: menú, mesas
       roles: TODOS,
       descripcion: `
 Datos y configuración del negocio con el que se inició sesión: nombre, NIT, ciudad,
-régimen de impuesto y **porcentaje de propina sugerida**.`,
+régimen de impuesto, **porcentaje de propina sugerida**, datos del recibo y **cobro por
+Bre-B** (llave y QR). Todos los roles lo ven: la caja y los meseros muestran la llave y el QR
+en la precuenta y en el cobro por transferencia.`,
       respuestas: { 200: respuesta('El negocio.', NEGOCIO_ACTUAL) },
     }),
     patch: operacion({
       etiqueta: 'Negocios',
-      resumen: 'Cambiar la propina sugerida',
+      resumen: 'Cambiar la configuración del negocio',
       roles: ['dueno'],
       descripcion: `
 Cambia la configuración del negocio. Envía solo lo que cambia.
@@ -136,6 +141,17 @@ venta. \`null\` los borra.
 en cada pedido se puede cambiar (por ejemplo, si es lejos). Por defecto, $3.000. El cambio queda
 en la **auditoría** (\`cambiar_valor_domicilio\`).
 
+**Cobro por Bre-B** (\`llaveBreB\`, \`qrBreB\`): salen en la precuenta y en el cobro por
+transferencia, para que el cliente pague desde la app de su banco. \`null\` los borra.
+- \`llaveBreB\`: la llave del negocio. Se acepta un celular (10 dígitos que empiezan en 3), un
+  correo, un documento sin puntos, una llave que empieza por \`@\` o un código de comercio (\`00\`
+  y 8 dígitos). Los números se guardan sin espacios ni puntos y el correo en minúsculas.
+- \`qrBreB\`: el **contenido** del QR que el banco le dio al negocio (el texto que lleva el
+  código, hasta 512 caracteres), no la imagen. La app lo lee de una foto y lo vuelve a dibujar.
+- El cambio queda en la **auditoría** con el valor anterior (\`cambiar_cobro_bre_b\`): es por
+  donde entra la plata de las transferencias.
+- Zenda no confirma los pagos: la caja revisa en su banco que la plata llegó.
+
 **Propina sugerida** (\`propinaSugerida\`, Ley 1935 de 2018). Solo se sugiere en los pedidos de
 mesa (es por el servicio a la mesa).
 - Entre **0 y 10 %**. La ley no permite sugerir más del 10 % (si no, 400).
@@ -149,6 +165,8 @@ mesa (es por el servicio a la mesa).
           propinaSugerida:
             'Porcentaje de 0 a 10, con máximo 2 decimales. 0 desactiva la sugerencia.',
           valorDomicilio: 'Valor del domicilio por defecto, en pesos.',
+          llaveBreB: 'Llave Bre-B del negocio. null la borra.',
+          qrBreB: 'Contenido del QR de cobro del banco (no la imagen). null lo borra.',
         },
       }),
       respuestas: {

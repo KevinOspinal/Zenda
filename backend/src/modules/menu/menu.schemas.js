@@ -37,6 +37,12 @@ const camposProducto = {
   tipoImpuesto: z.enum(['impoconsumo', 'iva', 'exento']),
   controlaStock: z.boolean(),
   activo: z.boolean(),
+  // Grupos de opciones que se eligen al pedirlo (término, adiciones...), en el orden en que se
+  // muestran. Se envía la lista completa: reemplaza la anterior.
+  gruposOpciones: z
+    .array(esquemaId)
+    .max(10, 'máximo 10 grupos de opciones por producto')
+    .refine((ids) => new Set(ids).size === ids.length, 'hay grupos repetidos'),
 };
 
 /** POST /productos */
@@ -45,6 +51,7 @@ export const esquemaCrearProducto = z.object({
   descripcion: camposProducto.descripcion.optional(),
   controlaStock: camposProducto.controlaStock.default(false),
   activo: camposProducto.activo.default(true),
+  gruposOpciones: camposProducto.gruposOpciones.default([]),
 });
 
 /**

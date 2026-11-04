@@ -4,8 +4,8 @@
 // - Ver los pedidos y avanzar los platos: todos. Cada paso tiene su regla en el servicio: la
 //   cocina marca "preparando" y "listo"; el mesero, "entregado".
 // - Cobrar: cajero, administrador y dueño (el mesero no cobra).
-// - Domicilios (corregir sus datos y despacharlos) y entregar pedidos sin mesa: cajero,
-//   administrador y dueño. Registrar un domicilio también (lo revisa el servicio). El
+// - Domicilios (corregir sus datos y despacharlos) y entregar pedidos (sin mesa, o de mesa
+//   cobrados que no van a cocina): cajero, administrador y dueño. Registrar un domicilio también (lo revisa el servicio). El
 //   domiciliario consulta y entrega solo los domicilios que lleva él (lo revisa el servicio).
 // - Anular: administrador y dueño.
 import { Router } from 'express';

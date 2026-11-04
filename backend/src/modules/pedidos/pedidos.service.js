@@ -31,13 +31,18 @@ import {
   descontarInventarioPorVenta,
   devolverInventarioPorAnulacion,
 } from '../inventario/movimientos.js';
+import {
+  GRUPOS_DEL_PRODUCTO,
+  gruposParaPedir,
+  revisarOpcionesElegidas,
+} from '../opciones/opcionesDeProductos.js';
 import { calcularLinea, calcularTotalesPedido, obtenerTasaImpuesto } from './calculoImpuestos.js';
 import { calcularPropinaSugerida } from './propina.js';
 import { emitirReciboSiNoFactura } from './recibos.js';
 
 /** @typedef {import('../../lib/tokens.js').DatosSesion} DatosSesion */
 /** @typedef {import('../../lib/negocio.js').TransaccionPrisma} TransaccionPrisma */
-/** @typedef {{ productoId: string, cantidad: string, notas?: string }} DatosItem */
+/** @typedef {{ productoId: string, cantidad: string, notas?: string, opciones?: string[] }} DatosItem */
 /** @typedef {'efectivo' | 'tarjeta' | 'transferencia' | 'otro'} MetodoPago */
 /** @typedef {{ metodo: MetodoPago, monto: string, referencia?: string, recibido?: string }} DatosPago */
 /** @typedef {'pendiente' | 'preparando' | 'listo' | 'entregado'} EstadoCocina */
@@ -96,14 +101,29 @@ const DETALLE_ENTREGA = /** @type {const} */ ({
  * Lo que se devuelve de un pedido: sus ítems con el nombre del producto, sus pagos y la mesa.
  * El porcentaje de propina del negocio se usa para calcular la propina sugerida (ver `presentarPedido`).
  */
+/**
+ * Quién tomó el pedido: su nombre y su rol. Si lo tomó el dueño, el administrador o el cajero,
+ * no tiene un mesero asignado y sus platos los puede llevar cualquier mesero.
+ */
+const TOMADO_POR = /** @type {const} */ ({ select: { nombre: true, rol: true } });
+
 const DETALLE_PEDIDO = /** @type {const} */ ({
   items: {
     // En el orden en que se agregaron.
     orderBy: [{ creadoEn: 'asc' }, { id: 'asc' }],
-    include: { producto: { select: { nombre: true } } },
+    include: {
+      producto: { select: { nombre: true } },
+      // Las opciones elegidas (término, adiciones...), como se vendieron.
+      opciones: {
+        orderBy: { orden: 'asc' },
+        // opcionId: la opción del menú (null si se borró); sirve para volver a pedir igual.
+        select: { id: true, opcionId: true, grupo: true, nombre: true, precioExtra: true },
+      },
+    },
   },
   pagos: { orderBy: { creadoEn: 'asc' } },
   mesa: { select: { id: true, nombre: true, estado: true } },
+  mesero: TOMADO_POR,
   cliente: { select: { id: true, nombre: true, tipoDocumento: true, numeroDocumento: true } },
   entrega: DETALLE_ENTREGA,
   // Solo en negocios que no facturan electrónicamente (ver recibos.js).
@@ -223,6 +243,7 @@ export function listarPedidos(
       take: 100,
       include: {
         mesa: { select: { id: true, nombre: true } },
+        mesero: TOMADO_POR,
         ...(incluirItems || domicilios ? { items: DETALLE_PEDIDO.items } : {}),
         // Los datos de entrega, solo para la caja (ver MANEJAN_DOMICILIOS).
         ...(veEntregas ? { entrega: DETALLE_ENTREGA } : {}),
@@ -315,6 +336,11 @@ export function cambiarEstadoCocina(sesion, pedidoId, itemId, estadoCocina) {
     }
 
     await tx.itemPedido.update({ where: { id: itemId }, data: { estadoCocina } });
+
+    // Un pedido cobrado ocupa la mesa hasta que llegan sus platos: con el último, se libera.
+    if (estadoCocina === 'entregado' && pedido.estado === 'pagado' && pedido.mesaId) {
+      await actualizarEstadoMesa(tx, pedido.mesaId);
+    }
     return cargarPedido(tx, pedidoId, sesion);
   });
 }
@@ -366,12 +392,18 @@ export function cambiarEstadoCocinaDelPedido(sesion, pedidoId, estadoCocina) {
     // 3. Avanzarlos todos en una sola instrucción.
     const cambiados = platos.map((plato) => plato.id);
     await tx.itemPedido.updateMany({ where: { id: { in: cambiados } }, data: { estadoCocina } });
+
+    // 4. Un pedido cobrado ocupa la mesa hasta que llegan sus platos: con el último, se libera.
+    if (estadoCocina === 'entregado' && pedido.estado === 'pagado' && pedido.mesaId) {
+      await actualizarEstadoMesa(tx, pedido.mesaId);
+    }
     return { pedido: await cargarPedido(tx, pedidoId, sesion), cambiados };
   });
 }
 
 /**
  * Envía el pedido a cocina. Repetirlo no es un error (por ejemplo, tras agregar más ítems).
+ * Si es de mesa, la mesa queda ocupada hasta que se entreguen sus platos, aunque ya se cobró.
  * @param {DatosSesion} sesion
  * @param {string} pedidoId
  */
@@ -400,6 +432,9 @@ export function enviarACocina(sesion, pedidoId) {
         enviadoACocinaEn: pedido.enviadoACocinaEn ?? new Date(),
       },
     });
+
+    // 3. La mesa espera los platos: sigue ocupada (o vuelve a estarlo) hasta que lleguen.
+    if (pedido.mesaId) await actualizarEstadoMesa(tx, pedido.mesaId);
     return cargarPedido(tx, pedidoId, sesion);
   });
 }
@@ -408,8 +443,9 @@ export function enviarACocina(sesion, pedidoId) {
  * Divide la cuenta: pasa ítems (completos o parte de sus unidades) a un pedido nuevo en la
  * misma mesa. Cada cuenta se cobra por separado, y así cada persona puede tener su factura.
  *
- * Los ítems conservan su precio, impuesto, notas y estado de cocina. Los totales de ambos
- * pedidos se recalculan. La mesa sigue ocupada hasta que se cobren todas sus cuentas.
+ * Los ítems conservan su precio, impuesto, notas, opciones y estado de cocina. Los totales de ambos
+ * pedidos se recalculan. La mesa sigue ocupada hasta que se cobren todas sus cuentas y se
+ * entreguen sus platos.
  *
  * @param {DatosSesion} sesion
  * @param {string} pedidoId
@@ -425,7 +461,10 @@ export function dividirPedido(sesion, pedidoId, { items }) {
     if (original.tipo === 'domicilio') {
       throw new AppError(409, 'DOMICILIO_NO_SE_DIVIDE', 'Un domicilio se cobra completo');
     }
-    const itemsDelPedido = await tx.itemPedido.findMany({ where: { pedidoId } });
+    const itemsDelPedido = await tx.itemPedido.findMany({
+      where: { pedidoId },
+      include: { opciones: true },
+    });
 
     // 2. Validar cada ítem y las unidades que se mueven.
     const movimientos = items.map(({ itemId, cantidad }) => {
@@ -492,6 +531,10 @@ export function dividirPedido(sesion, pedidoId, { items }) {
             tasaImpuesto: item.tasaImpuesto,
             estadoCocina: item.estadoCocina,
             notas: item.notas,
+            // Las unidades que pasan llevan las mismas opciones, con el mismo precio.
+            opciones: {
+              create: item.opciones.map(({ id: _id, itemId: _itemId, ...opcion }) => opcion),
+            },
           },
         });
       }
@@ -596,8 +639,12 @@ async function cobrarEnTransaccion(tx, sesion, pedidoId, { pagos, propina = '0',
   // 8. Descontar del inventario los productos que lo controlan.
   const advertencias = await descontarInventarioPorVenta(tx, sesion.tenantId, pedidoId);
 
-  // 9. Liberar la mesa.
-  if (pedido.mesaId) await liberarMesa(tx, pedido.mesaId);
+  // 9. Actualizar la mesa: queda libre si ya no tiene nada en curso (ver actualizarEstadoMesa).
+  //    Si se cobró sin pasar por la cocina, sigue ocupada mientras la caja decide si lo envía a
+  //    la cocina o si no va a cocina (POST /pedidos/:id/entregar); ahí se actualiza.
+  if (pedido.mesaId && !(await faltaDecidirCocina(tx, pedido))) {
+    await actualizarEstadoMesa(tx, pedido.mesaId);
+  }
 
   // 10. Si el negocio no factura electrónicamente, su recibo de venta con número consecutivo.
   await emitirReciboSiNoFactura(tx, sesion.tenantId, pedidoId);
@@ -652,8 +699,8 @@ export function anularPedido(sesion, pedidoId, { motivo }) {
       throw new AppError(409, 'PEDIDO_ANULADO', 'El pedido ya está anulado');
     }
 
-    // 3. Liberar la mesa si el pedido la ocupaba.
-    if (pedido.mesaId && pedido.estado !== 'pagado') await liberarMesa(tx, pedido.mesaId);
+    // 3. Actualizar la mesa: el pedido anulado ya no la ocupa (ni sus platos, si se cobró).
+    if (pedido.mesaId) await actualizarEstadoMesa(tx, pedido.mesaId);
 
     // 4. Si estaba cobrado, devolver al inventario lo que se descontó.
     if (pedido.estado === 'pagado') {
@@ -832,16 +879,19 @@ export function despacharDomicilio(sesion, pedidoId, { domiciliarioId }) {
 }
 
 /**
- * Marca como entregado un pedido sin mesa:
+ * Marca como entregado un pedido:
  * - Domicilio: el cliente lo recibió (debe haber salido antes con un domiciliario). Lo marca la
  *   caja o el domiciliario que lo lleva. Si es contra entrega y aún no se cobró, queda "por
  *   liquidar" hasta que la caja reciba el dinero (ver liquidarDomiciliario).
  * - Mostrador: el cliente lo recogió; lo que quedara en la cocina sale con él.
- * En una mesa no aplica: ahí el mesero marca cada plato como entregado.
+ * - Mesa: solo uno cobrado que no pasó por la cocina ("No va a cocina": por ejemplo, unas
+ *   gaseosas). Se entrega todo y la mesa queda libre. Lo que sí va a la cocina no: ahí el
+ *   mesero marca cada plato como entregado.
  * @param {DatosSesion} sesion
  * @param {string} pedidoId
  * @throws {AppError} 404 si un domiciliario intenta entregar un pedido que no lleva él; 409 si
- *   es de mesa, si está anulado o si el domicilio no ha salido.
+ *   es de mesa y no se ha cobrado o ya fue a la cocina, si está anulado o si el domicilio no
+ *   ha salido.
  */
 export function entregarPedido(sesion, pedidoId) {
   return conNegocio(sesion.tenantId, async (tx) => {
@@ -858,7 +908,7 @@ export function entregarPedido(sesion, pedidoId) {
       throw new AppError(409, 'PEDIDO_ANULADO', 'El pedido está anulado');
     }
 
-    if (pedido.tipo === 'mesa') {
+    if (pedido.tipo === 'mesa' && (pedido.estado !== 'pagado' || pedido.enviadoACocinaEn)) {
       throw new AppError(
         409,
         'ENTREGA_EN_MESA',
@@ -879,10 +929,13 @@ export function entregarPedido(sesion, pedidoId) {
       }
       await tx.entregaDomicilio.update({ where: { pedidoId }, data: { entregadoEn: new Date() } });
     } else {
+      // Mostrador, o mesa cobrada sin cocina: lo que quedara por entregar sale con el cliente.
       await tx.itemPedido.updateMany({
         where: { pedidoId, estadoCocina: { not: 'entregado' } },
         data: { estadoCocina: 'entregado' },
       });
+      // La mesa ya no espera nada de este pedido: queda libre si no tiene otra cuenta en curso.
+      if (pedido.mesaId) await actualizarEstadoMesa(tx, pedido.mesaId);
     }
 
     return cargarPedido(tx, pedidoId, sesion);
@@ -958,8 +1011,11 @@ export function liquidarDomiciliario(sesion, domiciliarioId, { pedidos }) {
 // ───────────────────────────── Funciones internas ─────────────────────────────
 
 /**
- * Agrega ítems a un pedido: valida cada producto, copia su precio y tasa del momento
- * y al final recalcula los totales.
+ * Agrega ítems a un pedido: valida cada producto y sus opciones, copia el precio y el impuesto
+ * del momento y al final recalcula los totales.
+ *
+ * El precio del ítem es el del plato más el de sus opciones (por ejemplo, la hamburguesa más
+ * el queso adicional). Cada opción guarda su propio impuesto (ver recalcularTotales).
  * @param {TransaccionPrisma} tx
  * @param {string} tenantId
  * @param {string} pedidoId
@@ -970,9 +1026,12 @@ async function agregarItems(tx, tenantId, pedidoId, items) {
 
   const negocio = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId } });
 
-  for (const { productoId, cantidad, notas } of items) {
+  for (const { productoId, cantidad, notas, opciones: idsOpciones = [] } of items) {
     // 1. El producto debe ser del negocio y estar activo.
-    const producto = await tx.producto.findUnique({ where: { id: productoId } });
+    const producto = await tx.producto.findUnique({
+      where: { id: productoId },
+      include: { grupos: GRUPOS_DEL_PRODUCTO },
+    });
     if (!producto) {
       throw new AppError(404, 'PRODUCTO_NO_ENCONTRADO', 'El producto no existe');
     }
@@ -984,7 +1043,18 @@ async function agregarItems(tx, tenantId, pedidoId, items) {
       );
     }
 
-    // 2. Copiar precio y tasa: si mañana cambia el menú, esta venta no se altera.
+    // 2. Las opciones elegidas deben ser del producto y cumplir cada grupo (el término es
+    //    obligatorio, máximo una salsa...).
+    const elegidas = revisarOpcionesElegidas(
+      producto.nombre,
+      gruposParaPedir(producto.grupos),
+      idsOpciones,
+    );
+
+    // 3. Copiar precio, impuesto y opciones: si mañana cambia el menú, esta venta no se altera.
+    const precioUnitario = aDecimal(producto.precio).plus(
+      sumar(elegidas.map(({ opcion }) => opcion.precioExtra)),
+    );
     await tx.itemPedido.create({
       data: {
         tenantId,
@@ -992,13 +1062,53 @@ async function agregarItems(tx, tenantId, pedidoId, items) {
         productoId,
         cantidad,
         notas,
-        precioUnitario: producto.precio,
+        precioUnitario,
         tasaImpuesto: obtenerTasaImpuesto(negocio.regimenImpuesto, producto.tipoImpuesto),
+        opciones: {
+          create: elegidas.map(({ grupo, opcion }, orden) => ({
+            tenantId,
+            opcionId: opcion.id,
+            grupo: grupo.nombre,
+            nombre: opcion.nombre,
+            precioExtra: opcion.precioExtra,
+            tasaImpuesto: obtenerTasaImpuesto(negocio.regimenImpuesto, opcion.tipoImpuesto),
+            orden,
+          })),
+        },
       },
     });
   }
 
   await recalcularTotales(tx, pedidoId);
+}
+
+/**
+ * Líneas de impuesto de un ítem: el plato con su impuesto y cada opción con precio con el
+ * suyo (por ejemplo, la hamburguesa con INC y una adición que el negocio marcó sin impuesto).
+ * El precio del plato es el del ítem menos lo que suman sus opciones.
+ * ⚠️ Pendiente de validar con un contador: cómo van las adiciones en la factura electrónica.
+ * @param {{ precioUnitario: Prisma.Decimal, cantidad: Prisma.Decimal, tasaImpuesto: Prisma.Decimal,
+ *   opciones: { precioExtra: Prisma.Decimal, tasaImpuesto: Prisma.Decimal }[] }} item
+ */
+function lineasDelItem(item) {
+  const conPrecio = item.opciones.filter((opcion) => opcion.precioExtra.greaterThan(0));
+  const precioDelPlato = aDecimal(item.precioUnitario).minus(
+    sumar(conPrecio.map((opcion) => opcion.precioExtra)),
+  );
+  return [
+    calcularLinea({
+      precioConImpuesto: precioDelPlato,
+      cantidad: item.cantidad,
+      tasaImpuesto: item.tasaImpuesto,
+    }),
+    ...conPrecio.map((opcion) =>
+      calcularLinea({
+        precioConImpuesto: opcion.precioExtra,
+        cantidad: item.cantidad,
+        tasaImpuesto: opcion.tasaImpuesto,
+      }),
+    ),
+  ];
 }
 
 /**
@@ -1008,18 +1118,12 @@ async function agregarItems(tx, tenantId, pedidoId, items) {
  * @param {string} pedidoId
  */
 async function recalcularTotales(tx, pedidoId) {
-  const items = await tx.itemPedido.findMany({ where: { pedidoId } });
+  const items = await tx.itemPedido.findMany({ where: { pedidoId }, include: { opciones: true } });
   const { valorDomicilio } = await tx.pedido.findUniqueOrThrow({
     where: { id: pedidoId },
     select: { valorDomicilio: true },
   });
-  const lineas = items.map((item) =>
-    calcularLinea({
-      precioConImpuesto: item.precioUnitario,
-      cantidad: item.cantidad,
-      tasaImpuesto: item.tasaImpuesto,
-    }),
-  );
+  const lineas = items.flatMap(lineasDelItem);
   // El domicilio suma como una línea más, por ahora sin impuesto: el contador debe confirmar
   // cuál lleva. Así subtotal + impuestos + ajuste sigue dando el total.
   if (valorDomicilio.greaterThan(0)) {
@@ -1058,17 +1162,52 @@ async function ocuparMesa(tx, mesaId) {
 }
 
 /**
- * Marca la mesa como libre si ya no tiene pedidos abiertos.
+ * Deja la mesa ocupada o libre según lo que tenga en curso. Sigue ocupada mientras tenga:
+ * - un pedido sin cobrar, o
+ * - uno cobrado con platos de la cocina por entregar: el cliente pagó antes de que salieran y
+ *   sigue en la mesa esperándolos. Cuenta como en la cocina (filtroComandasDeCocina), con el
+ *   límite de horas: así unos platos que nadie marcó como entregados no la dejan ocupada
+ *   para siempre.
  * @param {TransaccionPrisma} tx
  * @param {string} mesaId
  */
-async function liberarMesa(tx, mesaId) {
-  const pendientes = await tx.pedido.count({
-    where: { mesaId, estado: { in: [...ESTADOS_ABIERTOS] } },
+async function actualizarEstadoMesa(tx, mesaId) {
+  const enCurso = await tx.pedido.count({
+    where: {
+      mesaId,
+      OR: [
+        { estado: { in: [...ESTADOS_ABIERTOS] } },
+        {
+          estado: /** @type {const} */ ('pagado'),
+          cerradoEn: { gte: inicioDeCobradosEnCocina() },
+          enviadoACocinaEn: { not: null },
+          items: { some: { estadoCocina: { not: /** @type {const} */ ('entregado') } } },
+        },
+      ],
+    },
   });
-  if (pendientes === 0) {
-    await tx.mesa.update({ where: { id: mesaId }, data: { estado: 'libre' } });
-  }
+  const estado = enCurso > 0 ? /** @type {const} */ ('ocupada') : /** @type {const} */ ('libre');
+  await tx.mesa.update({ where: { id: mesaId }, data: { estado } });
+}
+
+/**
+ * Se cobró sin pasar por la cocina y tiene platos sin entregar: falta que la caja decida si lo
+ * envía a la cocina o si no va a cocina (por ejemplo, unas gaseosas). Mientras tanto, su mesa
+ * sigue ocupada.
+ * @param {TransaccionPrisma} tx
+ * @param {{ id: string, enviadoACocinaEn: Date | null }} pedido
+ */
+async function faltaDecidirCocina(tx, pedido) {
+  if (pedido.enviadoACocinaEn) return false;
+  const porEntregar = await tx.itemPedido.count({
+    where: { pedidoId: pedido.id, estadoCocina: { not: 'entregado' } },
+  });
+  return porEntregar > 0;
+}
+
+/** Desde cuándo un pedido cobrado sigue en la cocina (y ocupando su mesa). */
+function inicioDeCobradosEnCocina() {
+  return new Date(Date.now() - HORAS_COBRADO_EN_COCINA * 60 * 60 * 1000);
 }
 
 /**
@@ -1079,7 +1218,7 @@ async function liberarMesa(tx, mesaId) {
  * que nadie marcó como entregados.
  */
 function filtroComandasDeCocina() {
-  const cobradoDesde = new Date(Date.now() - HORAS_COBRADO_EN_COCINA * 60 * 60 * 1000);
+  const cobradoDesde = inicioDeCobradosEnCocina();
   return {
     enviadoACocinaEn: { not: null },
     items: { some: { estadoCocina: { not: /** @type {const} */ ('entregado') } } },

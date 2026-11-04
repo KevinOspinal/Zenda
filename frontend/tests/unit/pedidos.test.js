@@ -1,9 +1,13 @@
 // @ts-check
-// Pruebas de cómo se nombra y se reconoce un pedido según su tipo.
+// Pruebas de cómo se nombra y se reconoce un pedido según su tipo, su seguimiento y qué le
+// falta a un pedido ya cobrado (decidir lo de la cocina o entregar sus platos).
 import { describe, expect, it } from 'vitest';
 import {
   ORIGENES_PEDIDO,
   TIPOS_PEDIDO,
+  avisoDelPedidoCerrado,
+  esCobradoEnCocina,
+  faltaDecidirCocina,
   nombreDelPedido,
   pasosDelPedido,
   tipoDelPedido,
@@ -116,5 +120,65 @@ describe('pasosDelPedido', () => {
     });
 
     expect(resumen(pasos)).toEqual(['registrado:hecho', 'anulado:hecho']);
+  });
+});
+
+describe('pedido ya cobrado: la cocina y sus platos', () => {
+  const ENVIADO = '2026-11-04T12:00:00.000Z';
+  /** @param {string} estadoCocina */
+  const plato = (estadoCocina) => ({ estadoCocina });
+  /**
+   * Pedido de mesa cobrado sin pasar por la cocina, con un plato pendiente.
+   * @param {Record<string, unknown>} [cambios]
+   */
+  const cobrado = (cambios = {}) => ({
+    tipo: 'mesa',
+    mesa: { nombre: 'Mesa 4' },
+    estado: 'pagado',
+    enviadoACocinaEn: null,
+    items: [plato('pendiente')],
+    ...cambios,
+  });
+
+  it('falta decidir lo de la cocina si se cobró sin enviarlo y tiene algo por entregar', () => {
+    expect(faltaDecidirCocina(cobrado())).toBe(true);
+    // Ya fue a la cocina, ya se entregó todo o no se ha cobrado: no falta nada.
+    expect(faltaDecidirCocina(cobrado({ enviadoACocinaEn: ENVIADO }))).toBe(false);
+    expect(faltaDecidirCocina(cobrado({ items: [plato('entregado')] }))).toBe(false);
+    expect(faltaDecidirCocina(cobrado({ estado: 'abierto' }))).toBe(false);
+  });
+
+  it('un pedido cobrado sigue en la cocina mientras le falten platos por entregar', () => {
+    const enCocina = cobrado({
+      enviadoACocinaEn: ENVIADO,
+      items: [plato('listo'), plato('entregado')],
+    });
+
+    expect(esCobradoEnCocina(enCocina)).toBe(true);
+    expect(esCobradoEnCocina({ ...enCocina, items: [plato('entregado')] })).toBe(false);
+    expect(esCobradoEnCocina(cobrado())).toBe(false);
+  });
+
+  it('el aviso dice qué falta: decidir lo de la cocina, llevar los platos o nada', () => {
+    expect(avisoDelPedidoCerrado(cobrado())).toMatchObject({
+      color: 'warning',
+      titulo: 'Falta enviarlo a la cocina',
+    });
+    expect(avisoDelPedidoCerrado(cobrado()).descripcion).toContain('No va a cocina');
+    // Un domicilio siempre va a la cocina: no se le ofrece otra salida.
+    expect(
+      avisoDelPedidoCerrado(cobrado({ tipo: 'domicilio', mesa: null })).descripcion,
+    ).not.toContain('No va a cocina');
+    expect(avisoDelPedidoCerrado(cobrado({ enviadoACocinaEn: ENVIADO }))).toMatchObject({
+      color: 'info',
+      titulo: 'Cobrado · faltan platos por llevar',
+    });
+    expect(
+      avisoDelPedidoCerrado(cobrado({ enviadoACocinaEn: ENVIADO, items: [plato('entregado')] })),
+    ).toMatchObject({ color: 'success', titulo: 'Pedido cobrado' });
+    expect(avisoDelPedidoCerrado(cobrado({ estado: 'anulado' }))).toMatchObject({
+      color: 'error',
+      titulo: 'Pedido anulado',
+    });
   });
 });

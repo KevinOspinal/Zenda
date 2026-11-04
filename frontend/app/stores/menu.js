@@ -3,7 +3,11 @@
 // Cada categoría trae su ícono y su tono (utils/categorias.js) y cada producto, los de su
 // categoría: los productos no tienen foto.
 
-/** @typedef {{ id: string, nombre: string, descripcion: string | null, precio: string }} ProductoDelMenu */
+/**
+ * Producto del menú. `grupos`: sus opciones para elegir al pedirlo (término, adiciones...).
+ * @typedef {{ id: string, nombre: string, descripcion: string | null, precio: string,
+ *   grupos: import('~/utils/opciones.js').GrupoDelMenu[] }} ProductoDelMenu
+ */
 /** @typedef {{ icono: string, fondo: string, texto: string }} AparienciaCategoria */
 
 export const useMenuStore = defineStore('menu', () => {
