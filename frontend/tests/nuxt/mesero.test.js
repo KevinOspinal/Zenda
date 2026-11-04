@@ -75,6 +75,8 @@ const pedidoNuevo = (id, numeroDeItems) => ({
 beforeEach(() => {
   fetchFalso.mockReset();
   navegarFalso.mockReset();
+  // "Ver los de todos" se recuerda en el dispositivo: cada prueba empieza sin él.
+  localStorage.removeItem('zenda:avisos-de-todos');
   const sesion = useSesionStore();
   sesion.usuario = { id: 'laura', nombre: 'Laura', email: 'laura@x.test', rol: 'mesero' };
 });
@@ -223,6 +225,42 @@ function mesa4ConDosListos() {
 }
 
 describe('avisos de platos listos', () => {
+  /**
+   * El pedido de la Mesa 4, tomado por otra persona.
+   * @param {string} id Quién lo tomó.
+   * @param {{ nombre: string, rol: string }} mesero
+   */
+  const tomadoPor = (id, mesero) => ({ ...structuredClone(PEDIDO_MESA_4), meseroId: id, mesero });
+
+  it('un pedido que tomó el dueño le aparece a todos los meseros, con quién lo tomó', async () => {
+    simularBackend(fetchFalso, {
+      'GET /pedidos': () => [tomadoPor('kevin', { nombre: 'Kevin Acevedo', rol: 'dueno' })],
+    });
+
+    const pagina = await mountSuspended(PaginaAvisos);
+
+    await vi.waitFor(() => expect(pagina.text()).toContain('Lo tomó Kevin'));
+    expect(pagina.text()).toContain('1 mesa con platos listos');
+  });
+
+  it('los de otro mesero no se mezclan, pero dice que los hay y deja verlos', async () => {
+    simularBackend(fetchFalso, {
+      'GET /pedidos': () => [tomadoPor('andres', { nombre: 'Andrés Ruiz', rol: 'mesero' })],
+    });
+
+    const pagina = await mountSuspended(PaginaAvisos);
+    await vi.waitFor(() =>
+      expect(pagina.text()).toContain('Hay 1 mesa con platos listos de otros meseros'),
+    );
+    await pagina
+      .findAll('button')
+      .find((boton) => boton.text().includes('Ver los de todos'))
+      ?.trigger('click');
+
+    await vi.waitFor(() => expect(pagina.text()).toContain('Lo tomó Andrés'));
+    expect(pagina.text()).toContain('1 mesa con platos listos');
+  });
+
   it('una tarjeta por mesa; con un solo plato listo, "Entregado" lo entrega', async () => {
     simularBackend(fetchFalso, {
       'GET /pedidos': () => [structuredClone(PEDIDO_MESA_4)],

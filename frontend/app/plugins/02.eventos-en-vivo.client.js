@@ -2,7 +2,8 @@
 // Eventos en vivo del backend → stores. Es el único lugar donde se escuchan los eventos de
 // pedidos, mesas y caja, para que cada uno se atienda una sola vez en toda la app.
 // También avisa cuando hay platos listos (sonido, vibración y aviso): en mesa, al mesero
-// del pedido; en mostrador y domicilio, a la caja, que es quien los entrega. Los avisos no
+// del pedido (o a todos los meseros, si lo tomó el dueño, el administrador o el cajero); en
+// mostrador y domicilio, a la caja, que es quien los entrega. Los avisos no
 // saturan: uno por mesa, que se actualiza, y el sonido como máximo una vez cada pocos
 // segundos (utils/avisos.js). Y suena en la cocina cuando llega una comanda nueva.
 // El domiciliario solo atiende sus entregas: cada cambio de un domicilio se le consulta al API,
@@ -38,8 +39,9 @@ export default defineNuxtPlugin(() => {
   const agrupador = crearAgrupadorDeAvisos();
 
   /**
-   * Avisa que hay platos listos a quien los entrega: en mesa, al mesero del pedido; en
-   * mostrador y domicilio, a la caja (si está atendiendo la caja o el mostrador).
+   * Avisa que hay platos listos a quien los entrega: en mesa, al mesero del pedido (o a todos
+   * los meseros, si lo tomó el dueño, el administrador o el cajero); en mostrador y domicilio,
+   * a la caja (si está atendiendo la caja o el mostrador).
    * Un solo aviso por pedido: si ya está en pantalla, se actualiza en lugar de sumar otro.
    * @param {{ pedidoId: string, mesa: { id: string, nombre: string } | null,
    *   productos: string[] }} datos
@@ -53,7 +55,8 @@ export default defineNuxtPlugin(() => {
     const tipo = tipoDelPedido(pedido);
     const leToca =
       tipo === 'mesa'
-        ? pedido.meseroId === sesion.usuario?.id
+        ? pedido.meseroId === sesion.usuario?.id ||
+          (sesion.rol === 'mesero' && esDeTodosLosMeseros(pedido))
         : puede(sesion.rol, 'cobrar') && enLaCaja();
     if (!leToca) return;
 

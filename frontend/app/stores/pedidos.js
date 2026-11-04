@@ -60,7 +60,8 @@ export const usePedidosStore = defineStore('pedidos', () => {
 
   /**
    * Pedidos de mesa con platos listos para llevar, cada uno con esos platos. Si se indica un
-   * mesero, solo los de sus pedidos. Los avisos se agrupan así: uno por mesa, no por plato.
+   * mesero, solo los suyos y los que no tienen mesero asignado (ver esDeTodosLosMeseros). Los
+   * avisos se agrupan así: uno por mesa, no por plato.
    * Solo los de mesa: los de mostrador y los domicilios los entrega la caja.
    * @param {string} [meseroId]
    * @returns {{ pedido: any, items: any[] }[]}
@@ -68,7 +69,7 @@ export const usePedidosStore = defineStore('pedidos', () => {
   function pedidosConPlatosListos(meseroId) {
     return comandas.value
       .filter((pedido) => tipoDelPedido(pedido) === 'mesa')
-      .filter((pedido) => !meseroId || pedido.meseroId === meseroId)
+      .filter((pedido) => !meseroId || pedido.meseroId === meseroId || esDeTodosLosMeseros(pedido))
       .map((pedido) => ({
         pedido,
         items: (pedido.items ?? []).filter(

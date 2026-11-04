@@ -1,6 +1,9 @@
 <!--
   Avisos del mesero: las mesas con platos listos para llevar, una tarjeta por mesa (no una
   por plato), para que la lista no se llene cuando salen varios pedidos a la vez.
+  Muestra las mesas del mesero y las que no tienen mesero asignado (las tomó el dueño, el
+  administrador o el cajero). "Ver los de todos" suma las de los demás meseros y se recuerda en
+  el dispositivo; si solo hay platos listos de otros, lo dice en lugar de quedar vacía.
   Llegan en vivo (con sonido y vibración). "Entregar todo" entrega de una vez los platos
   listos de la mesa; cada plato también se puede entregar solo, si se llevan por partes.
 -->
@@ -13,10 +16,19 @@ const toast = useToast();
 
 pedidos.cargarActivos();
 
-const verTodos = ref(false);
+const verTodos = useLocalStorage('zenda:avisos-de-todos', false);
 const avisos = computed(() =>
   pedidos.pedidosConPlatosListos(verTodos.value ? undefined : sesion.usuario?.id),
 );
+/** Mesas con platos listos de otros meseros, que no se ven sin "Ver los de todos". */
+const deOtrosMeseros = computed(() =>
+  verTodos.value ? 0 : pedidos.pedidosConPlatosListos().length - avisos.value.length,
+);
+
+function verLosDeTodos() {
+  verTodos.value = true;
+}
+
 const totalPlatos = computed(() =>
   avisos.value.reduce((suma, aviso) => suma + aviso.items.length, 0),
 );
@@ -73,7 +85,9 @@ async function entregarTodo({ pedido, items }) {
           {{ avisos.length }} {{ avisos.length === 1 ? 'mesa' : 'mesas' }} con platos listos ·
           {{ totalPlatos }} {{ totalPlatos === 1 ? 'plato' : 'platos' }}
         </template>
-        <template v-else>Nada por llevar</template>
+        <template v-else>
+          {{ deOtrosMeseros ? 'Nada por llevar de tus mesas' : 'Nada por llevar' }}
+        </template>
       </p>
       <USwitch v-model="verTodos" label="Ver los de todos" />
     </div>
@@ -84,6 +98,14 @@ async function entregarTodo({ pedido, items }) {
     >
       <USkeleton v-for="n in 3" :key="n" class="h-32 rounded-xl" />
     </div>
+
+    <UEmpty
+      v-else-if="!avisos.length && deOtrosMeseros"
+      icon="i-lucide-users"
+      title="Tus mesas no tienen platos listos"
+      :description="`Hay ${deOtrosMeseros} ${deOtrosMeseros === 1 ? 'mesa' : 'mesas'} con platos listos de otros meseros.`"
+      :actions="[{ label: 'Ver los de todos', icon: 'i-lucide-eye', onClick: verLosDeTodos }]"
+    />
 
     <UEmpty
       v-else-if="!avisos.length"
