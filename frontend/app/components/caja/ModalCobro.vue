@@ -1,7 +1,9 @@
 <!--
   Cobrar un pedido: propina voluntaria, uno o varios métodos de pago, cambio y cliente
   opcional para la factura. "Confirmar cobro" solo se activa cuando los pagos cuadran
-  exactamente con el total más la propina. Al cobrar, muestra el cambio en grande.
+  exactamente con el total más la propina. Al cobrar, muestra el cambio en grande
+  (CobroRegistrado). Si el pedido no ha ido a la cocina, no se cierra hasta decidir si va o no:
+  así ningún pedido cobrado se queda sin preparar.
   En el celular ocupa toda la pantalla.
 -->
 <script setup>
@@ -29,9 +31,12 @@ const propinaOtra = ref('');
 const pagos = ref(/** @type {import('~/utils/caja.js').PagoEnPantalla[]} */ ([]));
 const cliente = ref(/** @type {any} */ (null));
 const cobrando = ref(false);
-const { imprimir } = useImpresionDeRecibo();
 const resultado = ref(
   /** @type {{ pedido: any, cambio: string, advertencias: any[] } | null} */ (null),
+);
+/** Se cobró sin pasar por la cocina: hasta decidir si va, la ventana no se cierra. */
+const faltaCocina = computed(() =>
+  Boolean(resultado.value && faltaDecidirCocina(resultado.value.pedido)),
 );
 
 // 1. Al abrir: empezar limpio y traer el pedido completo (con la propina sugerida).
@@ -129,7 +134,8 @@ async function confirmar() {
     v-model:open="abierto"
     :title="resultado ? 'Cobro registrado' : titulo"
     :fullscreen="!pantallaGrande"
-    :dismissible="!cobrando"
+    :dismissible="!cobrando && !faltaCocina"
+    :close="!faltaCocina"
     :ui="{ content: 'lg:max-w-2xl' }"
   >
     <template #body>
@@ -147,35 +153,8 @@ async function confirmar() {
         :title="error || 'No pudimos abrir el pedido'"
       />
 
-      <!-- Cobro registrado: el cambio en grande. -->
-      <div v-else-if="resultado" class="space-y-5 py-4 text-center">
-        <div class="mx-auto grid size-20 place-items-center rounded-full bg-success/15">
-          <UIcon
-            name="i-lucide-circle-check"
-            class="size-12 text-success motion-safe:animate-bounce"
-          />
-        </div>
-        <div
-          v-if="aDecimal(resultado.cambio).greaterThan(0)"
-          class="mx-auto max-w-sm rounded-2xl bg-success/10 p-6 ring-1 ring-success/30"
-        >
-          <p class="font-medium text-toned">Devuelve</p>
-          <p class="cifra text-6xl font-bold tracking-tight text-success">
-            {{ formatearPesos(resultado.cambio) }}
-          </p>
-        </div>
-        <p v-else class="text-lg text-muted">No hay cambio para devolver.</p>
-        <!-- Negocio sin factura electrónica: su recibo de venta, si el cliente lo quiere. -->
-        <UButton
-          v-if="resultado.pedido?.recibo"
-          size="xl"
-          color="neutral"
-          variant="outline"
-          icon="i-lucide-printer"
-          :label="`Imprimir recibo No. ${numeroDeRecibo(resultado.pedido.recibo.numero)}`"
-          @click="imprimir(resultado.pedido)"
-        />
-      </div>
+      <!-- Cobro registrado: el cambio en grande y, si falta, qué pasa con la cocina. -->
+      <CobroRegistrado v-else-if="resultado" :resultado="resultado" @decidido="abierto = false" />
 
       <!-- Armar el cobro. -->
       <div v-else class="space-y-6">
@@ -238,7 +217,8 @@ async function confirmar() {
       </div>
     </template>
 
-    <template #footer>
+    <!-- Mientras falte decidir lo de la cocina, sus botones son los únicos. -->
+    <template v-if="!faltaCocina" #footer>
       <div class="flex w-full justify-end gap-2">
         <UButton v-if="resultado" size="xl" block label="Listo" @click="abierto = false" />
         <template v-else>

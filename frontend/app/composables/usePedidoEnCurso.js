@@ -46,6 +46,15 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
   }
   watch(pedidoId, cargarPedido, { immediate: true });
 
+  // Un pedido cobrado que sigue en la cocina se mantiene al día con los eventos en vivo
+  // (platos listos o entregados): mientras el store lo tenga, se muestra esa versión.
+  watch(
+    () => pedidoCerrado.value && pedidos.buscar(pedidoCerrado.value.id),
+    (enVivo) => {
+      if (enVivo && enVivo !== pedidoCerrado.value) pedidoCerrado.value = enVivo;
+    },
+  );
+
   // Si el pedido se cierra mientras está en pantalla (se cobró o se anuló aquí o en otro
   // dispositivo), se trae de nuevo para mostrar cómo quedó.
   watch(pedido, (actual, anterior) => {

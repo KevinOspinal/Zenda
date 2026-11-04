@@ -1,8 +1,10 @@
 <!--
   Un pedido que ya se cobró o se anuló: arriba qué pasó y qué falta (con su acción), la cuenta
   como un recibo, el seguimiento del pedido y, en un domicilio, a dónde va.
-  Si se cobró sin pasar por la cocina (por ejemplo, un domicilio pagado por adelantado), se
-  puede enviar desde aquí.
+  - Si se cobró sin pasar por la cocina, falta decidir: enviarlo o, si no va a cocina (por
+    ejemplo, unas gaseosas), entregarlo. Un domicilio siempre va a la cocina.
+  - Una mesa cobrada con platos por llevar sigue ocupada: desde aquí se entregan los platos
+    listos o se empieza otro pedido en la mesa, si piden algo más.
 -->
 <script setup>
 const props = defineProps({
@@ -15,28 +17,33 @@ const props = defineProps({
 const pedidos = usePedidosStore();
 const toast = useToast();
 const { imprimir } = useImpresionDeRecibo();
+const { decidiendo, decidir } = useDecisionDeCocina();
 const pantallaAncha = useMediaQuery('(min-width: 640px)');
 
 const tipo = computed(() => tipoDelPedido(props.pedido));
-const anulado = computed(() => props.pedido.estado === 'anulado');
-/** Se cobró sin pasar por la cocina. */
-const sinCocina = computed(
-  () => !anulado.value && !props.pedido.enviadoACocinaEn && (props.pedido.items?.length ?? 0) > 0,
+/** El aviso de arriba: qué pasó y, si falta algo, qué hacer. */
+const aviso = computed(() => avisoDelPedidoCerrado(props.pedido));
+/** Se cobró sin pasar por la cocina: falta decidir si va. */
+const sinCocina = computed(() => faltaDecidirCocina(props.pedido));
+/** Mesa cobrada que espera platos de la cocina: sigue ocupada hasta que lleguen. */
+const esperaPlatos = computed(() => tipo.value === 'mesa' && esCobradoEnCocina(props.pedido));
+const platosListos = computed(() =>
+  esperaPlatos.value
+    ? (props.pedido.items ?? []).filter((/** @type {any} */ item) => item.estadoCocina === 'listo')
+    : [],
 );
-/** En un domicilio es obligatorio: solo sale cuando la cocina lo tiene listo. */
-const faltaCocina = computed(() => sinCocina.value && tipo.value === 'domicilio');
 const pasos = computed(() => pasosDelPedido(props.pedido));
 const entrega = computed(() => props.pedido.entrega ?? null);
 
-async function enviarACocina() {
+/** @param {import('~/composables/useDecisionDeCocina.js').DecisionDeCocina} decision */
+async function elegir(decision) {
+  if (await decidir(props.pedido, decision)) await navigateTo(props.volverA);
+}
+
+/** El mesero lleva de una vez los platos que la cocina ya terminó. */
+async function entregarListos() {
   try {
-    await pedidos.enviarACocina(props.pedido.id);
-    toast.add({
-      title: `${nombreDelPedido(props.pedido)} enviado a la cocina`,
-      icon: 'i-lucide-chef-hat',
-      color: 'success',
-    });
-    await navigateTo(props.volverA);
+    await pedidos.cambiarEstadoCocinaDelPedido(props.pedido.id, 'entregado');
   } catch (error) {
     toast.add({
       title: error instanceof ErrorApi ? error.message : MENSAJE_ERROR_GENERICO,
@@ -46,43 +53,59 @@ async function enviarACocina() {
   }
 }
 
-/** El aviso de arriba: qué pasó y, si falta algo, qué hacer. */
-const aviso = computed(() => {
-  if (anulado.value) {
-    return {
-      color: /** @type {const} */ ('error'),
-      icono: 'i-lucide-ban',
-      titulo: 'Pedido anulado',
-      descripcion: 'No se cobró y ya no se le pueden hacer cambios.',
-    };
-  }
-  if (faltaCocina.value) {
-    return {
-      color: /** @type {const} */ ('warning'),
-      icono: 'i-lucide-chef-hat',
-      titulo: 'Falta enviarlo a la cocina',
-      descripcion:
-        'Ya se cobró, pero la cocina todavía no lo ha visto. Envíalo para que lo preparen; cuando esté listo, lo despachas.',
-    };
-  }
-  return {
-    color: /** @type {const} */ ('success'),
-    icono: 'i-lucide-circle-check',
-    titulo: 'Pedido cobrado',
-    descripcion: 'Ya no se le pueden agregar productos.',
-  };
-});
-
+const GRANDE = /** @type {const} */ ('lg');
 const acciones = computed(() => [
   ...(sinCocina.value
     ? [
         {
           label: 'Enviar a cocina',
           icon: 'i-lucide-chef-hat',
-          size: /** @type {const} */ ('lg'),
-          color: /** @type {const} */ (faltaCocina.value ? 'warning' : 'neutral'),
-          variant: /** @type {const} */ (faltaCocina.value ? 'solid' : 'outline'),
-          onClick: enviarACocina,
+          size: GRANDE,
+          color: /** @type {const} */ ('warning'),
+          loading: decidiendo.value === 'cocina',
+          disabled: Boolean(decidiendo.value),
+          onClick: () => elegir('cocina'),
+        },
+      ]
+    : []),
+  ...(sinCocina.value && tipo.value !== 'domicilio'
+    ? [
+        {
+          label: 'No va a cocina',
+          icon: 'i-lucide-cup-soda',
+          size: GRANDE,
+          color: /** @type {const} */ ('neutral'),
+          variant: /** @type {const} */ ('outline'),
+          loading: decidiendo.value === 'sin_cocina',
+          disabled: Boolean(decidiendo.value),
+          onClick: () => elegir('sin_cocina'),
+        },
+      ]
+    : []),
+  ...(platosListos.value.length
+    ? [
+        {
+          label:
+            platosListos.value.length === 1
+              ? 'Entregar el plato listo'
+              : `Entregar ${platosListos.value.length} platos listos`,
+          icon: 'i-lucide-check-check',
+          size: GRANDE,
+          color: /** @type {const} */ ('info'),
+          loadingAuto: true,
+          onClick: entregarListos,
+        },
+      ]
+    : []),
+  ...(esperaPlatos.value && props.pedido.mesaId
+    ? [
+        {
+          label: 'Nuevo pedido en la mesa',
+          icon: 'i-lucide-plus',
+          size: GRANDE,
+          color: /** @type {const} */ ('neutral'),
+          variant: /** @type {const} */ ('outline'),
+          to: `/pedidos/nuevo?mesa=${props.pedido.mesaId}`,
         },
       ]
     : []),
@@ -91,7 +114,7 @@ const acciones = computed(() => [
         {
           label: 'Reimprimir recibo',
           icon: 'i-lucide-printer',
-          size: /** @type {const} */ ('lg'),
+          size: GRANDE,
           color: /** @type {const} */ ('neutral'),
           variant: /** @type {const} */ ('outline'),
           // El original se imprimió al cobrar: esta sale como copia.
@@ -101,7 +124,7 @@ const acciones = computed(() => [
     : []),
   {
     label: 'Volver',
-    size: /** @type {const} */ ('lg'),
+    size: GRANDE,
     color: /** @type {const} */ ('neutral'),
     variant: /** @type {const} */ ('ghost'),
     to: props.volverA,

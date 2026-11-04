@@ -3,8 +3,8 @@
 // de pedidos, los avisos del mesero y la cocina.
 //
 // Aparte se guardan los pedidos ya cobrados que tienen platos en la cocina (el cliente pagó
-// antes de que salieran): la cocina los sigue viendo y el mesero recibe sus avisos, pero no
-// cuentan como activos (no están por cobrar ni ocupan la mesa).
+// antes de que salieran): la cocina los sigue viendo, el mesero recibe sus avisos y su mesa
+// sigue ocupada hasta entregarlos, pero no cuentan como activos (no están por cobrar).
 //
 // - Los datos vienen del API (GET /pedidos?activos=true y ?cocina=true, con sus ítems).
 // - Cada acción guarda el pedido completo que responde el API: los totales e impuestos los
@@ -13,18 +13,6 @@
 
 /** Estados de un pedido que todavía se puede modificar o cobrar. */
 const ESTADOS_ACTIVOS = Object.freeze(['abierto', 'enviado_a_cocina']);
-
-/**
- * Un pedido cobrado que pasó por la cocina y aún tiene platos por entregar.
- * @param {any} pedido
- */
-function esCobradoEnCocina(pedido) {
-  return (
-    pedido.estado === 'pagado' &&
-    Boolean(pedido.enviadoACocinaEn) &&
-    (pedido.items ?? []).some((/** @type {any} */ item) => item.estadoCocina !== 'entregado')
-  );
-}
 
 /**
  * @typedef {{ productoId: string, cantidad: string | number, notas?: string | null,
@@ -59,6 +47,15 @@ export const usePedidosStore = defineStore('pedidos', () => {
   /** @param {string} mesaId */
   function pedidoDeMesa(mesaId) {
     return lista.value.find((pedido) => pedido.mesaId === mesaId) ?? null;
+  }
+
+  /**
+   * El pedido cobrado de la mesa que aún espera platos de la cocina (la mesa sigue ocupada
+   * hasta que se entreguen). Null si no hay.
+   * @param {string} mesaId
+   */
+  function pedidoCobradoDeMesa(mesaId) {
+    return Object.values(cobradosEnCocina.value).find((pedido) => pedido.mesaId === mesaId) ?? null;
   }
 
   /**
@@ -172,6 +169,17 @@ export const usePedidosStore = defineStore('pedidos', () => {
   /** @param {string} pedidoId */
   async function enviarACocina(pedidoId) {
     const pedido = await useApi().post(`/pedidos/${pedidoId}/enviar-cocina`);
+    guardar(pedido);
+    return pedido;
+  }
+
+  /**
+   * Un pedido cobrado que no va a la cocina (por ejemplo, unas gaseosas): se entrega de una
+   * vez y, si es de mesa, la mesa queda libre.
+   * @param {string} pedidoId
+   */
+  async function entregarSinCocina(pedidoId) {
+    const pedido = await useApi().post(`/pedidos/${pedidoId}/entregar`);
     guardar(pedido);
     return pedido;
   }
@@ -328,6 +336,7 @@ export const usePedidosStore = defineStore('pedidos', () => {
     estadoCarga,
     errorCarga,
     pedidoDeMesa,
+    pedidoCobradoDeMesa,
     pedidosConPlatosListos,
     cargarActivos,
     cargarDetalle,
@@ -335,6 +344,7 @@ export const usePedidosStore = defineStore('pedidos', () => {
     agregarItem,
     quitarItem,
     enviarACocina,
+    entregarSinCocina,
     cambiarEstadoCocina,
     cambiarEstadoCocinaDelPedido,
     cobrar,

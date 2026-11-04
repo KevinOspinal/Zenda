@@ -1,12 +1,13 @@
 // @ts-check
-// Pruebas de las pantallas del mesero con un backend simulado: tomar pedido, mapa de mesas
-// y avisos de platos listos.
+// Pruebas de las pantallas del mesero con un backend simulado: tomar pedido, mapa de mesas,
+// avisos de platos listos y la mesa que ya pagó y espera sus platos.
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, ref, toRef } from 'vue';
 import TomarPedido from '~/components/pedidos/TomarPedido.vue';
 import { usePedidoEnCurso } from '~/composables/usePedidoEnCurso.js';
 import PaginaAvisos from '~/pages/avisos.vue';
+import PedidoCerrado from '~/components/pedidos/PedidoCerrado.vue';
 import PaginaMesas from '~/pages/mesas/index.vue';
 import { useCajaStore } from '~/stores/caja.js';
 import { useSesionStore } from '~/stores/sesion.js';
@@ -18,6 +19,8 @@ const { fetchFalso, navegarFalso } = vi.hoisted(() => ({
 }));
 mockNuxtImport('$fetch', () => fetchFalso);
 mockNuxtImport('navigateTo', () => navegarFalso);
+
+const AHORA = new Date().toISOString();
 
 const MESAS = [
   { id: 'm1', nombre: 'Mesa 1', zona: 'Salón', capacidad: 4, estado: 'libre' },
@@ -165,6 +168,37 @@ describe('mapa de mesas', () => {
     expect(pagina.text()).not.toContain('La caja está cerrada');
   });
 
+  it('una mesa que ya pagó sigue ocupada hasta que le lleven los platos: abre ese pedido', async () => {
+    const pagado = { ...mesa4ConDosListos(), estado: 'pagado', enviadoACocinaEn: AHORA };
+    simularBackend(fetchFalso, {
+      'GET /mesas': () => MESAS,
+      // Nada por cobrar; en la cocina sigue el pedido ya cobrado.
+      'GET /pedidos': (opciones) => (opciones.query?.cocina ? [pagado] : []),
+      'GET /caja/estado': () => ({ abierta: true, turnoId: 't1', abiertoEn: '' }),
+    });
+
+    const pagina = await mountSuspended(PaginaMesas);
+
+    await vi.waitFor(() => expect(pagina.text()).toContain('Pagada'));
+    expect(pagina.text()).toContain('¡Listo!');
+    await pagina.find('button[aria-label^="Mesa 4"]').trigger('click');
+    expect(navegarFalso).toHaveBeenCalledWith('/pedidos/p4');
+  });
+
+  it('una mesa ocupada sin nada en curso deja tomar un pedido nuevo', async () => {
+    simularBackend(fetchFalso, {
+      'GET /mesas': () => MESAS,
+      'GET /pedidos': () => [],
+      'GET /caja/estado': () => ({ abierta: true, turnoId: 't1', abiertoEn: '' }),
+    });
+
+    const pagina = await mountSuspended(PaginaMesas);
+    await vi.waitFor(() => expect(pagina.text()).toContain('Mesa 4'));
+    await pagina.find('button[aria-label^="Mesa 4"]').trigger('click');
+
+    await vi.waitFor(() => expect(navegarFalso).toHaveBeenCalledWith('/pedidos/nuevo?mesa=m4'));
+  });
+
   it('con la caja cerrada, lo avisa arriba', async () => {
     simularBackend(fetchFalso, {
       'GET /mesas': () => MESAS,
@@ -262,5 +296,83 @@ describe('cuenta de la mesa', () => {
     const [, opciones] =
       fetchFalso.mock.calls.find(([ruta]) => ruta === '/pedidos/p4/cocina') ?? [];
     expect(opciones.body).toEqual({ estadoCocina: 'entregado' });
+  });
+});
+
+describe('pedido ya cobrado', () => {
+  it('una mesa que espera sus platos: se entregan los listos o se pide algo más', async () => {
+    const pagado = {
+      ...mesa4ConDosListos(),
+      estado: 'pagado',
+      enviadoACocinaEn: AHORA,
+      cerradoEn: AHORA,
+      pagos: [],
+    };
+    simularBackend(fetchFalso, {
+      'GET /pedidos/p4': () => structuredClone(pagado),
+      'GET /menu': () => [],
+      'GET /mesas': () => [],
+      'GET /caja/estado': () => ({ abierta: true }),
+      'PATCH /pedidos/p4/cocina': () => ({
+        ...pagado,
+        items: pagado.items.map((item) => ({ ...item, estadoCocina: 'entregado' })),
+      }),
+    });
+
+    const pantalla = await mountSuspended(TomarPedido, { props: { pedidoId: 'p4' } });
+    await vi.waitFor(() => expect(pantalla.text()).toContain('Cobrado · faltan platos por llevar'));
+    expect(pantalla.find('a[href="/pedidos/nuevo?mesa=m4"]').exists()).toBe(true);
+
+    await pantalla
+      .findAll('button')
+      .find((boton) => boton.text().includes('Entregar 2 platos listos'))
+      ?.trigger('click');
+
+    await vi.waitFor(() => expect(pantalla.text()).toContain('Pedido cobrado'));
+    const [, opciones] =
+      fetchFalso.mock.calls.find(([ruta]) => ruta === '/pedidos/p4/cocina') ?? [];
+    expect(opciones.body).toEqual({ estadoCocina: 'entregado' });
+  });
+
+  it('cobrado sin pasar por la cocina: «No va a cocina» lo entrega y vuelve', async () => {
+    const venta = {
+      id: 'v1',
+      tipo: 'mostrador',
+      numero: 16,
+      mesa: null,
+      estado: 'pagado',
+      total: '4000',
+      abiertoEn: AHORA,
+      enviadoACocinaEn: null,
+      cerradoEn: AHORA,
+      items: [
+        {
+          id: 'i1',
+          cantidad: '1',
+          precioUnitario: '4000',
+          estadoCocina: 'pendiente',
+          producto: { nombre: 'Gaseosa personal' },
+        },
+      ],
+      pagos: [],
+    };
+    simularBackend(fetchFalso, {
+      'POST /pedidos/v1/entregar': () => ({
+        ...venta,
+        items: venta.items.map((item) => ({ ...item, estadoCocina: 'entregado' })),
+      }),
+    });
+
+    const vista = await mountSuspended(PedidoCerrado, {
+      props: { pedido: venta, volverA: '/caja' },
+    });
+    expect(vista.text()).toContain('Falta enviarlo a la cocina');
+    await vista
+      .findAll('button')
+      .find((boton) => boton.text().includes('No va a cocina'))
+      ?.trigger('click');
+
+    await vi.waitFor(() => expect(navegarFalso).toHaveBeenCalledWith('/caja'));
+    expect(fetchFalso.mock.calls.map(([ruta]) => ruta)).toEqual(['/pedidos/v1/entregar']);
   });
 });
