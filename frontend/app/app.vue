@@ -23,7 +23,7 @@ watch(
     <NuxtLayout>
       <NuxtPage />
     </NuxtLayout>
-    <!-- El recibo que se está imprimiendo: solo se ve en el papel. -->
-    <ReciboParaImprimir />
+    <!-- El recibo o la precuenta que se está imprimiendo: solo se ve en el papel. -->
+    <DocumentoParaImprimir />
   </UApp>
 </template>

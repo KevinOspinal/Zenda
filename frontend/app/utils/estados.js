@@ -194,6 +194,12 @@ export const ACCIONES_AUDITORIA = Object.freeze({
     color: 'warning',
     icono: 'i-lucide-receipt-text',
   },
+  // La llave o el QR de Bre-B: es por donde entra la plata de las transferencias.
+  cambiar_cobro_bre_b: {
+    etiqueta: 'Cobro con Bre-B',
+    color: 'warning',
+    icono: 'i-lucide-qr-code',
+  },
   dar_acceso_domiciliario: {
     etiqueta: 'Acceso de domiciliario',
     color: 'success',

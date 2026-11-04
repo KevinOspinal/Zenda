@@ -7,6 +7,8 @@
 <script setup>
 const props = defineProps({
   titulo: { type: String, required: true },
+  /** Pedido ya creado (para su precuenta). Vacío si aún no existe. */
+  pedidoId: { type: String, default: '' },
   items: { type: /** @type {import('vue').PropType<any[]>} */ (Array), required: true },
   total: {
     type: /** @type {import('vue').PropType<import('~/utils/dinero.js').ValorDinero>} */ ([
@@ -45,6 +47,7 @@ const totalProductos = computed(() => sumar(props.items.map((i) => i.cantidad)).
     >
       <h3 class="mb-2 text-lg font-bold text-highlighted">Cuenta · {{ titulo }}</h3>
       <PanelCuenta
+        :pedido-id="pedidoId"
         :items="items"
         :total="total"
         :estado-pedido="estadoPedido"
@@ -89,6 +92,7 @@ const totalProductos = computed(() => sumar(props.items.map((i) => i.cantidad)).
     >
       <template #body>
         <PanelCuenta
+          :pedido-id="pedidoId"
           :items="items"
           :total="total"
           :estado-pedido="estadoPedido"

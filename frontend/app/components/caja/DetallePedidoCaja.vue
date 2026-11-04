@@ -1,6 +1,7 @@
 <!--
   Detalle del pedido elegido en la caja: sus productos, la base y el impuesto, el total y
-  las acciones: cobrar (la principal), dividir la cuenta, agregar productos y anular.
+  las acciones: cobrar (la principal), dividir la cuenta, agregar productos, imprimir la
+  precuenta y anular.
 -->
 <script setup>
 const props = defineProps({
@@ -14,6 +15,7 @@ const puedeAnular = computed(() => puede(sesion.rol, 'anularPedidos'));
 /** El total incluye el valor del domicilio: se muestra para que no sorprenda. */
 const tieneImpuestos = computed(() => !aDecimal(props.pedido.impuestos ?? 0).isZero());
 const tieneDomicilio = computed(() => aDecimal(props.pedido.valorDomicilio ?? 0).greaterThan(0));
+const { preparando, imprimirPrecuenta } = useImpresionDePrecuenta();
 const sePuedeDividir = computed(() =>
   sumar(props.pedido.items.map((/** @type {any} */ i) => i.cantidad)).greaterThan(1),
 );
@@ -63,7 +65,7 @@ const sePuedeDividir = computed(() =>
       Cobrar {{ formatearPesos(pedido.total) }}
       <UKbd value="C" class="ms-2 hidden lg:inline-flex" />
     </UButton>
-    <div class="grid grid-cols-2 gap-2" :class="puedeAnular && 'sm:grid-cols-3'">
+    <div class="grid grid-cols-2 gap-2" :class="puedeAnular ? 'sm:grid-cols-4' : 'sm:grid-cols-3'">
       <UButton
         color="neutral"
         variant="soft"
@@ -84,6 +86,18 @@ const sePuedeDividir = computed(() =>
         :to="`/pedidos/${pedido.id}`"
       />
       <UButton
+        color="neutral"
+        variant="soft"
+        size="lg"
+        icon="i-lucide-printer"
+        label="Precuenta"
+        block
+        :class="!puedeAnular && 'col-span-2 sm:col-span-1'"
+        :loading="preparando"
+        :disabled="!pedido.items?.length"
+        @click="imprimirPrecuenta(pedido.id)"
+      />
+      <UButton
         v-if="puedeAnular"
         color="error"
         variant="soft"
@@ -91,7 +105,6 @@ const sePuedeDividir = computed(() =>
         icon="i-lucide-ban"
         label="Anular"
         block
-        class="col-span-2 sm:col-span-1"
         @click="emit('anular')"
       />
     </div>

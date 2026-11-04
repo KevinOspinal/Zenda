@@ -50,6 +50,10 @@ const NOMBRES_DETALLE = Object.freeze({
   diferencia: 'Diferencia',
   cantidad: 'Cantidad',
   rol: 'Rol',
+  llaveAnterior: 'Llave antes',
+  llaveNueva: 'Llave ahora',
+  qrAnterior: 'QR antes',
+  qrNuevo: 'QR ahora',
 });
 
 /**
@@ -136,7 +140,8 @@ function lineasDeDetalle(detalle) {
               class="flex gap-2"
             >
               <dt class="text-muted">{{ linea.nombre }}:</dt>
-              <dd class="font-medium text-highlighted">{{ linea.valor }}</dd>
+              <!-- break-all: el contenido de un QR es un texto largo sin espacios. -->
+              <dd class="min-w-0 font-medium break-all text-highlighted">{{ linea.valor }}</dd>
             </div>
           </dl>
         </div>

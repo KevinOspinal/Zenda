@@ -1,8 +1,9 @@
 <!--
   Pagos del cobro. Por defecto un solo pago por el total; se elige el método con botones
   grandes. En efectivo se escribe (o se toca) con cuánto paga el cliente para calcular el
-  cambio; en tarjeta o transferencia, la referencia es opcional. "Pagar con otro método
-  también" reparte la cuenta en varios métodos (pago mixto).
+  cambio; en tarjeta o transferencia, la referencia es opcional. En transferencia aparecen el
+  QR y la llave Bre-B del negocio (PagoConBreB). "Pagar con otro método también" reparte la
+  cuenta en varios métodos (pago mixto).
 -->
 <script setup>
 const props = defineProps({
@@ -135,7 +136,12 @@ function quitarPago(indice) {
           </div>
         </UFormField>
       </template>
-      <UFormField v-else label="Referencia" hint="Opcional">
+      <!-- Por transferencia: el QR y la llave Bre-B del negocio, con el valor de este pago. -->
+      <PagoConBreB
+        v-if="pago.metodo === 'transferencia'"
+        :monto="mixto ? pago.monto || '0' : aPagar"
+      />
+      <UFormField v-if="pago.metodo !== 'efectivo'" label="Referencia" hint="Opcional">
         <UInput
           v-model="pago.referencia"
           size="lg"

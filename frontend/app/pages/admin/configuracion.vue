@@ -1,8 +1,9 @@
 <!--
   Configuración del negocio (solo el dueño): sus datos, cómo factura (con factura electrónica
   o con recibo de venta), los datos del recibo, la propina sugerida en mesa, de 0 a 10 % (Ley
-  1935 de 2018) con una vista previa, y el valor del domicilio por defecto. La facturación, la
-  propina y el domicilio quedan en la auditoría.
+  1935 de 2018) con una vista previa, el valor del domicilio por defecto y el cobro con Bre-B
+  (llave y QR del banco). La facturación, la propina, el domicilio y Bre-B quedan en la
+  auditoría.
   El nombre y el NIT se ven pero no se editan aquí.
 -->
 <script setup>
@@ -17,6 +18,10 @@ const propina = ref(10);
 const guardando = ref(false);
 /** Valor del domicilio por defecto, como lo escribe CampoDinero ("3000"). */
 const valorDomicilio = ref('');
+
+// Lo que se guarda aquí lo usan la precuenta y el cobro: se les pasa al instante.
+const negocioStore = useNegocioStore();
+watch(negocio, (actual) => actual && negocioStore.actualizar(actual));
 
 async function cargar() {
   error.value = '';
@@ -134,6 +139,7 @@ async function guardar() {
 
       <FacturacionDelNegocio :negocio="negocio" @guardado="(guardado) => (negocio = guardado)" />
       <DatosDelRecibo :negocio="negocio" @guardado="(guardado) => (negocio = guardado)" />
+      <ConfiguracionBreB :negocio="negocio" @guardado="(guardado) => (negocio = guardado)" />
 
       <section class="space-y-5 rounded-xl bg-default p-5 ring-1 ring-default">
         <div>

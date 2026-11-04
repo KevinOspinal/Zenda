@@ -1,10 +1,12 @@
 <!--
-  Panel de la cuenta: los productos del pedido, el total y el botón de enviar a cocina.
-  En tablet y PC va fijo a la derecha del menú; en el celular, dentro de un panel que sube
-  desde abajo. El total lo calcula el backend: aquí solo se muestra.
+  Panel de la cuenta: los productos del pedido, el total, el botón de enviar a cocina y la
+  precuenta para llevar a la mesa. En tablet y PC va fijo a la derecha del menú; en el celular,
+  dentro de un panel que sube desde abajo. El total lo calcula el backend: aquí solo se muestra.
 -->
 <script setup>
-defineProps({
+const props = defineProps({
+  /** Pedido ya creado (para imprimir su precuenta). Vacío si aún no existe. */
+  pedidoId: { type: String, default: '' },
   items: { type: /** @type {import('vue').PropType<any[]>} */ (Array), required: true },
   /** Total del pedido en pesos (texto del API o Decimal). */
   total: {
@@ -33,6 +35,10 @@ const emit = defineEmits({
   enviar: () => true,
   cobrar: () => true,
 });
+
+const { preparando, imprimirPrecuenta } = useImpresionDePrecuenta();
+/** La precuenta se imprime cuando el pedido existe y tiene productos. */
+const hayPrecuenta = computed(() => Boolean(props.pedidoId) && props.items.length > 0);
 </script>
 
 <template>
@@ -86,6 +92,19 @@ const emit = defineEmits({
         :loading="enviando"
         :disabled="!items.length || procesando"
         @click="emit('enviar')"
+      />
+      <!-- La cuenta para llevar a la mesa, con la propina sugerida y el QR de Bre-B. -->
+      <UButton
+        v-if="hayPrecuenta"
+        block
+        size="lg"
+        color="neutral"
+        variant="ghost"
+        icon="i-lucide-printer"
+        label="Imprimir precuenta"
+        :loading="preparando"
+        :disabled="procesando"
+        @click="imprimirPrecuenta(pedidoId)"
       />
     </div>
   </div>

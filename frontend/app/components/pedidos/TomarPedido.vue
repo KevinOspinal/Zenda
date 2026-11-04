@@ -178,6 +178,7 @@ function personalizar(producto) {
       <CuentaDelPedido
         v-model:abierta="cuentaAbierta"
         :titulo="titulo"
+        :pedido-id="pedido?.id ?? ''"
         :items="items"
         :total="total"
         :estado-pedido="estadoPedido"
