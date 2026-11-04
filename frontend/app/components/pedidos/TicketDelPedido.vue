@@ -40,6 +40,9 @@ const pagos = computed(() => props.pedido.pagos ?? []);
         </span>
         <span class="min-w-0 flex-1 space-y-1">
           <span class="block font-medium text-highlighted">{{ linea.producto.nombre }}</span>
+          <span v-if="linea.opciones?.length" class="cifra block text-sm text-toned">
+            {{ textoDeOpciones(linea.opciones) }}
+          </span>
           <span v-if="linea.notas" class="block text-sm text-muted">{{ linea.notas }}</span>
           <ChipEstado
             v-if="pasoPorCocina"

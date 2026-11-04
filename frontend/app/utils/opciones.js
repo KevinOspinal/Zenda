@@ -1,13 +1,22 @@
 // @ts-check
-// Opciones de los productos (término, adiciones, quitar ingredientes): cómo se describe la
-// regla de un grupo, las formas de elegir que ofrece el formulario y plantillas para empezar
-// rápido. Las reglas las valida siempre el backend (ver backend/src/modules/opciones).
+// Opciones de los productos (término, adiciones, quitar ingredientes):
+// - Administración: cómo se describe la regla de un grupo, las formas de elegir que ofrece el
+//   formulario y plantillas para empezar rápido.
+// - Pedido: elegir respetando el máximo, qué grupos obligatorios faltan y el precio con las
+//   adiciones (solo para mostrar).
+// - Cuenta, cocina y recibo: el texto de lo que se eligió.
+// Las reglas y el precio que se cobra los decide siempre el backend (ver
+// backend/src/modules/opciones).
+import { aDecimal, formatearPesos } from './dinero.js';
 
 /**
  * @typedef {object} ReglaDeGrupo
  * @property {number} minimo 0 = opcional.
  * @property {number | null} maximo null = sin límite.
  */
+
+/** @typedef {{ id: string, nombre: string, precioExtra: string }} OpcionDelMenu */
+/** @typedef {ReglaDeGrupo & { id: string, nombre: string, opciones: OpcionDelMenu[] }} GrupoDelMenu */
 
 /** Máximo de opciones por grupo (igual que en el backend). */
 export const MAXIMO_OPCIONES_POR_GRUPO = 30;
@@ -93,3 +102,77 @@ export const PLANTILLAS_DE_GRUPO = Object.freeze([
     opciones: ['Sin cebolla', 'Sin tomate', 'Sin salsas'],
   },
 ]);
+
+/**
+ * Indica si hay que elegir algo antes de agregar el producto (por ejemplo, el término).
+ * @param {{ grupos?: GrupoDelMenu[] }} producto Producto de GET /menu.
+ */
+export function requiereElegir(producto) {
+  return (producto.grupos ?? []).some((grupo) => grupo.minimo > 0);
+}
+
+/**
+ * Elige o suelta una opción respetando el máximo del grupo. En los grupos de una sola opción,
+ * elegir otra reemplaza la anterior; si además es obligatorio, la elegida no se suelta.
+ * @param {GrupoDelMenu} grupo
+ * @param {string[]} elegidas Ids elegidos en todo el plato.
+ * @param {string} opcionId La opción que se tocó.
+ * @returns {string[]} Las elegidas después del toque.
+ */
+export function alternarOpcion(grupo, elegidas, opcionId) {
+  const delGrupo = new Set(grupo.opciones.map((opcion) => opcion.id));
+  if (elegidas.includes(opcionId)) {
+    if (grupo.maximo === 1 && grupo.minimo > 0) return elegidas;
+    return elegidas.filter((id) => id !== opcionId);
+  }
+  if (grupo.maximo === 1) return [...elegidas.filter((id) => !delGrupo.has(id)), opcionId];
+  const enElGrupo = elegidas.filter((id) => delGrupo.has(id)).length;
+  if (grupo.maximo !== null && enElGrupo >= grupo.maximo) return elegidas;
+  return [...elegidas, opcionId];
+}
+
+/**
+ * Cuántas opciones de un grupo están elegidas.
+ * @param {GrupoDelMenu} grupo
+ * @param {string[]} elegidas
+ */
+export function elegidasEnGrupo(grupo, elegidas) {
+  return grupo.opciones.filter((opcion) => elegidas.includes(opcion.id)).length;
+}
+
+/**
+ * Los grupos obligatorios a los que todavía les falta elegir.
+ * @param {GrupoDelMenu[]} grupos
+ * @param {string[]} elegidas
+ */
+export function gruposPendientes(grupos, elegidas) {
+  return grupos.filter((grupo) => elegidasEnGrupo(grupo, elegidas) < grupo.minimo);
+}
+
+/**
+ * Precio de una unidad con las adiciones elegidas, solo para mostrar (el backend cobra).
+ * @param {string} precio Precio del plato.
+ * @param {GrupoDelMenu[]} grupos
+ * @param {string[]} elegidas
+ */
+export function precioConOpciones(precio, grupos, elegidas) {
+  return grupos
+    .flatMap((grupo) => grupo.opciones)
+    .filter((opcion) => elegidas.includes(opcion.id))
+    .reduce((total, opcion) => total.plus(aDecimal(opcion.precioExtra)), aDecimal(precio));
+}
+
+/**
+ * Texto de las opciones elegidas de un plato: "3/4 · Queso +$ 2.160 · Sin cebolla".
+ * @param {{ nombre: string, precioExtra?: string }[] | undefined} opciones Las del ítem (API).
+ * @param {{ conPrecio?: boolean }} [ajustes] La cocina no necesita los precios.
+ */
+export function textoDeOpciones(opciones, { conPrecio = true } = {}) {
+  return (opciones ?? [])
+    .map((opcion) =>
+      conPrecio && aDecimal(opcion.precioExtra ?? 0).gt(0)
+        ? `${opcion.nombre} +${formatearPesos(/** @type {string} */ (opcion.precioExtra))}`
+        : opcion.nombre,
+    )
+    .join(' · ');
+}

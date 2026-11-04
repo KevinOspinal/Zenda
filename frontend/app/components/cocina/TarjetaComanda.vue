@@ -133,6 +133,13 @@ const PLATO_POR_ESTADO = Object.freeze({
               />
             </span>
             <span
+              v-if="item.opciones?.length"
+              class="mt-1 flex items-start gap-1 text-base font-semibold text-primary"
+            >
+              <UIcon name="i-lucide-list-checks" class="mt-0.5 size-4 shrink-0" />
+              {{ textoDeOpciones(item.opciones, { conPrecio: false }) }}
+            </span>
+            <span
               v-if="item.notas"
               class="mt-1 flex items-start gap-1 text-base font-semibold text-warning"
             >

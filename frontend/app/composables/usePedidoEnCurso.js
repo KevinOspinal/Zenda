@@ -139,13 +139,19 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
   /**
    * Agrega un producto. Si el pedido aún no existe, lo crea con este primer producto.
    * @param {{ id: string, nombre: string }} producto
-   * @param {{ cantidad?: number, notas?: string | null }} [opciones]
+   * @param {{ cantidad?: number, notas?: string | null, opciones?: string[] }} [detalle]
+   *   `opciones`: ids de las opciones elegidas (término, adiciones...).
    */
-  async function agregar(producto, { cantidad = 1, notas = '' } = {}) {
+  async function agregar(producto, { cantidad = 1, notas = '', opciones = [] } = {}) {
     sumarEnCamino(producto.id, cantidad);
     try {
       await enFila(async () => {
-        const item = { productoId: producto.id, cantidad, ...(notas ? { notas } : {}) };
+        const item = {
+          productoId: producto.id,
+          cantidad,
+          ...(notas ? { notas } : {}),
+          ...(opciones.length ? { opciones } : {}),
+        };
         if (idActual.value) {
           await pedidos.agregarItem(idActual.value, item);
           return;
@@ -178,10 +184,17 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
             icon: 'i-lucide-undo-2',
             color: 'neutral',
             variant: 'outline',
+            // Vuelve a pedir el plato igual, con sus mismas opciones.
             onClick: () =>
               agregar(
                 { id: item.productoId, nombre: item.producto.nombre },
-                { cantidad: Number(item.cantidad), notas: item.notas },
+                {
+                  cantidad: Number(item.cantidad),
+                  notas: item.notas,
+                  opciones: (item.opciones ?? [])
+                    .map((/** @type {{ opcionId: string | null }} */ o) => o.opcionId)
+                    .filter(Boolean),
+                },
               ),
           },
         ],

@@ -1,11 +1,18 @@
 // @ts-check
-// Pruebas de las opciones de los productos con un backend simulado: crear y editar grupos
-// (término, adiciones), asignarlos a un producto y ver la lista de grupos.
+// Pruebas de las opciones de los productos con un backend simulado:
+// - Administración: crear y editar grupos (término, adiciones), asignarlos a un producto y
+//   ver la lista de grupos.
+// - Pedido: elegirlas al agregar un plato, enviarlas al API y verlas en la cuenta y la cocina.
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import FormularioGrupoOpciones from '~/components/admin/FormularioGrupoOpciones.vue';
 import FormularioProducto from '~/components/admin/FormularioProducto.vue';
 import GruposDeOpciones from '~/components/admin/GruposDeOpciones.vue';
+import TarjetaComanda from '~/components/cocina/TarjetaComanda.vue';
+import PersonalizarProducto from '~/components/pedidos/PersonalizarProducto.vue';
+import ResumenCuenta from '~/components/pedidos/ResumenCuenta.vue';
+import TarjetaProducto from '~/components/pedidos/TarjetaProducto.vue';
+import { usePedidoEnCurso } from '~/composables/usePedidoEnCurso.js';
 import { useSesionStore } from '~/stores/sesion.js';
 import { PLANTILLAS_DE_GRUPO } from '~/utils/opciones.js';
 import { simularBackend } from './ayudantes.js';
@@ -13,7 +20,9 @@ import { simularBackend } from './ayudantes.js';
 const { fetchFalso } = vi.hoisted(() => ({ fetchFalso: vi.fn() }));
 mockNuxtImport('$fetch', () => fetchFalso);
 
-const ESPACIO_FIJO = ' ';
+const ESPACIO_FIJO = '\u00a0';
+/** @param {string} valor Por ejemplo "12.960". */
+const pesos = (valor) => `$${ESPACIO_FIJO}${valor}`;
 
 /**
  * Cuerpo enviado en la primera llamada a una ruta.
@@ -44,6 +53,11 @@ const TERMINO = {
     { id: 'o3', nombre: '3/4', precioExtra: '0', tipoImpuesto: 'impoconsumo', activo: true },
   ],
 };
+
+// Los paneles se dibujan en el body (fuera del componente): se limpian entre pruebas.
+afterEach(() => {
+  document.body.querySelectorAll('[role="dialog"]').forEach((dialogo) => dialogo.remove());
+});
 
 beforeEach(() => {
   fetchFalso.mockReset();
@@ -205,5 +219,154 @@ describe('opciones del producto', () => {
 
     await vi.waitFor(() => expect(formulario.emitted('guardado')).toHaveLength(1));
     expect(cuerpoEnviadoA('/productos/p1').gruposOpciones).toEqual(['g1', 'g2']);
+  });
+});
+
+describe('al tomar el pedido', () => {
+  /** Hamburguesa como la entrega GET /menu: término obligatorio y adiciones con precio. */
+  const HAMBURGUESA = {
+    id: 'p1',
+    nombre: 'IND Classic',
+    descripcion: null,
+    precio: '10800',
+    grupos: [
+      {
+        id: 'g1',
+        nombre: 'Término de la carne',
+        minimo: 1,
+        maximo: 1,
+        opciones: [
+          { id: 'o3', nombre: '3/4', precioExtra: '0' },
+          { id: 'o4', nombre: 'Bien asado', precioExtra: '0' },
+        ],
+      },
+      {
+        id: 'g2',
+        nombre: 'Adiciones',
+        minimo: 0,
+        maximo: null,
+        opciones: [{ id: 'o1', nombre: 'Queso', precioExtra: '2160' }],
+      },
+    ],
+  };
+  const APARIENCIA = { icono: 'i-lucide-hamburger', fondo: '', texto: '' };
+
+  /**
+   * Botón del panel (se dibuja en el body) que contiene un texto.
+   * @param {string} texto
+   */
+  const botonDelPanel = (texto) =>
+    /** @type {HTMLButtonElement | undefined} */ (
+      [...document.body.querySelectorAll('button')].find((boton) =>
+        boton.textContent?.includes(texto),
+      )
+    );
+
+  it('un plato con término obligatorio abre sus opciones en lugar de agregarse', async () => {
+    const tarjeta = await mountSuspended(TarjetaProducto, {
+      props: { producto: HAMBURGUESA, apariencia: APARIENCIA },
+    });
+
+    await tarjeta.findAll('button')[0]?.trigger('click');
+
+    expect(tarjeta.emitted('agregar')).toBeUndefined();
+    expect(tarjeta.emitted('personalizar')?.[0]).toEqual([HAMBURGUESA]);
+    expect(tarjeta.text()).toContain('Elige opciones');
+  });
+
+  it('no deja agregar sin el término; con él, suma las adiciones al valor', async () => {
+    const panel = await mountSuspended(PersonalizarProducto, {
+      props: { producto: HAMBURGUESA, apariencia: APARIENCIA, abierto: true },
+    });
+
+    await vi.waitFor(() => expect(botonDelPanel('Elige: Término de la carne')).toBeDefined());
+    expect(botonDelPanel('Elige: Término de la carne')?.disabled).toBe(true);
+    expect(document.body.textContent).toContain('Obligatorio');
+
+    // Cada toque espera a que la pantalla se actualice, como pasa con un dedo real.
+    botonDelPanel('3/4')?.click();
+    await nextTick();
+    botonDelPanel('Queso')?.click();
+
+    await vi.waitFor(() =>
+      expect(botonDelPanel(`Agregar · ${pesos('12.960')}`)?.disabled).toBe(false),
+    );
+    expect(document.body.textContent).toContain('Listo');
+    botonDelPanel('Agregar ·')?.click();
+
+    expect(panel.emitted('agregar')?.[0]).toEqual([
+      { producto: HAMBURGUESA, cantidad: 1, notas: '', opciones: ['o3', 'o1'] },
+    ]);
+  });
+
+  it('las opciones elegidas viajan al API con el plato', async () => {
+    simularBackend(fetchFalso, {
+      'GET /mesas': () => [],
+      'POST /pedidos': (opciones) => ({
+        id: 'n1',
+        estado: 'abierto',
+        tipo: 'mostrador',
+        total: '12960',
+        abiertoEn: new Date().toISOString(),
+        items: [],
+        ...opciones.body,
+      }),
+    });
+    /** @type {ReturnType<typeof usePedidoEnCurso> | undefined} */
+    let pedidoEnCurso;
+    const Envoltura = defineComponent({
+      setup() {
+        pedidoEnCurso = usePedidoEnCurso({ pedidoId: ref(''), mesaId: ref(''), alCrear: () => {} });
+        return () => h('div');
+      },
+    });
+    await mountSuspended(Envoltura);
+
+    await pedidoEnCurso?.agregar(HAMBURGUESA, { opciones: ['o3', 'o1'] });
+
+    expect(cuerpoEnviadoA('/pedidos').items).toEqual([
+      { productoId: 'p1', cantidad: 1, opciones: ['o3', 'o1'] },
+    ]);
+  });
+
+  /** Ítem del pedido con sus opciones, como lo entrega el API. */
+  const ITEM = {
+    id: 'i1',
+    cantidad: '1',
+    precioUnitario: '12960',
+    notas: 'Salsa aparte',
+    estadoCocina: 'pendiente',
+    creadoEn: new Date().toISOString(),
+    producto: { nombre: 'IND Classic' },
+    opciones: [
+      { id: 'x1', opcionId: 'o3', grupo: 'Término de la carne', nombre: '3/4', precioExtra: '0' },
+      { id: 'x2', opcionId: 'o1', grupo: 'Adiciones', nombre: 'Queso', precioExtra: '2160' },
+    ],
+  };
+
+  it('la cuenta muestra las opciones con el precio de las adiciones', async () => {
+    const cuenta = await mountSuspended(ResumenCuenta, { props: { items: [ITEM] } });
+
+    expect(cuenta.text()).toContain(`3/4 · Queso +${pesos('2.160')}`);
+    expect(cuenta.text()).toContain(pesos('12.960'));
+  });
+
+  it('la cocina ve las opciones sin precios, aparte de las notas', async () => {
+    const pedido = {
+      id: 'n1',
+      estado: 'enviado_a_cocina',
+      mesa: { id: 'm1', nombre: 'Mesa 4' },
+      mesaId: 'm1',
+      total: '12960',
+      abiertoEn: ITEM.creadoEn,
+      items: [ITEM],
+    };
+    const tarjeta = await mountSuspended(TarjetaComanda, {
+      props: { comanda: { pedido, items: pedido.items, minutos: 0 } },
+    });
+
+    expect(tarjeta.text()).toContain('3/4 · Queso');
+    expect(tarjeta.text()).not.toContain('2.160');
+    expect(tarjeta.text()).toContain('Salsa aparte');
   });
 });

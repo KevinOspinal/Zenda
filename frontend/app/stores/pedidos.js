@@ -27,7 +27,8 @@ function esCobradoEnCocina(pedido) {
 }
 
 /**
- * @typedef {{ productoId: string, cantidad: string | number, notas?: string | null }} NuevoItem
+ * @typedef {{ productoId: string, cantidad: string | number, notas?: string | null,
+ *   opciones?: string[] }} NuevoItem
  */
 
 export const usePedidosStore = defineStore('pedidos', () => {

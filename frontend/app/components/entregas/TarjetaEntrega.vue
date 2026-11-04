@@ -181,6 +181,9 @@ const cantidadDeProductos = computed(() =>
               </span>
               <span class="min-w-0">
                 <span class="block text-highlighted">{{ item.producto.nombre }}</span>
+                <span v-if="item.opciones?.length" class="block text-sm text-muted">
+                  {{ textoDeOpciones(item.opciones, { conPrecio: false }) }}
+                </span>
                 <span v-if="item.notas" class="block text-sm text-muted">{{ item.notas }}</span>
               </span>
             </li>

@@ -1,12 +1,16 @@
 <!--
   Producto del menú para tomar pedidos.
-  - Tocar la tarjeta agrega una unidad (con una vibración leve en celulares Android).
-  - El botón de nota abre las opciones: cantidad y notas para la cocina.
+  - Tocar la tarjeta agrega una unidad (con una vibración leve en celulares Android). Si el
+    plato tiene algo obligatorio por elegir (por ejemplo, el término), abre sus opciones.
+  - El botón de nota abre las opciones: término, adiciones, cantidad y notas para la cocina.
   - Un contador muestra cuántas van en el pedido y salta un poco al cambiar.
   Los productos no tienen foto: se muestra el ícono y el tono de su categoría.
 -->
 <script setup>
-/** @typedef {{ id: string, nombre: string, descripcion?: string | null, precio: string }} Producto */
+/**
+ * @typedef {{ id: string, nombre: string, descripcion?: string | null, precio: string,
+ *   grupos?: import('~/utils/opciones.js').GrupoDelMenu[] }} Producto
+ */
 /** @typedef {{ icono: string, fondo: string, texto: string }} AparienciaCategoria */
 
 const props = defineProps({
@@ -31,7 +35,15 @@ const emit = defineEmits({
 const preferencias = usePreferenciasStore();
 const { vibrate, isSupported } = useVibrate({ pattern: [12] });
 
+const tieneOpciones = computed(() => Boolean(props.producto.grupos?.length));
+/** Hay que elegir algo antes de agregarlo: el toque abre las opciones. */
+const debeElegir = computed(() => requiereElegir(props.producto));
+
 function agregar() {
+  if (debeElegir.value) {
+    emit('personalizar', props.producto);
+    return;
+  }
   if (preferencias.vibracion && isSupported.value) vibrate();
   emit('agregar', props.producto);
 }
@@ -44,7 +56,7 @@ function agregar() {
     <button
       type="button"
       class="flex min-h-20 flex-1 items-center gap-3 rounded-xl p-3 text-left transition focus-visible:outline-2 focus-visible:outline-primary active:scale-[0.98] motion-reduce:transition-none"
-      :aria-label="`Agregar ${producto.nombre}, ${formatearPesos(producto.precio)}`"
+      :aria-label="`${debeElegir ? 'Elegir opciones de' : 'Agregar'} ${producto.nombre}, ${formatearPesos(producto.precio)}`"
       @click="agregar"
     >
       <span class="grid size-14 shrink-0 place-items-center rounded-lg" :class="apariencia.fondo">
@@ -55,19 +67,25 @@ function agregar() {
         <span v-if="producto.descripcion" class="line-clamp-2 text-sm text-muted">
           {{ producto.descripcion }}
         </span>
-        <span class="cifra mt-1 block font-semibold text-primary">
-          {{ formatearPesos(producto.precio) }}
+        <span class="mt-1 flex flex-wrap items-center gap-x-2">
+          <span class="cifra font-semibold text-primary">{{
+            formatearPesos(producto.precio)
+          }}</span>
+          <span v-if="tieneOpciones" class="flex items-center gap-1 text-xs text-muted">
+            <UIcon name="i-lucide-list-checks" class="size-3.5" />
+            {{ debeElegir ? 'Elige opciones' : 'Con opciones' }}
+          </span>
         </span>
       </span>
     </button>
 
     <div class="flex items-center pe-2">
       <UButton
-        icon="i-lucide-message-square-plus"
+        :icon="tieneOpciones ? 'i-lucide-sliders-horizontal' : 'i-lucide-message-square-plus'"
         color="neutral"
         variant="ghost"
         class="size-11 justify-center"
-        :aria-label="`Agregar ${producto.nombre} con nota o cantidad`"
+        :aria-label="`Agregar ${producto.nombre} con ${tieneOpciones ? 'opciones, ' : ''}nota o cantidad`"
         @click="emit('personalizar', producto)"
       />
     </div>

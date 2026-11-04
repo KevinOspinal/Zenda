@@ -87,12 +87,25 @@ const metodosDePago = () => ({
   ],
 });
 
+/** Opciones vendidas: dos adiciones con precio y dos términos (sin costo). */
+const opcionesVendidas = () => ({
+  rango: RANGO,
+  total: '15000.00',
+  opciones: [
+    { grupo: 'Adiciones', nombre: 'Tocineta', cantidad: '3', total: '9000.00' },
+    { grupo: 'Adiciones', nombre: 'Queso', cantidad: '2', total: '6000.00' },
+    { grupo: 'Término de la carne', nombre: 'Bien asado', cantidad: '2', total: '0.00' },
+    { grupo: 'Término de la carne', nombre: '3/4', cantidad: '5', total: '0.00' },
+  ],
+});
+
 /** Backend con ventas en el periodo. */
 function conVentas() {
   simularBackend(fetchFalso, {
     'GET /reportes/resumen': resumenConVentas,
     'GET /reportes/por-producto': () => productosVendidos(),
     'GET /reportes/por-metodo-pago': metodosDePago,
+    'GET /reportes/por-opcion': opcionesVendidas,
   });
 }
 
@@ -101,11 +114,11 @@ beforeEach(() => {
 });
 
 describe('tablero de reportes', () => {
-  it('pide los tres reportes del día de hoy (hora de Colombia)', async () => {
+  it('pide los cuatro reportes del día de hoy (hora de Colombia)', async () => {
     conVentas();
     await montarPagina();
 
-    await vi.waitFor(() => expect(fetchFalso).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() => expect(fetchFalso).toHaveBeenCalledTimes(4));
     const [, opciones] = fetchFalso.mock.calls[0];
     expect(opciones.query).toEqual(rangoDePeriodo('hoy'));
   });
@@ -130,6 +143,20 @@ describe('tablero de reportes', () => {
     expect(texto).toContain('WhatsApp');
   });
 
+  it('muestra las adiciones con lo que dejaron y las opciones sin costo más pedidas', async () => {
+    conVentas();
+    const pagina = await montarPagina();
+
+    await vi.waitFor(() => expect(pagina.text()).toContain('Adiciones y opciones'));
+    const texto = pagina.text();
+    expect(texto).toContain(`dejaron ${pesos('15.000')} extra`);
+    expect(texto).toContain(`+${pesos('9.000')}`);
+    expect(texto).toContain('Adiciones · 3 veces');
+    // Sin costo: de la más pedida a la menos pedida.
+    expect(texto.indexOf('3/4')).toBeLessThan(texto.indexOf('Bien asado'));
+    expect(texto).toContain('× 5');
+  });
+
   it('si el dueño cambia de periodo antes de que llegue la respuesta, muestra solo el último', async () => {
     const hoy = rangoDePeriodo('hoy').desde;
     /** @type {(resumen: object) => void} */
@@ -145,6 +172,7 @@ describe('tablero de reportes', () => {
       'GET /reportes/por-producto': ({ query }) =>
         productosVendidos(query.desde === hoy ? 'Vendido hoy' : 'Vendido ayer'),
       'GET /reportes/por-metodo-pago': metodosDePago,
+      'GET /reportes/por-opcion': opcionesVendidas,
     });
     const pagina = await montarPagina();
 
@@ -177,6 +205,7 @@ describe('tablero de reportes', () => {
       }),
       'GET /reportes/por-producto': () => ({ rango: RANGO, total: '0.00', productos: [] }),
       'GET /reportes/por-metodo-pago': () => ({ rango: RANGO, total: '0.00', metodos: [] }),
+      'GET /reportes/por-opcion': () => ({ rango: RANGO, total: '0.00', opciones: [] }),
     });
     const pagina = await montarPagina();
 

@@ -202,7 +202,10 @@ function personalizar(producto) {
       v-model:abierto="personalizando"
       :producto="productoElegido"
       :apariencia="productoElegido?.apariencia ?? null"
-      @agregar="({ producto, cantidad, notas }) => agregar(producto, { cantidad, notas })"
+      @agregar="
+        ({ producto, cantidad, notas, opciones }) =>
+          agregar(producto, { cantidad, notas, opciones })
+      "
     />
   </div>
 </template>
