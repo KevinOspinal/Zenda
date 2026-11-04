@@ -272,6 +272,8 @@ describe('pedir con opciones', () => {
         ['Adiciones', 'Tocineta', '3000'],
       ],
     );
+    // Cada una dice de qué opción del menú viene (para volver a pedir el plato igual).
+    expect(item.opciones[1].opcionId).toBe(opcion(adiciones, 'Queso'));
     // Base: plato $10.000 + queso $2.000 + tocineta $3.000. Impuesto: $800 + $160 (la tocineta
     // no lleva).
     expect(res.body).toMatchObject({ subtotal: '15000', impuestos: '960', total: '15960' });
@@ -453,6 +455,7 @@ describe('aislamiento y régimen', () => {
     expect(venta.body.items[0].opciones[0]).toMatchObject({
       grupo: 'Término de la carne',
       nombre: 'Azul',
+      opcionId: null,
     });
   });
 });

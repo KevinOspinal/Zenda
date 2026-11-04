@@ -136,6 +136,8 @@ export const PEDIDO = Object.freeze({
       opciones: [
         {
           id: 'e1f2a3b4-c5d6-4e7f-8a9b-0c1d2e3f4a5b',
+          // La opción del menú; null si después se borró del grupo.
+          opcionId: ID.opcionTresCuartos,
           grupo: 'Término de la carne',
           nombre: '3/4',
           precioExtra: '0',

@@ -110,7 +110,8 @@ const DETALLE_PEDIDO = /** @type {const} */ ({
       // Las opciones elegidas (término, adiciones...), como se vendieron.
       opciones: {
         orderBy: { orden: 'asc' },
-        select: { id: true, grupo: true, nombre: true, precioExtra: true },
+        // opcionId: la opción del menú (null si se borró); sirve para volver a pedir igual.
+        select: { id: true, opcionId: true, grupo: true, nombre: true, precioExtra: true },
       },
     },
   },
