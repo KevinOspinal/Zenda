@@ -292,6 +292,51 @@ describe('eventos del ciclo de una venta', () => {
     expect(await mesa).toMatchObject({ mesaId: ids.mesa, estado: 'libre' });
   });
 
+  it('un pedido cobrado antes de ir a la cocina ocupa la mesa hasta su último plato', async () => {
+    const alCrear = esperarEvento(cocina, EVENTOS.MESA_ESTADO);
+    const { body: pedido } = await llamar('post', '/pedidos', 'mesero', {
+      mesaId: ids.mesa,
+      items: [{ productoId: ids.hamburguesa, cantidad: 1 }],
+    });
+    await alCrear;
+    // Cada aviso se espera antes de la siguiente acción, para no confundirlos.
+    const alCobrar = esperarEvento(cocina, EVENTOS.MESA_ESTADO);
+    await llamar('post', `/pedidos/${pedido.id}/cobrar`, 'cajero', {
+      pagos: [{ metodo: 'tarjeta', monto: 12000 }],
+    });
+    const despuesDeCobrar = await alCobrar;
+    const alEnviar = esperarEvento(cocina, EVENTOS.MESA_ESTADO);
+    await llamar('post', `/pedidos/${pedido.id}/enviar-cocina`, 'cajero');
+    const despuesDeEnviar = await alEnviar;
+
+    await llamar('patch', `/pedidos/${pedido.id}/cocina`, 'cocina', { estadoCocina: 'listo' });
+    const alEntregar = esperarEvento(cocina, EVENTOS.MESA_ESTADO);
+    await llamar('patch', `/pedidos/${pedido.id}/cocina`, 'mesero', { estadoCocina: 'entregado' });
+
+    expect(despuesDeCobrar).toMatchObject({ mesaId: ids.mesa, estado: 'ocupada' });
+    expect(despuesDeEnviar).toMatchObject({ mesaId: ids.mesa, estado: 'ocupada' });
+    expect(await alEntregar).toMatchObject({ mesaId: ids.mesa, estado: 'libre' });
+  });
+
+  it('una venta en mesa que no va a cocina libera la mesa al entregarla', async () => {
+    const alCrear = esperarEvento(cocina, EVENTOS.MESA_ESTADO);
+    const { body: pedido } = await llamar('post', '/pedidos', 'mesero', {
+      mesaId: ids.mesa,
+      items: [{ productoId: ids.hamburguesa, cantidad: 1 }],
+    });
+    await alCrear;
+    const alCobrar = esperarEvento(cocina, EVENTOS.MESA_ESTADO);
+    await llamar('post', `/pedidos/${pedido.id}/cobrar`, 'cajero', {
+      pagos: [{ metodo: 'tarjeta', monto: 12000 }],
+    });
+    await alCobrar;
+    const alEntregar = esperarEvento(cocina, EVENTOS.MESA_ESTADO);
+
+    await llamar('post', `/pedidos/${pedido.id}/entregar`, 'cajero');
+
+    expect(await alEntregar).toMatchObject({ mesaId: ids.mesa, estado: 'libre' });
+  });
+
   it('anular avisa el pedido anulado', async () => {
     const { body: pedido } = await llamar('post', '/pedidos', 'cajero', {
       items: [{ productoId: ids.hamburguesa, cantidad: 1 }],

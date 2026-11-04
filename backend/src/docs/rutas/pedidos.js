@@ -348,7 +348,11 @@ Funciona aunque el pedido ya esté pagado (en comidas rápidas se cobra antes de
 - \`entregado\`: todos. La cocina solo en pedidos sin mesa (mostrador, "Ya salió"); en una mesa
   lo confirma el mesero.
 
-📡 Avisa en tiempo real con \`item:estado_cocina\`: cuando un ítem está **listo**, el mesero se entera.`,
+Si el pedido ya se cobró, al entregar su último plato la mesa queda **libre** (si no tiene otra
+cuenta en curso).
+
+📡 Avisa en tiempo real con \`item:estado_cocina\`: cuando un ítem está **listo**, el mesero se entera.
+Si un pedido cobrado entrega un plato, también \`mesa:estado\`.`,
       parametros: idPedidoEItem,
       cuerpo: cuerpo(esquemaEstadoCocina, {
         ejemplo: { estadoCocina: 'listo' },
@@ -372,10 +376,12 @@ Avanza de una vez los platos que pueden pasar a ese estado:
 
 Mismas reglas de quién marca cada paso que \`PATCH /pedidos/{id}/items/{itemId}/cocina\`
 (si no, 403 \`SIN_PERMISO\`). Si ningún plato puede pasar a ese estado, 409
-\`NADA_QUE_AVANZAR\`.
+\`NADA_QUE_AVANZAR\`. Si el pedido ya se cobró y salen sus últimos platos, la mesa queda
+**libre** (si no tiene otra cuenta en curso).
 
 📡 Avisa en tiempo real con **un solo** \`pedido:estado_cocina\` con todos los platos que
-cambiaron, para que el mesero reciba un solo aviso por mesa.`,
+cambiaron, para que el mesero reciba un solo aviso por mesa. Si un pedido cobrado entrega
+platos, también \`mesa:estado\`.`,
       parametros: idPedido,
       cuerpo: cuerpo(esquemaEstadoCocinaPedido, {
         ejemplo: { estadoCocina: 'entregado' },
@@ -402,8 +408,11 @@ anulado, no (409 \`PEDIDO_ANULADO\`).
 La primera vez guarda la hora en \`enviadoACocinaEn\`; reenviar no la cambia. Con ella la
 cocina sigue viendo el pedido aunque se cobre antes de que salgan sus platos.
 
+En una mesa, la mesa queda **ocupada** hasta que se entreguen los platos, aunque el pedido ya
+esté cobrado.
+
 📡 Avisa en tiempo real con \`pedido:enviado_a_cocina\`: **la comanda** con productos,
-cantidades y notas.`,
+cantidades y notas. Si ya estaba cobrado, también \`mesa:estado\`.`,
       parametros: idPedido,
       respuestas: {
         200: respuesta('Pedido enviado a cocina.', {
@@ -431,7 +440,7 @@ propia factura**.
   2 hamburguesas puedes pasar 1; la otra se queda en la cuenta original.
 - Los productos conservan su **precio, impuesto, notas, opciones y estado de cocina**.
 - Los totales de ambas cuentas se recalculan; sumados, dan lo mismo que antes.
-- La mesa sigue **ocupada** hasta que se cobren todas sus cuentas.
+- La mesa sigue **ocupada** hasta que se cobren todas sus cuentas y se entreguen sus platos.
 - Se puede dividir varias veces (por ejemplo, en tres cuentas).
 
 **Errores**
@@ -524,7 +533,11 @@ cliente en efectivo (\`recibido\`) queda guardado en el pago, para mostrar el ca
 - Con \`clienteId\`, la factura irá a nombre de ese cliente; sin él, a "consumidor final".
 
 **Qué pasa al cobrar**
-1. El pedido queda \`pagado\` y la mesa, **libre**.
+1. El pedido queda \`pagado\`. La mesa queda **libre** si no le falta nada; sigue **ocupada**:
+   - mientras tenga platos de la cocina por entregar (se libera con el último), y
+   - si el pedido no ha ido a la cocina: enseguida se envía
+     (\`POST /pedidos/{id}/enviar-cocina\`) o, si no va a cocina, se entrega
+     (\`POST /pedidos/{id}/entregar\`).
 2. Los productos que controlan inventario **se descuentan del stock**. Si alguno queda en
    negativo, se cobra igual y llega en \`advertencias\`.
 
@@ -687,7 +700,7 @@ quién lo lleva. Sus platos quedan \`entregado\` y la comanda sale del tablero d
   '/pedidos/{id}/entregar': {
     post: operacion({
       etiqueta: 'Pedidos',
-      resumen: 'Marcar entregado un pedido sin mesa',
+      resumen: 'Marcar entregado un pedido',
       roles: [...COBRAN, 'domiciliario'],
       descripcion: `
 - **Domicilio:** el cliente lo recibió (\`entrega.entregadoEn\`). Debe haber salido antes con un
@@ -696,11 +709,13 @@ quién lo lleva. Sus platos quedan \`entregado\` y la comanda sale del tablero d
   sin cobrar, queda **por liquidar** hasta que la caja reciba el dinero
   (\`POST /domiciliarios/{id}/liquidar\`).
 - **Mostrador:** el cliente lo recogió; lo que quedara en la cocina sale con él.
-- **Mesa:** no aplica (409 \`ENTREGA_EN_MESA\`): el mesero marca cada plato como entregado.
+- **Mesa:** solo uno **cobrado que no fue a la cocina** ("No va a cocina": por ejemplo, unas
+  gaseosas). Se entrega todo y la mesa queda **libre**. Si no se ha cobrado o ya fue a la
+  cocina, no aplica (409 \`ENTREGA_EN_MESA\`): el mesero marca cada plato como entregado.
 
 Sin cuerpo.
 
-📡 Avisa en tiempo real con \`pedido:actualizado\`.`,
+📡 Avisa en tiempo real con \`pedido:actualizado\` y, si es de mesa, \`mesa:estado\`.`,
       parametros: idPedido,
       respuestas: {
         200: respuesta('Pedido entregado.', {

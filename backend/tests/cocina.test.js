@@ -3,6 +3,7 @@
 // - La cocina ve las comandas y marca "preparando" y "listo"; no toma pedidos ni cobra.
 // - El mesero no marca "listo"; sí "entregado". La cocina solo entrega en mostrador.
 // - GET /pedidos?cocina=true: la cocina sigue viendo un pedido cobrado con platos por entregar.
+// - La mesa de un pedido cobrado sigue ocupada hasta que se entregan sus platos.
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
@@ -353,5 +354,140 @@ describe('PATCH /pedidos/:id/cocina (todos los platos a la vez)', () => {
 
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('NADA_QUE_AVANZAR');
+  });
+});
+
+describe('la mesa sigue ocupada hasta entregar los platos', () => {
+  /**
+   * Estado de la mesa, como lo ve el mapa.
+   * @param {string} mesaId
+   */
+  async function estadoMesa(mesaId) {
+    const res = await llamar('get', `/mesas/${mesaId}`, negocio.encabezados.mesero);
+    return res.body.estado;
+  }
+
+  /**
+   * Cobra el pedido en efectivo.
+   * @param {{ id: string }} pedido
+   * @param {string} monto
+   */
+  async function cobrar(pedido, monto) {
+    const res = await llamar('post', `/pedidos/${pedido.id}/cobrar`, negocio.encabezados.cajero, {
+      pagos: [{ metodo: 'efectivo', monto }],
+    });
+    expect(res.status).toBe(200);
+    return res.body.pedido;
+  }
+
+  /**
+   * Toma un pedido en una mesa nueva y lo cobra antes de enviarlo a la cocina.
+   * @param {string} productoId
+   * @param {string} monto
+   */
+  async function cobradoSinCocina(productoId, monto) {
+    const creado = await llamar('post', '/pedidos', negocio.encabezados.mesero, {
+      mesaId: await nuevaMesa(),
+      items: [{ productoId, cantidad: 1 }],
+    });
+    return cobrar(creado.body, monto);
+  }
+
+  it('cobrado antes de ir a la cocina, la mesa sigue ocupada mientras se decide', async () => {
+    const pedido = await cobradoSinCocina(ids.hamburguesa, '12000');
+
+    expect(pedido).toMatchObject({ estado: 'pagado', enviadoACocinaEn: null });
+    expect(await estadoMesa(pedido.mesaId)).toBe('ocupada');
+  });
+
+  it('al enviarlo, la cocina lo prepara y la mesa se libera con el último plato', async () => {
+    const pedido = await cobradoSinCocina(ids.hamburguesa, '12000');
+
+    const enviado = await llamar(
+      'post',
+      `/pedidos/${pedido.id}/enviar-cocina`,
+      negocio.encabezados.cajero,
+    );
+    expect(enviado.body).toMatchObject({ estado: 'pagado', enviadoACocinaEn: expect.any(String) });
+    expect(await comandasDeCocina(negocio.encabezados.cocina)).toContain(pedido.id);
+
+    await marcarPlato(pedido, 'listo', negocio.encabezados.cocina);
+    expect(await estadoMesa(pedido.mesaId)).toBe('ocupada');
+
+    await marcarPlato(pedido, 'entregado', negocio.encabezados.mesero);
+    expect(await estadoMesa(pedido.mesaId)).toBe('libre');
+    expect(await comandasDeCocina(negocio.encabezados.cocina)).not.toContain(pedido.id);
+  });
+
+  it('"No va a cocina": se entrega todo de una vez y la mesa queda libre', async () => {
+    const pedido = await cobradoSinCocina(ids.gaseosa, '4000');
+
+    const res = await llamar('post', `/pedidos/${pedido.id}/entregar`, negocio.encabezados.cajero);
+
+    expect(res.status).toBe(200);
+    expect(res.body.items).toEqual([expect.objectContaining({ estadoCocina: 'entregado' })]);
+    expect(await estadoMesa(pedido.mesaId)).toBe('libre');
+    expect(await comandasDeCocina(negocio.encabezados.cocina)).not.toContain(pedido.id);
+  });
+
+  it('lo que ya fue a la cocina no se entrega de una vez: el mesero lleva cada plato', async () => {
+    const pedido = await pedidoEnCocina(negocio.encabezados.mesero, { enMesa: true });
+    await cobrar(pedido, '12000');
+
+    const res = await llamar('post', `/pedidos/${pedido.id}/entregar`, negocio.encabezados.cajero);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('ENTREGA_EN_MESA');
+  });
+
+  it('cobrado con los platos en la cocina, sigue ocupada; "Entregar todo" la libera', async () => {
+    const pedido = await pedidoEnCocina(negocio.encabezados.mesero, { enMesa: true });
+    await cobrar(pedido, '12000');
+    const recienCobrado = await estadoMesa(pedido.mesaId);
+
+    await llamar('patch', `/pedidos/${pedido.id}/cocina`, negocio.encabezados.cocina, {
+      estadoCocina: 'listo',
+    });
+    await llamar('patch', `/pedidos/${pedido.id}/cocina`, negocio.encabezados.mesero, {
+      estadoCocina: 'entregado',
+    });
+
+    expect(recienCobrado).toBe('ocupada');
+    expect(await estadoMesa(pedido.mesaId)).toBe('libre');
+  });
+
+  it('anular un pedido cobrado con platos en la cocina libera la mesa', async () => {
+    const pedido = await pedidoEnCocina(negocio.encabezados.mesero, { enMesa: true });
+    await cobrar(pedido, '12000');
+
+    const res = await llamar(
+      'post',
+      `/pedidos/${pedido.id}/anular`,
+      negocio.encabezados.administrador,
+      { motivo: 'Prueba' },
+    );
+
+    expect(res.status).toBe(200);
+    expect(await estadoMesa(pedido.mesaId)).toBe('libre');
+  });
+
+  it('un pedido cobrado hace más de 12 horas ya no ocupa la mesa', async () => {
+    const viejo = await pedidoEnCocina(negocio.encabezados.mesero, { enMesa: true });
+    await cobrar(viejo, '12000');
+    const haceTreceHoras = new Date(Date.now() - 13 * 60 * 60 * 1000);
+    await conNegocio(negocio.tenantId, (tx) =>
+      tx.pedido.update({ where: { id: viejo.id }, data: { cerradoEn: haceTreceHoras } }),
+    );
+
+    // Otra cuenta en la misma mesa, que no va a cocina: al entregarla, la vieja ya no cuenta.
+    const otra = await llamar('post', '/pedidos', negocio.encabezados.mesero, {
+      mesaId: viejo.mesaId,
+      items: [{ productoId: ids.gaseosa, cantidad: 1 }],
+    });
+    await cobrar(otra.body, '4000');
+    await llamar('post', `/pedidos/${otra.body.id}/entregar`, negocio.encabezados.cajero);
+
+    expect(otra.status).toBe(201);
+    expect(await estadoMesa(viejo.mesaId)).toBe('libre');
   });
 });

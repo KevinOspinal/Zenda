@@ -163,6 +163,6 @@ export async function despachar(_req, res) {
  */
 export async function entregar(_req, res) {
   const pedido = await servicio.entregarPedido(obtenerSesion(res), res.locals.entrada.params.id);
-  eventos.avisarPedidoActualizado(pedido);
+  eventos.avisarPedidoEntregado(pedido);
   res.json(pedido);
 }

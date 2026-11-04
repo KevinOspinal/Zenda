@@ -328,6 +328,11 @@ export function cambiarEstadoCocina(sesion, pedidoId, itemId, estadoCocina) {
     }
 
     await tx.itemPedido.update({ where: { id: itemId }, data: { estadoCocina } });
+
+    // Un pedido cobrado ocupa la mesa hasta que llegan sus platos: con el último, se libera.
+    if (estadoCocina === 'entregado' && pedido.estado === 'pagado' && pedido.mesaId) {
+      await actualizarEstadoMesa(tx, pedido.mesaId);
+    }
     return cargarPedido(tx, pedidoId, sesion);
   });
 }
@@ -379,12 +384,18 @@ export function cambiarEstadoCocinaDelPedido(sesion, pedidoId, estadoCocina) {
     // 3. Avanzarlos todos en una sola instrucción.
     const cambiados = platos.map((plato) => plato.id);
     await tx.itemPedido.updateMany({ where: { id: { in: cambiados } }, data: { estadoCocina } });
+
+    // 4. Un pedido cobrado ocupa la mesa hasta que llegan sus platos: con el último, se libera.
+    if (estadoCocina === 'entregado' && pedido.estado === 'pagado' && pedido.mesaId) {
+      await actualizarEstadoMesa(tx, pedido.mesaId);
+    }
     return { pedido: await cargarPedido(tx, pedidoId, sesion), cambiados };
   });
 }
 
 /**
  * Envía el pedido a cocina. Repetirlo no es un error (por ejemplo, tras agregar más ítems).
+ * Si es de mesa, la mesa queda ocupada hasta que se entreguen sus platos, aunque ya se cobró.
  * @param {DatosSesion} sesion
  * @param {string} pedidoId
  */
@@ -413,6 +424,9 @@ export function enviarACocina(sesion, pedidoId) {
         enviadoACocinaEn: pedido.enviadoACocinaEn ?? new Date(),
       },
     });
+
+    // 3. La mesa espera los platos: sigue ocupada (o vuelve a estarlo) hasta que lleguen.
+    if (pedido.mesaId) await actualizarEstadoMesa(tx, pedido.mesaId);
     return cargarPedido(tx, pedidoId, sesion);
   });
 }
@@ -422,7 +436,8 @@ export function enviarACocina(sesion, pedidoId) {
  * misma mesa. Cada cuenta se cobra por separado, y así cada persona puede tener su factura.
  *
  * Los ítems conservan su precio, impuesto, notas, opciones y estado de cocina. Los totales de ambos
- * pedidos se recalculan. La mesa sigue ocupada hasta que se cobren todas sus cuentas.
+ * pedidos se recalculan. La mesa sigue ocupada hasta que se cobren todas sus cuentas y se
+ * entreguen sus platos.
  *
  * @param {DatosSesion} sesion
  * @param {string} pedidoId
@@ -616,8 +631,12 @@ async function cobrarEnTransaccion(tx, sesion, pedidoId, { pagos, propina = '0',
   // 8. Descontar del inventario los productos que lo controlan.
   const advertencias = await descontarInventarioPorVenta(tx, sesion.tenantId, pedidoId);
 
-  // 9. Liberar la mesa.
-  if (pedido.mesaId) await liberarMesa(tx, pedido.mesaId);
+  // 9. Actualizar la mesa: queda libre si ya no tiene nada en curso (ver actualizarEstadoMesa).
+  //    Si se cobró sin pasar por la cocina, sigue ocupada mientras la caja decide si lo envía a
+  //    la cocina o si no va a cocina (POST /pedidos/:id/entregar); ahí se actualiza.
+  if (pedido.mesaId && !(await faltaDecidirCocina(tx, pedido))) {
+    await actualizarEstadoMesa(tx, pedido.mesaId);
+  }
 
   // 10. Si el negocio no factura electrónicamente, su recibo de venta con número consecutivo.
   await emitirReciboSiNoFactura(tx, sesion.tenantId, pedidoId);
@@ -672,8 +691,8 @@ export function anularPedido(sesion, pedidoId, { motivo }) {
       throw new AppError(409, 'PEDIDO_ANULADO', 'El pedido ya está anulado');
     }
 
-    // 3. Liberar la mesa si el pedido la ocupaba.
-    if (pedido.mesaId && pedido.estado !== 'pagado') await liberarMesa(tx, pedido.mesaId);
+    // 3. Actualizar la mesa: el pedido anulado ya no la ocupa (ni sus platos, si se cobró).
+    if (pedido.mesaId) await actualizarEstadoMesa(tx, pedido.mesaId);
 
     // 4. Si estaba cobrado, devolver al inventario lo que se descontó.
     if (pedido.estado === 'pagado') {
@@ -852,16 +871,19 @@ export function despacharDomicilio(sesion, pedidoId, { domiciliarioId }) {
 }
 
 /**
- * Marca como entregado un pedido sin mesa:
+ * Marca como entregado un pedido:
  * - Domicilio: el cliente lo recibió (debe haber salido antes con un domiciliario). Lo marca la
  *   caja o el domiciliario que lo lleva. Si es contra entrega y aún no se cobró, queda "por
  *   liquidar" hasta que la caja reciba el dinero (ver liquidarDomiciliario).
  * - Mostrador: el cliente lo recogió; lo que quedara en la cocina sale con él.
- * En una mesa no aplica: ahí el mesero marca cada plato como entregado.
+ * - Mesa: solo uno cobrado que no pasó por la cocina ("No va a cocina": por ejemplo, unas
+ *   gaseosas). Se entrega todo y la mesa queda libre. Lo que sí va a la cocina no: ahí el
+ *   mesero marca cada plato como entregado.
  * @param {DatosSesion} sesion
  * @param {string} pedidoId
  * @throws {AppError} 404 si un domiciliario intenta entregar un pedido que no lleva él; 409 si
- *   es de mesa, si está anulado o si el domicilio no ha salido.
+ *   es de mesa y no se ha cobrado o ya fue a la cocina, si está anulado o si el domicilio no
+ *   ha salido.
  */
 export function entregarPedido(sesion, pedidoId) {
   return conNegocio(sesion.tenantId, async (tx) => {
@@ -878,7 +900,7 @@ export function entregarPedido(sesion, pedidoId) {
       throw new AppError(409, 'PEDIDO_ANULADO', 'El pedido está anulado');
     }
 
-    if (pedido.tipo === 'mesa') {
+    if (pedido.tipo === 'mesa' && (pedido.estado !== 'pagado' || pedido.enviadoACocinaEn)) {
       throw new AppError(
         409,
         'ENTREGA_EN_MESA',
@@ -899,10 +921,13 @@ export function entregarPedido(sesion, pedidoId) {
       }
       await tx.entregaDomicilio.update({ where: { pedidoId }, data: { entregadoEn: new Date() } });
     } else {
+      // Mostrador, o mesa cobrada sin cocina: lo que quedara por entregar sale con el cliente.
       await tx.itemPedido.updateMany({
         where: { pedidoId, estadoCocina: { not: 'entregado' } },
         data: { estadoCocina: 'entregado' },
       });
+      // La mesa ya no espera nada de este pedido: queda libre si no tiene otra cuenta en curso.
+      if (pedido.mesaId) await actualizarEstadoMesa(tx, pedido.mesaId);
     }
 
     return cargarPedido(tx, pedidoId, sesion);
@@ -1129,17 +1154,52 @@ async function ocuparMesa(tx, mesaId) {
 }
 
 /**
- * Marca la mesa como libre si ya no tiene pedidos abiertos.
+ * Deja la mesa ocupada o libre según lo que tenga en curso. Sigue ocupada mientras tenga:
+ * - un pedido sin cobrar, o
+ * - uno cobrado con platos de la cocina por entregar: el cliente pagó antes de que salieran y
+ *   sigue en la mesa esperándolos. Cuenta como en la cocina (filtroComandasDeCocina), con el
+ *   límite de horas: así unos platos que nadie marcó como entregados no la dejan ocupada
+ *   para siempre.
  * @param {TransaccionPrisma} tx
  * @param {string} mesaId
  */
-async function liberarMesa(tx, mesaId) {
-  const pendientes = await tx.pedido.count({
-    where: { mesaId, estado: { in: [...ESTADOS_ABIERTOS] } },
+async function actualizarEstadoMesa(tx, mesaId) {
+  const enCurso = await tx.pedido.count({
+    where: {
+      mesaId,
+      OR: [
+        { estado: { in: [...ESTADOS_ABIERTOS] } },
+        {
+          estado: /** @type {const} */ ('pagado'),
+          cerradoEn: { gte: inicioDeCobradosEnCocina() },
+          enviadoACocinaEn: { not: null },
+          items: { some: { estadoCocina: { not: /** @type {const} */ ('entregado') } } },
+        },
+      ],
+    },
   });
-  if (pendientes === 0) {
-    await tx.mesa.update({ where: { id: mesaId }, data: { estado: 'libre' } });
-  }
+  const estado = enCurso > 0 ? /** @type {const} */ ('ocupada') : /** @type {const} */ ('libre');
+  await tx.mesa.update({ where: { id: mesaId }, data: { estado } });
+}
+
+/**
+ * Se cobró sin pasar por la cocina y tiene platos sin entregar: falta que la caja decida si lo
+ * envía a la cocina o si no va a cocina (por ejemplo, unas gaseosas). Mientras tanto, su mesa
+ * sigue ocupada.
+ * @param {TransaccionPrisma} tx
+ * @param {{ id: string, enviadoACocinaEn: Date | null }} pedido
+ */
+async function faltaDecidirCocina(tx, pedido) {
+  if (pedido.enviadoACocinaEn) return false;
+  const porEntregar = await tx.itemPedido.count({
+    where: { pedidoId: pedido.id, estadoCocina: { not: 'entregado' } },
+  });
+  return porEntregar > 0;
+}
+
+/** Desde cuándo un pedido cobrado sigue en la cocina (y ocupando su mesa). */
+function inicioDeCobradosEnCocina() {
+  return new Date(Date.now() - HORAS_COBRADO_EN_COCINA * 60 * 60 * 1000);
 }
 
 /**
@@ -1150,7 +1210,7 @@ async function liberarMesa(tx, mesaId) {
  * que nadie marcó como entregados.
  */
 function filtroComandasDeCocina() {
-  const cobradoDesde = new Date(Date.now() - HORAS_COBRADO_EN_COCINA * 60 * 60 * 1000);
+  const cobradoDesde = inicioDeCobradosEnCocina();
   return {
     enviadoACocinaEn: { not: null },
     items: { some: { estadoCocina: { not: /** @type {const} */ ('entregado') } } },

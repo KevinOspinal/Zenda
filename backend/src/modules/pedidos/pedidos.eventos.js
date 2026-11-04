@@ -69,6 +69,15 @@ function avisarEstadoMesa(pedido) {
   });
 }
 
+/**
+ * Un pedido cobrado ocupa su mesa hasta que llegan sus platos. Al enviarlo a la cocina o al
+ * entregar un plato, la mesa puede cambiar (con el último plato queda libre): se avisa.
+ * @param {PedidoCompleto} pedido
+ */
+function avisarMesaDePedidoCobrado(pedido) {
+  if (pedido.estado === 'pagado') avisarEstadoMesa(pedido);
+}
+
 /** @param {PedidoCompleto} pedido */
 export function avisarPedidoCreado(pedido) {
   emitirANegocio(pedido.tenantId, EVENTOS.PEDIDO_CREADO, resumen(pedido));
@@ -93,6 +102,7 @@ export function avisarEnviadoACocina(pedido) {
     ...resumen(pedido),
     items: itemsDeComanda(pedido),
   });
+  avisarMesaDePedidoCobrado(pedido);
 }
 
 /**
@@ -110,6 +120,7 @@ export function avisarEstadoCocina(pedido, itemId) {
     producto: item.producto.nombre,
     estadoCocina: item.estadoCocina,
   });
+  if (item.estadoCocina === 'entregado') avisarMesaDePedidoCobrado(pedido);
 }
 
 /**
@@ -133,6 +144,17 @@ export function avisarEstadoCocinaDelPedido(pedido, itemIds) {
       cantidad: item.cantidad,
     })),
   });
+  if (cambiados[0].estadoCocina === 'entregado') avisarMesaDePedidoCobrado(pedido);
+}
+
+/**
+ * Se entregó el pedido (POST /pedidos/:id/entregar). Si es de mesa (se cobró y no fue a la
+ * cocina), la mesa quedó libre: también se avisa.
+ * @param {PedidoCompleto} pedido
+ */
+export function avisarPedidoEntregado(pedido) {
+  avisarPedidoActualizado(pedido);
+  avisarEstadoMesa(pedido);
 }
 
 /** @param {PedidoCompleto} pedido */
