@@ -1,23 +1,44 @@
 // @ts-check
-// Carga el menú de La Industria en un negocio a través del API, con la cuenta del dueño o de
-// un administrador. Sirve para dejar listo el menú de un negocio nuevo (por ejemplo, el piloto)
-// sin escribirlo producto por producto. Pasa por las mismas validaciones que la app.
+// Carga un menú (sus categorías, productos y grupos de opciones) en un negocio a través del
+// API, con la cuenta del dueño o de un administrador. Sirve para dejar listo el menú de un
+// negocio nuevo (el piloto o un demo) sin escribirlo producto por producto. Pasa por las mismas
+// validaciones que la app.
 //
 // Uso, desde la carpeta backend:
-//   node scripts/cargar-menu.js https://URL-DEL-API
+//   node scripts/cargar-menu.js https://URL-DEL-API                    (La Industria)
+//   node scripts/cargar-menu.js https://URL-DEL-API --menu centenario  (Restaurante Centenario)
+// Los menús que hay están en prisma/datos/menus.js.
 //
 // - Pide el NIT, el correo y la contraseña (la contraseña no se muestra al escribirla).
 // - Antes de crear algo, muestra el negocio y lo que va a cargar, y pide confirmación.
-// - Se puede repetir: una categoría con el mismo nombre, o un producto con el mismo nombre en
-//   su categoría, no se vuelve a crear.
-// - El impuesto de cada producto sale del régimen del negocio (ver src/config/impuestos.js).
+// - Se puede repetir: una categoría o un grupo de opciones con el mismo nombre, o un producto
+//   con el mismo nombre en su categoría, no se vuelve a crear (tampoco se cambia).
+// - El impuesto de cada producto y de cada opción sale del régimen del negocio (ver
+//   src/config/impuestos.js).
 // - Las bebidas se crean sin controlar inventario: el negocio lo activa desde Menú cuando
 //   registre sus cantidades reales.
 import { createInterface } from 'node:readline/promises';
-import { menuLaIndustria as menu } from '../prisma/datos/menuLaIndustria.js';
+import { MENUS } from '../prisma/datos/menus.js';
 import { IMPUESTO_POR_REGIMEN } from '../src/config/impuestos.js';
 
-const urlApi = (process.argv[2] ?? '').replace(/\/+$/, '');
+/** @typedef {import('../prisma/datos/menus.js').MenuParaCargar} MenuParaCargar */
+
+const [urlArgumento = '', ...demasArgumentos] = process.argv.slice(2);
+const urlApi = urlArgumento.replace(/\/+$/, '');
+const nombreMenu = leerOpcion(demasArgumentos, '--menu') ?? 'la-industria';
+
+/**
+ * Valor de una opción de la línea de comandos: "--menu centenario" o "--menu=centenario".
+ * @param {string[]} argumentos
+ * @param {string} opcion
+ * @returns {string | undefined}
+ */
+function leerOpcion(argumentos, opcion) {
+  const indice = argumentos.findIndex((a) => a === opcion || a.startsWith(`${opcion}=`));
+  if (indice === -1) return undefined;
+  const argumento = argumentos[indice];
+  return argumento === opcion ? argumentos[indice + 1] : argumento.slice(opcion.length + 1);
+}
 
 /**
  * Llama al API y devuelve su respuesta. Si responde con error, lanza el mensaje del API.
@@ -125,13 +146,37 @@ function normalizar(nombre) {
     .toLowerCase();
 }
 
+/**
+ * Revisa la carta antes de tocar el API: cada producto debe nombrar grupos de opciones que
+ * existan en el mismo menú. Así un error en los datos no deja el menú cargado a medias.
+ * @param {MenuParaCargar} menu
+ */
+function revisarMenu(menu) {
+  const grupos = new Set(menu.grupos.map((grupo) => normalizar(grupo.nombre)));
+  for (const categoria of menu.categorias) {
+    for (const producto of categoria.productos) {
+      const faltante = (producto.grupos ?? []).find((nombre) => !grupos.has(normalizar(nombre)));
+      if (faltante) {
+        throw new Error(`${producto.nombre} usa el grupo "${faltante}", que no está en el menú`);
+      }
+    }
+  }
+}
+
 async function cargarMenu() {
   if (!/^https?:\/\/.+/.test(urlApi)) {
     throw new Error(
       'Indica la URL del API. Ejemplo: node scripts/cargar-menu.js https://zenda.seenode.app',
     );
   }
-  console.log(`Cargar el menú de La Industria en ${urlApi}\n`);
+  const menu = MENUS[nombreMenu];
+  if (!menu) {
+    throw new Error(
+      `no hay un menú "${nombreMenu}". Los que hay: ${Object.keys(MENUS).join(', ')}`,
+    );
+  }
+  revisarMenu(menu);
+  console.log(`Cargar el menú de ${menu.negocio} en ${urlApi}\n`);
 
   // 1. Iniciar sesión con la cuenta del dueño o de un administrador.
   const nit = await preguntar('NIT del negocio (solo números): ');
@@ -145,12 +190,16 @@ async function cargarMenu() {
   // 2. Mostrar en qué negocio se va a cargar y pedir confirmación.
   const { negocio, usuario } = await llamar('/auth/yo', { token });
   const tipoImpuesto = IMPUESTO_POR_REGIMEN[negocio.regimenImpuesto] ?? 'exento';
-  const totalProductos = menu.reduce((suma, categoria) => suma + categoria.productos.length, 0);
+  const totalProductos = menu.categorias.reduce(
+    (suma, categoria) => suma + categoria.productos.length,
+    0,
+  );
+  const grupos = menu.grupos.length ? ` y ${menu.grupos.length} grupos de opciones` : '';
   console.log(
     `\nNegocio: ${negocio.nombre} (NIT ${negocio.nit}). Entraste como ${usuario.nombre}.`,
   );
   console.log(
-    `Se cargarán ${menu.length} categorías y ${totalProductos} productos, con impuesto "${tipoImpuesto}".`,
+    `Se cargarán ${menu.categorias.length} categorías, ${totalProductos} productos${grupos}, con impuesto "${tipoImpuesto}".`,
   );
   if ((await preguntar('¿Continuar? (s/n): ')).toLowerCase() !== 's') {
     console.log('No se cargó nada.');
@@ -162,11 +211,41 @@ async function cargarMenu() {
   const categorias = await llamar('/categorias', { token });
   /** @type {{ categoriaId: string, nombre: string }[]} */
   const productos = await llamar('/productos', { token });
+  /** @type {{ id: string, nombre: string }[]} */
+  const gruposExistentes = menu.grupos.length ? await llamar('/grupos-opciones', { token }) : [];
 
-  // 4. Crear las categorías (en el orden de la carta) y sus productos.
+  // 4. Crear los grupos de opciones (los productos los necesitan al crearse). Uno que ya existe
+  //    se usa tal como está.
+  /** Id de cada grupo en el API, por su nombre normalizado. */
+  const idsDeGrupos = new Map();
+  let gruposCreados = 0;
+  if (menu.grupos.length) console.log('\nGrupos de opciones');
+  for (const [orden, grupo] of menu.grupos.entries()) {
+    let enElApi = gruposExistentes.find((g) => normalizar(g.nombre) === normalizar(grupo.nombre));
+    if (enElApi) {
+      console.log(`  · ${grupo.nombre} (ya existía)`);
+    } else {
+      enElApi = await llamar('/grupos-opciones', {
+        metodo: 'POST',
+        token,
+        cuerpo: {
+          nombre: grupo.nombre,
+          minimo: grupo.minimo,
+          maximo: grupo.maximo,
+          orden,
+          opciones: grupo.opciones.map((opcion) => ({ ...opcion, tipoImpuesto })),
+        },
+      });
+      gruposCreados += 1;
+      console.log(`  ✓ ${grupo.nombre} (${grupo.opciones.length} opciones)`);
+    }
+    idsDeGrupos.set(normalizar(grupo.nombre), /** @type {{ id: string }} */ (enElApi).id);
+  }
+
+  // 5. Crear las categorías (en el orden de la carta) y sus productos, con sus grupos.
   let creados = 0;
   let omitidos = 0;
-  for (const [orden, categoria] of menu.entries()) {
+  for (const [orden, categoria] of menu.categorias.entries()) {
     let enElApi = categorias.find((c) => normalizar(c.nombre) === normalizar(categoria.nombre));
     if (!enElApi) {
       enElApi = await llamar('/categorias', {
@@ -197,6 +276,9 @@ async function cargarMenu() {
           descripcion: producto.descripcion,
           precio: producto.precio,
           tipoImpuesto,
+          gruposOpciones: (producto.grupos ?? []).map((nombre) =>
+            idsDeGrupos.get(normalizar(nombre)),
+          ),
         },
       });
       creados += 1;
@@ -204,7 +286,10 @@ async function cargarMenu() {
     }
   }
 
-  console.log(`\nListo: ${creados} productos creados y ${omitidos} que ya existían.`);
+  const resumenGrupos = menu.grupos.length ? ` y ${gruposCreados} grupos de opciones` : '';
+  console.log(
+    `\nListo: ${creados} productos${resumenGrupos} creados; ${omitidos} productos ya existían.`,
+  );
 }
 
 try {
