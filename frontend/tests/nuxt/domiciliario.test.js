@@ -202,9 +202,9 @@ describe('entregas del domiciliario', () => {
 });
 
 describe('acceso del domiciliario', () => {
-  it('el dueño le da correo y contraseña para entrar desde su celular', async () => {
+  it('el administrador de Zenda le da correo y contraseña para entrar desde su celular', async () => {
     const sesion = useSesionStore();
-    sesion.usuario = { id: 'd0', nombre: 'Andrés', email: 'a@x.test', rol: 'dueno' };
+    sesion.usuario = { id: 'd0', nombre: 'Andrés', email: 'a@x.test', rol: 'administrador_zenda' };
     simularBackend(fetchFalso, {
       'POST /domiciliarios/dm1/acceso': (opciones) => ({
         ...PEDRO,

@@ -3,7 +3,8 @@
   negocio, la llave (con botón de copiar) y el valor del pago. "Mostrar al cliente" pone el QR
   en grande para que lo escanee desde su celular.
   Zenda no ve la cuenta del banco: quien cobra revisa que la plata llegó antes de confirmar.
-  Si el negocio no ha configurado Bre-B, el dueño ve dónde hacerlo; los demás, nada.
+  Si el negocio no ha configurado Bre-B, el dueño (y el administrador de Zenda) ve dónde
+  hacerlo; los demás, nada.
 -->
 <script setup>
 const props = defineProps({

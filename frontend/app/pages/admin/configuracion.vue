@@ -1,15 +1,19 @@
 <!--
-  Configuración del negocio (solo el dueño): sus datos, cómo factura (con factura electrónica
-  o con recibo de venta), los datos del recibo, la propina sugerida en mesa, de 0 a 10 % (Ley
-  1935 de 2018) con una vista previa, el valor del domicilio por defecto y el cobro con Bre-B
-  (llave y QR del banco). La facturación, la propina, el domicilio y Bre-B quedan en la
-  auditoría.
-  El nombre y el NIT se ven pero no se editan aquí.
+  Configuración del negocio (el dueño y el administrador de Zenda): sus datos, cómo factura
+  (con factura electrónica o con recibo de venta), los datos del recibo, la propina sugerida en
+  mesa, de 0 a 10 % (Ley 1935 de 2018) con una vista previa, el valor del domicilio por defecto
+  y el cobro con Bre-B (llave y QR del banco). La facturación, la propina, el domicilio y Bre-B
+  quedan en la auditoría.
+  - La facturación solo la cambia el administrador de Zenda: el dueño la ve en los datos del
+    negocio, pero no la cambia.
+  - El nombre y el NIT se ven pero no se editan aquí.
 -->
 <script setup>
 definePageMeta({ seccion: 'configuracion' });
 
 const toast = useToast();
+const sesion = useSesionStore();
+const cambiaLaFacturacion = computed(() => puede(sesion.rol, 'configurarFacturacion'));
 
 const negocio = ref(/** @type {any} */ (null));
 const cargando = ref(true);
@@ -133,11 +137,18 @@ async function guardar() {
             <dd class="font-medium text-highlighted">
               {{ NOMBRES_REGIMEN[negocio.regimenImpuesto] }}
             </dd>
+            <dd v-if="!cambiaLaFacturacion" class="text-sm text-muted">
+              La cambia el administrador de Zenda.
+            </dd>
           </div>
         </dl>
       </section>
 
-      <FacturacionDelNegocio :negocio="negocio" @guardado="(guardado) => (negocio = guardado)" />
+      <FacturacionDelNegocio
+        v-if="cambiaLaFacturacion"
+        :negocio="negocio"
+        @guardado="(guardado) => (negocio = guardado)"
+      />
       <DatosDelRecibo :negocio="negocio" @guardado="(guardado) => (negocio = guardado)" />
       <ConfiguracionBreB :negocio="negocio" @guardado="(guardado) => (negocio = guardado)" />
 

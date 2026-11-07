@@ -1,7 +1,7 @@
 <!--
-  Cobro con Bre-B (solo el dueño): la llave del negocio y el QR de cobro que le dio su banco.
-  Salen en la precuenta y en el cobro por transferencia, para que el cliente pague desde la app
-  de su banco.
+  Cobro con Bre-B (el dueño y el administrador de Zenda): la llave del negocio y el QR de cobro
+  que le dio su banco. Salen en la precuenta y en el cobro por transferencia, para que el
+  cliente pague desde la app de su banco.
   - El QR se sube como foto o captura. Zenda lee el código en el navegador y guarda solo su
     contenido; después lo dibuja nítido en pantalla y en papel. La imagen no sale del equipo.
   - Cada cambio queda en la auditoría: es por donde entra la plata de las transferencias.

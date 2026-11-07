@@ -140,7 +140,7 @@ const enlace = computed(() => {
           :description="
             puede(sesion.rol, 'gestionarDomiciliarios')
               ? 'Regístralos en Domiciliarios.'
-              : 'Pídele al administrador que los registre.'
+              : 'Pídele al administrador de Zenda que los registre.'
           "
           :actions="
             puede(sesion.rol, 'gestionarDomiciliarios')

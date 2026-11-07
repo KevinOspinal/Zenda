@@ -1,6 +1,7 @@
 <!--
-  Empleados del negocio: nombre, rol y estado. El dueño los crea, les cambia el rol, los
-  desactiva y les restablece la contraseña; el administrador solo los ve.
+  Cuentas del negocio: nombre, rol y estado. Solo las ve y las maneja el administrador de Zenda:
+  crea las cuentas (también la del dueño), les cambia el rol, las desactiva y les restablece la
+  contraseña. La propia se cambia en Perfil, y el acceso de un domiciliario, en Domiciliarios.
 -->
 <script setup>
 import { z } from 'zod';
@@ -37,7 +38,7 @@ function abrir(usuario) {
 }
 function alGuardar() {
   panelAbierto.value = false;
-  toast.add({ title: 'Empleado guardado', icon: 'i-lucide-circle-check', color: 'success' });
+  toast.add({ title: 'Usuario guardado', icon: 'i-lucide-circle-check', color: 'success' });
   cargar();
 }
 
@@ -76,7 +77,31 @@ async function restablecer() {
   }
 }
 
-/** Estado de un empleado para mostrar. */
+/** @param {any} usuario */
+const esPropia = (usuario) => usuario.id === sesion.usuario?.id;
+
+/**
+ * Lo que se puede hacer con cada cuenta desde aquí:
+ * - Con la propia, nada: la contraseña se cambia en Perfil.
+ * - Con la de un domiciliario, restablecer su contraseña (su acceso se maneja en Domiciliarios).
+ * - Con las demás, editarla y restablecer su contraseña.
+ * @param {any} usuario
+ */
+function accionesDe(usuario) {
+  if (!puedeGestionar.value || esPropia(usuario)) return [];
+  const restablecerla = {
+    label: 'Restablecer contraseña',
+    icon: 'i-lucide-key-round',
+    onSelect: () => abrirRestablecer(usuario),
+  };
+  if (usuario.rol === 'domiciliario') return [restablecerla];
+  return [
+    { label: 'Editar', icon: 'i-lucide-pencil', onSelect: () => abrir(usuario) },
+    restablecerla,
+  ];
+}
+
+/** Estado de una cuenta para mostrar. */
 function estadoDe(/** @type {any} */ usuario) {
   if (!usuario.activo) return { etiqueta: 'Inactivo', color: 'neutral', icono: 'i-lucide-user-x' };
   if (usuario.bloqueado) return { etiqueta: 'Bloqueado', color: 'warning', icono: 'i-lucide-lock' };
@@ -94,7 +119,7 @@ function estadoDe(/** @type {any} */ usuario) {
         v-if="puedeGestionar"
         size="lg"
         icon="i-lucide-user-plus"
-        label="Nuevo empleado"
+        label="Nuevo usuario"
         @click="abrir(null)"
       />
     </div>
@@ -105,7 +130,7 @@ function estadoDe(/** @type {any} */ usuario) {
     <UEmpty
       v-else-if="error"
       icon="i-lucide-wifi-off"
-      title="No pudimos cargar los empleados"
+      title="No pudimos cargar los usuarios"
       :description="error"
       :actions="[{ label: 'Reintentar', icon: 'i-lucide-rotate-cw', onClick: cargar }]"
     />
@@ -134,21 +159,10 @@ function estadoDe(/** @type {any} */ usuario) {
               :icon="estadoDe(usuario).icono"
               :label="estadoDe(usuario).etiqueta"
             />
+            <UBadge v-if="esPropia(usuario)" color="neutral" variant="outline" label="Tú" />
           </div>
         </div>
-        <UDropdownMenu
-          v-if="puedeGestionar && usuario.rol !== 'dueno'"
-          :items="[
-            [
-              { label: 'Editar', icon: 'i-lucide-pencil', onSelect: () => abrir(usuario) },
-              {
-                label: 'Restablecer contraseña',
-                icon: 'i-lucide-key-round',
-                onSelect: () => abrirRestablecer(usuario),
-              },
-            ],
-          ]"
-        >
+        <UDropdownMenu v-if="accionesDe(usuario).length" :items="[accionesDe(usuario)]">
           <UButton
             color="neutral"
             variant="ghost"
@@ -162,7 +176,7 @@ function estadoDe(/** @type {any} */ usuario) {
     <USlideover
       v-model:open="panelAbierto"
       :side="pantallaGrande ? 'right' : 'bottom'"
-      :title="editado ? `Editar a ${editado.nombre}` : 'Nuevo empleado'"
+      :title="editado ? `Editar a ${editado.nombre}` : 'Nuevo usuario'"
     >
       <template #body>
         <FormularioUsuario

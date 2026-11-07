@@ -1,6 +1,7 @@
 <!--
-  Registro de un negocio nuevo en dos pasos: 1) el negocio y 2) la cuenta del dueño.
-  Al terminar, el dueño queda con la sesión iniciada y entra directo a Zenda.
+  Registro de un negocio nuevo en dos pasos: 1) el negocio y 2) la cuenta de quien lo registra.
+  Esa cuenta queda como administrador de Zenda (el equipo de Zenda registra a cada cliente): al
+  terminar, queda con la sesión iniciada y crea la cuenta del dueño en Usuarios.
   Las reglas copian las del backend (POST /negocios/registro).
 -->
 <script setup>
@@ -30,7 +31,7 @@ const esquemaNegocio = z.object({
   regimenImpuesto: z.enum(['responsable_inc', 'franquicia_iva', 'no_responsable']),
 });
 
-const esquemaDueno = z.object({
+const esquemaCuenta = z.object({
   nombre: z.string().trim().min(1, 'Escribe tu nombre').max(120),
   email: z.string().trim().toLowerCase().pipe(z.email('Escribe un correo válido')),
   contrasena: z
@@ -42,39 +43,39 @@ const esquemaDueno = z.object({
 });
 
 const negocio = reactive({ nombre: '', nit: '', ciudad: '', regimenImpuesto: 'responsable_inc' });
-const dueno = reactive({ nombre: '', email: '', contrasena: '' });
+const cuenta = reactive({ nombre: '', email: '', contrasena: '' });
 const verContrasena = ref(false);
 const error = ref('');
 const formularioNegocio = useTemplateRef('formularioNegocio');
 
 /** Requisitos de la contraseña, que se marcan mientras se escribe. */
 const requisitos = computed(() => [
-  { texto: 'Al menos 8 caracteres', cumple: dueno.contrasena.length >= 8 },
-  { texto: 'Una letra', cumple: /[A-Za-zÁÉÍÓÚáéíóúÑñ]/.test(dueno.contrasena) },
-  { texto: 'Un número', cumple: /\d/.test(dueno.contrasena) },
+  { texto: 'Al menos 8 caracteres', cumple: cuenta.contrasena.length >= 8 },
+  { texto: 'Una letra', cumple: /[A-Za-zÁÉÍÓÚáéíóúÑñ]/.test(cuenta.contrasena) },
+  { texto: 'Un número', cumple: /\d/.test(cuenta.contrasena) },
 ]);
 
 async function registrar() {
   error.value = '';
   try {
-    // 1. Crear el negocio y su dueño (el NIT es único en todo el sistema).
+    // 1. Crear el negocio y la cuenta de quien lo registra (el NIT es único en todo el sistema).
     const respuesta = await peticionAlApi('/negocios/registro', {
       metodo: 'POST',
       cuerpo: {
         negocio: { ...negocio, ciudad: negocio.ciudad.trim() || undefined },
-        dueno,
+        cuenta,
       },
     });
 
-    // 2. El dueño queda con la sesión iniciada.
+    // 2. Queda con la sesión iniciada, como administrador de Zenda.
     sesion.iniciarConRegistro(respuesta);
     toast.add({
       title: `¡Bienvenido a Zenda, ${respuesta.usuario.nombre}!`,
-      description: `${respuesta.negocio.nombre} ya está registrado.`,
+      description: `${respuesta.negocio.nombre} ya está registrado. Crea la cuenta del dueño en Usuarios.`,
       icon: 'i-lucide-party-popper',
       color: 'success',
     });
-    await navigateTo(inicioDe('dueno'), { replace: true });
+    await navigateTo(inicioDe(respuesta.usuario.rol), { replace: true });
   } catch (fallo) {
     // 3. NIT repetido: volver al primer paso y marcar el campo.
     if (fallo instanceof ErrorApi && fallo.codigo === 'NIT_YA_REGISTRADO') {
@@ -147,14 +148,21 @@ async function registrar() {
       />
     </UForm>
 
-    <!-- Paso 2: la cuenta del dueño. -->
-    <UForm v-else :schema="esquemaDueno" :state="dueno" class="space-y-5" @submit="registrar">
+    <!-- Paso 2: la cuenta de quien registra el negocio. -->
+    <UForm v-else :schema="esquemaCuenta" :state="cuenta" class="space-y-5" @submit="registrar">
+      <UAlert
+        color="info"
+        variant="subtle"
+        icon="i-lucide-shield-user"
+        title="Esta cuenta queda como administrador de Zenda"
+        description="Maneja los usuarios, los domiciliarios y la facturación del negocio. Al terminar, crea la cuenta del dueño en Usuarios."
+      />
       <UFormField label="Tu nombre" name="nombre">
-        <UInput v-model="dueno.nombre" size="xl" class="w-full" autocomplete="name" autofocus />
+        <UInput v-model="cuenta.nombre" size="xl" class="w-full" autocomplete="name" autofocus />
       </UFormField>
       <UFormField label="Tu correo" name="email" help="Con él ingresarás a Zenda.">
         <UInput
-          v-model="dueno.email"
+          v-model="cuenta.email"
           type="email"
           size="xl"
           class="w-full"
@@ -164,7 +172,7 @@ async function registrar() {
       </UFormField>
       <UFormField label="Contraseña" name="contrasena">
         <UInput
-          v-model="dueno.contrasena"
+          v-model="cuenta.contrasena"
           :type="verContrasena ? 'text' : 'password'"
           size="xl"
           class="w-full"

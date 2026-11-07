@@ -1,20 +1,28 @@
 <!--
-  Crear un empleado (con su contraseña inicial) o editar uno: nombre, rol y si está activo.
-  Solo el dueño puede hacerlo; los roles asignables son administrador, cajero, mesero y
-  cocina (la cuenta compartida de la tableta de la cocina).
-  Cambiar el rol o desactivar a alguien cierra sus sesiones (regla del backend).
+  Crear una cuenta del negocio (con su contraseña inicial) o editar una: nombre, rol y si está
+  activa. Solo lo hace el administrador de Zenda. Los roles asignables son dueño, administrador,
+  cajero, mesero y cocina (la cuenta compartida de la tableta de la cocina).
+  Reglas del backend:
+  - Cambiar el rol o desactivar a alguien cierra sus sesiones.
+  - La cuenta de un administrador de Zenda solo cambia de nombre: no cambia de rol ni se
+    desactiva. Al único dueño activo tampoco se le quita el acceso (responde DUENO_PROTEGIDO).
 -->
 <script setup>
 import { z } from 'zod';
 
 const props = defineProps({
-  /** Empleado a editar; sin él, se crea uno nuevo. */
+  /** Cuenta a editar; sin ella, se crea una nueva. */
   usuario: { type: /** @type {import('vue').PropType<any>} */ (Object), default: null },
 });
 
 const emit = defineEmits({ guardado: () => true, cancelar: () => true });
 
 const ROLES_ASIGNABLES = Object.freeze([
+  {
+    value: 'dueno',
+    label: 'Dueño',
+    description: 'Todo el negocio: menú, caja, reportes, configuración y auditoría',
+  },
   {
     value: 'administrador',
     label: 'Administrador',
@@ -29,6 +37,9 @@ const ROLES_ASIGNABLES = Object.freeze([
   },
 ]);
 
+/** La cuenta del administrador de Zenda solo cambia de nombre. */
+const esCuentaZenda = computed(() => props.usuario?.rol === 'administrador_zenda');
+
 const contrasenaNueva = z
   .string()
   .min(8, 'Debe tener al menos 8 caracteres')
@@ -42,7 +53,9 @@ const esquema = computed(() =>
     email: props.usuario
       ? z.string()
       : z.string().trim().toLowerCase().pipe(z.email('Escribe un correo válido')),
-    rol: z.enum(['administrador', 'cajero', 'mesero', 'cocina']),
+    rol: esCuentaZenda.value
+      ? z.string()
+      : z.enum(['dueno', 'administrador', 'cajero', 'mesero', 'cocina']),
     contrasena: props.usuario ? z.string() : contrasenaNueva,
     activo: z.boolean(),
   }),
@@ -61,11 +74,11 @@ async function guardar() {
   error.value = '';
   try {
     if (props.usuario) {
-      await useApi().patch(`/usuarios/${props.usuario.id}`, {
-        nombre: datos.nombre.trim(),
-        rol: datos.rol,
-        activo: datos.activo,
-      });
+      const nombre = datos.nombre.trim();
+      await useApi().patch(
+        `/usuarios/${props.usuario.id}`,
+        esCuentaZenda.value ? { nombre } : { nombre, rol: datos.rol, activo: datos.activo },
+      );
     } else {
       await useApi().post('/usuarios', {
         nombre: datos.nombre.trim(),
@@ -100,9 +113,17 @@ async function guardar() {
         autocomplete="off"
       />
     </UFormField>
-    <UFormField label="Rol" name="rol">
+    <UFormField v-if="!esCuentaZenda" label="Rol" name="rol">
       <URadioGroup v-model="datos.rol" :items="ROLES_ASIGNABLES" variant="card" />
     </UFormField>
+    <UAlert
+      v-else
+      color="neutral"
+      variant="subtle"
+      icon="i-lucide-shield-user"
+      title="Cuenta del administrador de Zenda"
+      description="Solo cambia el nombre: no cambia de rol ni se desactiva, para que el negocio siempre tenga quien lo atienda."
+    />
     <UFormField
       v-if="!usuario"
       label="Contraseña inicial"
@@ -118,7 +139,7 @@ async function guardar() {
       />
     </UFormField>
     <USwitch
-      v-else
+      v-else-if="!esCuentaZenda"
       v-model="datos.activo"
       size="lg"
       label="Puede ingresar"
@@ -155,7 +176,7 @@ async function guardar() {
         size="lg"
         loading-auto
         icon="i-lucide-check"
-        :label="usuario ? 'Guardar cambios' : 'Crear empleado'"
+        :label="usuario ? 'Guardar cambios' : 'Crear usuario'"
       />
     </div>
   </UForm>

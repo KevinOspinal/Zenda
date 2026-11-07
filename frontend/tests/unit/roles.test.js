@@ -1,7 +1,15 @@
 // @ts-check
 // Pruebas de lo que ve y puede hacer cada rol. Los permisos deben coincidir con el backend.
 import { describe, expect, it } from 'vitest';
-import { inicioDe, puede, redireccionNecesaria, seccionesDe } from '../../app/utils/roles.js';
+import {
+  PERMISOS,
+  ROLES,
+  SECCIONES,
+  inicioDe,
+  puede,
+  redireccionNecesaria,
+  seccionesDe,
+} from '../../app/utils/roles.js';
 
 /** @param {import('../../app/utils/roles.js').Rol} rol */
 const idsDeSecciones = (rol) => seccionesDe(rol).map((seccion) => seccion.id);
@@ -15,22 +23,19 @@ describe('secciones por rol', () => {
     expect(idsDeSecciones('cajero')).toEqual(['caja', 'mesas', 'mostrador', 'clientes', 'perfil']);
   });
 
-  it('solo el dueño ve configuración y auditoría', () => {
-    expect(idsDeSecciones('dueno')).toContain('configuracion');
-    expect(idsDeSecciones('dueno')).toContain('auditoria');
+  it('el dueño y el administrador de Zenda ven configuración y auditoría; el administrador no', () => {
+    for (const rol of /** @type {const} */ (['administrador_zenda', 'dueno'])) {
+      expect(idsDeSecciones(rol)).toContain('configuracion');
+      expect(idsDeSecciones(rol)).toContain('auditoria');
+    }
     expect(idsDeSecciones('administrador')).not.toContain('configuracion');
     expect(idsDeSecciones('administrador')).not.toContain('auditoria');
   });
 
   it('todos los roles tienen perfil', () => {
-    for (const rol of /** @type {const} */ ([
-      'dueno',
-      'administrador',
-      'cajero',
-      'mesero',
-      'cocina',
-      'domiciliario',
-    ])) {
+    for (const rol of /** @type {import('../../app/utils/roles.js').Rol[]} */ (
+      Object.keys(ROLES)
+    )) {
       expect(idsDeSecciones(rol)).toContain('perfil');
     }
   });
@@ -42,17 +47,19 @@ describe('inicio por rol', () => {
     expect(inicioDe('cajero')).toBe('/caja');
     expect(inicioDe('administrador')).toBe('/reportes');
     expect(inicioDe('dueno')).toBe('/reportes');
+    expect(inicioDe('administrador_zenda')).toBe('/reportes');
     expect(inicioDe('cocina')).toBe('/cocina');
     expect(inicioDe('domiciliario')).toBe('/entregas');
   });
 });
 
 describe('domiciliarios', () => {
-  it('los gestiona la gerencia; la caja no los ve en su navegación', () => {
-    expect(idsDeSecciones('dueno')).toContain('domiciliarios');
-    expect(idsDeSecciones('administrador')).toContain('domiciliarios');
-    expect(idsDeSecciones('cajero')).not.toContain('domiciliarios');
-    expect(puede('cajero', 'gestionarDomiciliarios')).toBe(false);
+  it('solo el administrador de Zenda los registra; los demás no ven la sección', () => {
+    expect(idsDeSecciones('administrador_zenda')).toContain('domiciliarios');
+    for (const rol of /** @type {const} */ (['dueno', 'administrador', 'cajero'])) {
+      expect(idsDeSecciones(rol)).not.toContain('domiciliarios');
+      expect(puede(rol, 'gestionarDomiciliarios')).toBe(false);
+    }
   });
 });
 
@@ -74,9 +81,11 @@ describe('el domiciliario', () => {
     );
   });
 
-  it('el dueño le da acceso a Zenda; la caja lo liquida', () => {
-    expect(puede('dueno', 'darAccesoDomiciliarios')).toBe(true);
+  it('el administrador de Zenda le da acceso a Zenda; la caja lo liquida', () => {
+    expect(puede('administrador_zenda', 'darAccesoDomiciliarios')).toBe(true);
+    expect(puede('dueno', 'darAccesoDomiciliarios')).toBe(false);
     expect(puede('administrador', 'darAccesoDomiciliarios')).toBe(false);
+    expect(puede('dueno', 'liquidarDomiciliarios')).toBe(true);
     expect(puede('cajero', 'liquidarDomiciliarios')).toBe(true);
     expect(puede('domiciliario', 'cobrar')).toBe(false);
     expect(puede('domiciliario', 'tomarPedidos')).toBe(false);
@@ -128,15 +137,63 @@ describe('permisos (iguales a los del backend)', () => {
     expect(puede('cajero', 'verReportes')).toBe(false);
   });
 
-  it('el administrador anula, pero no gestiona usuarios ni configura el negocio', () => {
+  it('el administrador anula, pero no ve los usuarios ni configura el negocio', () => {
     expect(puede('administrador', 'anularPedidos')).toBe(true);
-    expect(puede('administrador', 'verUsuarios')).toBe(true);
+    expect(puede('administrador', 'verUsuarios')).toBe(false);
     expect(puede('administrador', 'gestionarUsuarios')).toBe(false);
     expect(puede('administrador', 'configurarNegocio')).toBe(false);
   });
 
+  it('el dueño configura el negocio y ve la auditoría, pero no la facturación ni los usuarios', () => {
+    expect(puede('dueno', 'configurarNegocio')).toBe(true);
+    expect(puede('dueno', 'verAuditoria')).toBe(true);
+    expect(puede('dueno', 'configurarFacturacion')).toBe(false);
+    expect(puede('dueno', 'verUsuarios')).toBe(false);
+    expect(puede('dueno', 'gestionarUsuarios')).toBe(false);
+  });
+
   it('sin rol (sin sesión) no se puede nada', () => {
     expect(puede(null, 'tomarPedidos')).toBe(false);
+  });
+});
+
+describe('el administrador de Zenda', () => {
+  it('puede todo lo que puede el dueño', () => {
+    for (const [accion, roles] of Object.entries(PERMISOS)) {
+      if (roles.includes('dueno')) expect(roles, accion).toContain('administrador_zenda');
+    }
+    for (const seccion of SECCIONES) {
+      if (seccion.roles.includes('dueno')) {
+        expect(seccion.roles, seccion.id).toContain('administrador_zenda');
+      }
+    }
+  });
+
+  it('es el único que maneja los usuarios, los domiciliarios y la facturación', () => {
+    for (const accion of /** @type {const} */ ([
+      'verUsuarios',
+      'gestionarUsuarios',
+      'gestionarDomiciliarios',
+      'darAccesoDomiciliarios',
+      'configurarFacturacion',
+    ])) {
+      expect(PERMISOS[accion], accion).toEqual(['administrador_zenda']);
+    }
+  });
+
+  it('el dueño ya no entra a Usuarios ni a Domiciliarios', () => {
+    expect(idsDeSecciones('administrador_zenda')).toContain('usuarios');
+    expect(idsDeSecciones('dueno')).not.toContain('usuarios');
+    expect(
+      redireccionNecesaria({ ruta: '/admin/usuarios', seccion: 'usuarios', rol: 'dueno' }),
+    ).toBe('/reportes');
+    expect(
+      redireccionNecesaria({
+        ruta: '/admin/domiciliarios',
+        seccion: 'domiciliarios',
+        rol: 'dueno',
+      }),
+    ).toBe('/reportes');
   });
 });
 

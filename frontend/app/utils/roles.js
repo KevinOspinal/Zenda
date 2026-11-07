@@ -4,11 +4,17 @@
 // Es el único lugar que decide qué se muestra según el rol. Los permisos copian los del
 // backend (ver la skill, contrato-api.md). Ocultar un botón mejora la experiencia, pero la
 // seguridad la pone el backend: toda pantalla debe manejar el error 403 igual.
+//
+// El administrador de Zenda (el equipo que vende y atiende el software) puede todo lo del
+// dueño y además lo que el dueño no: los usuarios, los domiciliarios y la facturación.
 
-/** @typedef {'dueno' | 'administrador' | 'cajero' | 'mesero' | 'cocina' | 'domiciliario'} Rol */
+/**
+ * @typedef {'administrador_zenda' | 'dueno' | 'administrador' | 'cajero' | 'mesero' | 'cocina' | 'domiciliario'} Rol
+ */
 
 /** @type {Readonly<Record<Rol, { etiqueta: string, icono: string }>>} */
 export const ROLES = Object.freeze({
+  administrador_zenda: { etiqueta: 'Administrador Zenda', icono: 'i-lucide-shield-user' },
   dueno: { etiqueta: 'Dueño', icono: 'i-lucide-crown' },
   administrador: { etiqueta: 'Administrador', icono: 'i-lucide-briefcase' },
   cajero: { etiqueta: 'Cajero', icono: 'i-lucide-calculator' },
@@ -18,6 +24,7 @@ export const ROLES = Object.freeze({
 });
 
 const TODOS = /** @type {Rol[]} */ ([
+  'administrador_zenda',
   'dueno',
   'administrador',
   'cajero',
@@ -26,12 +33,27 @@ const TODOS = /** @type {Rol[]} */ ([
   'domiciliario',
 ]);
 /** Los que atienden a los clientes: todos menos la cocina. */
-const ATIENDEN = /** @type {Rol[]} */ (['dueno', 'administrador', 'cajero', 'mesero']);
-const GERENCIA = /** @type {Rol[]} */ (['dueno', 'administrador']);
-const CAJA = /** @type {Rol[]} */ (['dueno', 'administrador', 'cajero']);
+const ATIENDEN = /** @type {Rol[]} */ ([
+  'administrador_zenda',
+  'dueno',
+  'administrador',
+  'cajero',
+  'mesero',
+]);
+const GERENCIA = /** @type {Rol[]} */ (['administrador_zenda', 'dueno', 'administrador']);
+const CAJA = /** @type {Rol[]} */ (['administrador_zenda', 'dueno', 'administrador', 'cajero']);
 /** Los que marcan los platos como "preparando" o "listo". El mesero no: eso lo sabe la cocina. */
-const PREPARAN = /** @type {Rol[]} */ (['dueno', 'administrador', 'cajero', 'cocina']);
-const SOLO_DUENO = /** @type {Rol[]} */ (['dueno']);
+const PREPARAN = /** @type {Rol[]} */ ([
+  'administrador_zenda',
+  'dueno',
+  'administrador',
+  'cajero',
+  'cocina',
+]);
+/** El dueño y, por encima de él, el administrador de Zenda. */
+const DUENOS = /** @type {Rol[]} */ (['administrador_zenda', 'dueno']);
+/** Solo el equipo de Zenda: las cuentas del negocio y la facturación. */
+const SOLO_ZENDA = /** @type {Rol[]} */ (['administrador_zenda']);
 
 /**
  * Acciones y los roles que el backend permite para cada una.
@@ -49,13 +71,14 @@ export const PERMISOS = Object.freeze({
   gestionarMesas: GERENCIA,
   verInventario: CAJA,
   registrarInventario: GERENCIA, // compras y ajustes
-  verUsuarios: GERENCIA,
-  gestionarDomiciliarios: GERENCIA,
-  darAccesoDomiciliarios: SOLO_DUENO, // su usuario para entrar a Zenda
+  verUsuarios: SOLO_ZENDA,
+  gestionarUsuarios: SOLO_ZENDA, // crear, editar y restablecer contraseñas (también del dueño)
+  gestionarDomiciliarios: SOLO_ZENDA, // registrarlos y editarlos (la caja los ve al despachar)
+  darAccesoDomiciliarios: SOLO_ZENDA, // su usuario para entrar a Zenda
   liquidarDomiciliarios: CAJA, // recibir el dinero de sus domicilios contra entrega
-  gestionarUsuarios: SOLO_DUENO,
-  configurarNegocio: SOLO_DUENO, // propina sugerida
-  verAuditoria: SOLO_DUENO,
+  configurarNegocio: DUENOS, // propina, domicilio, recibo y Bre-B
+  configurarFacturacion: SOLO_ZENDA, // el régimen de impuestos (el dueño lo ve, no lo cambia)
+  verAuditoria: DUENOS,
   verReportes: GERENCIA,
 });
 
@@ -152,14 +175,14 @@ export const SECCIONES = Object.freeze([
     etiqueta: 'Usuarios',
     icono: 'i-lucide-users',
     ruta: '/admin/usuarios',
-    roles: GERENCIA,
+    roles: SOLO_ZENDA,
   },
   {
     id: 'domiciliarios',
     etiqueta: 'Domiciliarios',
     icono: 'i-lucide-bike',
     ruta: '/admin/domiciliarios',
-    roles: GERENCIA,
+    roles: SOLO_ZENDA,
   },
   {
     id: 'turnos',
@@ -173,14 +196,14 @@ export const SECCIONES = Object.freeze([
     etiqueta: 'Configuración',
     icono: 'i-lucide-settings',
     ruta: '/admin/configuracion',
-    roles: SOLO_DUENO,
+    roles: DUENOS,
   },
   {
     id: 'auditoria',
     etiqueta: 'Auditoría',
     icono: 'i-lucide-shield-check',
     ruta: '/admin/auditoria',
-    roles: SOLO_DUENO,
+    roles: DUENOS,
   },
   {
     id: 'cocina',
@@ -214,6 +237,7 @@ const RUTAS_DEL_DOMICILIARIO = Object.freeze(['/entregas', '/perfil']);
 
 /** Pantalla con la que empieza cada rol al ingresar. */
 export const INICIO_POR_ROL = Object.freeze({
+  administrador_zenda: '/reportes',
   dueno: '/reportes',
   administrador: '/reportes',
   cajero: '/caja',

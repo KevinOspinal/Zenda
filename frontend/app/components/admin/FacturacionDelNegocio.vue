@@ -1,7 +1,8 @@
 <!--
-  Cómo factura el negocio (solo el dueño): con factura electrónica (impuesto al consumo o IVA) o
-  sin ella (no responsable: sin impuestos y con recibo de venta). Cambiarlo ajusta el impuesto
-  de todos los productos, por eso pide confirmación y explica qué pasará. Queda en la auditoría.
+  Cómo factura el negocio (solo el administrador de Zenda; el dueño lo ve en los datos del
+  negocio): con factura electrónica (impuesto al consumo o IVA) o sin ella (no responsable: sin
+  impuestos y con recibo de venta). Cambiarlo ajusta el impuesto de todos los productos, por eso
+  pide confirmación y explica qué pasará. Queda en la auditoría.
 -->
 <script setup>
 const props = defineProps({
