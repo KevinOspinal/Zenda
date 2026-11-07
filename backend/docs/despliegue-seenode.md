@@ -157,13 +157,29 @@ ejemplo `https://zenda-xxxx.seenode.app`. Guarda para que se vuelva a desplegar.
 La base queda limpia, sin los negocios de ejemplo (no se ejecuta `db:seed`).
 
 1. En el API agrega `REGISTRO_HABILITADO=true` y espera el despliegue.
-2. Abre `https://URL-DEL-FRONTEND/registro` y registra el restaurante con su NIT y la cuenta
-   del dueño.
+2. Abre `https://URL-DEL-FRONTEND/registro` y registra el restaurante con su NIT y **tu**
+   cuenta: queda como administrador de Zenda (el único que maneja los usuarios, los
+   domiciliarios y la facturación).
 3. Quita `REGISTRO_HABILITADO` del API para volver a cerrar el registro.
+4. Entra con tu cuenta y, en **Usuarios**, crea la cuenta del dueño (rol Dueño) y las de sus
+   empleados.
+
+Los negocios registrados antes de que existiera el rol de administrador de Zenda no tienen esa
+cuenta. Créala una sola vez, desde la carpeta `backend`:
+
+```bash
+node scripts/crear-administrador-zenda.js
+```
+
+Pide la URL de la base sin mostrarla (sirve la de `DATABASE_URL` o la de
+`DATABASE_URL_MIGRACIONES`), el NIT del negocio y tu correo. Si el correo ya tiene cuenta en el
+negocio, la convierte; si no, la crea y pide tu nombre y una contraseña. El cambio queda en la
+auditoría del negocio.
 
 ## Paso 8. Prueba completa
 
-- Ingreso del dueño, mesas, menú y usuarios (mesero, cajero, cocina).
+- Ingreso del administrador de Zenda y del dueño, mesas, menú y usuarios (dueño, mesero, cajero,
+  cocina).
 - Mesa → pedido → cocina → cobro → recibo.
 - Un domicilio contra entrega con el domiciliario desde un celular real: despachar, Google
   Maps o Waze, "Entregado" y la liquidación en la caja.
