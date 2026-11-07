@@ -1,16 +1,29 @@
 // @ts-check
 // Pruebas de los menús que carga scripts/cargar-menu.js: cada categoría, producto y grupo de
 // opciones pasa las mismas validaciones que el API (así la carga no se queda a medias en
-// producción por un dato mal escrito), y en la carta de Centenario cada plato con su proteína
-// cuesta lo mismo que en la carta física.
+// producción por un dato mal escrito), y la carta de Centenario trae los precios y las opciones
+// de su carta vigente.
 import { describe, expect, it } from 'vitest';
 import { MENUS } from '../prisma/datos/menus.js';
-import { PROTEINA, gruposCentenario, menuCentenario } from '../prisma/datos/menuCentenario.js';
-import { aDecimal } from '../src/lib/dinero.js';
+import {
+  SANCOCHO_O_ATOLLADO,
+  SOPAS_DEL_PLATO_FAMILIAR,
+  gruposCentenario,
+  menuCentenario,
+} from '../prisma/datos/menuCentenario.js';
+import { normalizar } from '../scripts/cambiosDelMenu.js';
 import { esquemaCrearCategoria, esquemaCrearProducto } from '../src/modules/menu/menu.schemas.js';
 import { esquemaGrupoOpciones } from '../src/modules/opciones/opciones.schemas.js';
 
 const ID_DE_EJEMPLO = '00000000-0000-4000-8000-000000000000';
+
+/**
+ * Un id de ejemplo distinto para cada posición (el API rechaza grupos repetidos en un producto).
+ * @param {unknown} _valor
+ * @param {number} indice
+ */
+const idDeEjemplo = (_valor, indice) =>
+  ID_DE_EJEMPLO.slice(0, -2) + String(indice).padStart(2, '0');
 
 /**
  * Mensaje de los errores de validación, para que la prueba diga qué dato está mal.
@@ -22,9 +35,6 @@ function errores(resultado, que) {
     ? []
     : resultado.error.issues.map((e) => `${que}: ${e.path.join('.')} ${e.message}`);
 }
-
-/** @param {string} nombre */
-const normalizar = (nombre) => nombre.trim().toLowerCase();
 
 describe.each(Object.entries(MENUS))('menú "%s"', (_nombre, menu) => {
   it('las categorías, los productos y los grupos pasan las validaciones del API', () => {
@@ -52,7 +62,7 @@ describe.each(Object.entries(MENUS))('menú "%s"', (_nombre, menu) => {
               descripcion: producto.descripcion,
               precio: producto.precio,
               tipoImpuesto: 'impoconsumo',
-              gruposOpciones: (producto.grupos ?? []).map(() => ID_DE_EJEMPLO),
+              gruposOpciones: (producto.grupos ?? []).map(idDeEjemplo),
             }),
             producto.nombre,
           ),
@@ -73,56 +83,78 @@ describe.each(Object.entries(MENUS))('menú "%s"', (_nombre, menu) => {
     expect(faltantes).toEqual([]);
   });
 
-  it('no repite nombres: el script los usaría para saltarse lo que cree que ya existe', () => {
+  it('no repite nombres: el script los usa para reconocer lo que el negocio ya tiene', () => {
     const repetidos = (/** @type {string[]} */ nombres) =>
       nombres.map(normalizar).filter((nombre, indice, todos) => todos.indexOf(nombre) !== indice);
 
     expect(repetidos(menu.categorias.map((c) => c.nombre))).toEqual([]);
     expect(repetidos(menu.grupos.map((g) => g.nombre))).toEqual([]);
-    for (const categoria of menu.categorias) {
-      expect(repetidos(categoria.productos.map((p) => p.nombre))).toEqual([]);
-    }
+    // Un producto se reconoce aunque esté en otra categoría: su nombre no se repite en el menú.
+    expect(repetidos(menu.categorias.flatMap((c) => c.productos.map((p) => p.nombre)))).toEqual([]);
   });
 });
 
 describe('carta de Centenario', () => {
-  /** Precios de los platos individuales en la carta física, por proteína. */
+  /** Precios de la carta vigente, tal como están impresos. */
   const CARTA = {
-    'Sancocho de gallina': {
-      Pernil: 28000,
-      Pechuga: 30000,
-      'Chuleta de pollo': 33000,
-      'Chuleta de cerdo': 33000,
-      'Punta de anca': 35000,
-      'Tilapia frita': 33000,
-      'Filete de pollo': 30000,
-    },
-    'Atollado ginebrino': {
-      Pernil: 30000,
-      Pechuga: 32000,
-      'Chuleta de pollo': 35000,
-      'Chuleta de cerdo': 35000,
-      'Punta de anca': 37000,
-      'Tilapia frita': 35000,
-      'Filete de pollo': 32000,
-    },
+    'Pernil o pechuga de gallina': '39000',
+    'Pernil o pechuga de pollo': '37000',
+    'Costilla de cerdo': '39900',
+    'Filete de cerdo': '38900',
+    'Chuleta de cerdo': '39900',
+    'Chuleta de pollo': '39000',
+    'Fiambre valluno': '53000',
+    'Gallina entera (6 personas)': '199000',
+    'Media gallina (3 personas)': '109000',
+    'Pollo entero (6 personas)': '176000',
+    'Medio pollo (3 personas)': '99000',
+    'Porción de sancocho': '10000',
+    'Porción de atollado': '14000',
+    'Chorizo asado': '6000',
+    'Tostada de plátano': '4000',
+    'Papas a la francesa': '5500',
+    'Porción de arroz': '4000',
+    'Porción de ensalada': '4000',
+    'Jarra de agua de panela con limón': '9000',
+    'Jarra de mandarina': '22000',
+    'Jarra de naranja': '22000',
+    'Jarra de limonada natural': '20000',
+    'Jarra de jugo de uva': '22000',
+    'Vaso de agua de panela con limón': '3000',
+    'Vaso de limonada natural': '6000',
+    'Vaso de zumo de uva': '6000',
+    'Vaso de mandarina': '6000',
+    'Vaso de naranja': '6000',
+    'Vaso de limonada cerezada': '9000',
+    'Vaso de limonada de coco': '10000',
+    'Botella de agua': '2500',
+    'Botella de agua con gas': '2800',
+    'Gaseosa personal PET': '4000',
+    'Gaseosa personal de vidrio': '3500',
+    'Gaseosa familiar': '10000',
   };
+  const productos = menuCentenario.flatMap((categoria) => categoria.productos);
 
-  it('cada plato individual con su proteína cuesta lo mismo que en la carta', () => {
-    const proteinas = /** @type {import('../prisma/datos/menus.js').GrupoMenu} */ (
-      gruposCentenario.find((grupo) => grupo.nombre === PROTEINA)
-    ).opciones;
-    const individuales = menuCentenario[0].productos;
+  it('cada producto cuesta lo mismo que en la carta, sin que falte ni sobre ninguno', () => {
+    const enElMenu = Object.fromEntries(productos.map((p) => [p.nombre, p.precio]));
 
-    for (const [plato, precios] of Object.entries(CARTA)) {
-      const producto = individuales.find((p) => p.nombre === plato);
-      for (const [proteina, precioEnCarta] of Object.entries(precios)) {
-        const opcion = proteinas.find((o) => o.nombre === proteina);
-        const total = aDecimal(producto?.precio ?? '0').plus(opcion?.precioExtra ?? 'NaN');
-        expect(`${plato} con ${proteina}: ${total.toString()}`).toBe(
-          `${plato} con ${proteina}: ${precioEnCarta}`,
-        );
-      }
+    expect(enElMenu).toEqual(CARTA);
+  });
+
+  it('cada plato se pide eligiendo la sopa, y ninguna opción cambia el precio de la carta', () => {
+    const platos = menuCentenario
+      .filter((categoria) => categoria.nombre !== 'Adicionales')
+      .flatMap((categoria) => categoria.productos)
+      .filter((producto) => producto.grupos);
+    const familiares = menuCentenario.find((c) => c.nombre === 'Platos familiares')?.productos;
+
+    // Los platos individuales llevan "sancocho o atollado" (una) y los familiares, una o las dos.
+    expect(platos).toHaveLength(11);
+    for (const plato of platos) {
+      const sopa = familiares?.includes(plato) ? SOPAS_DEL_PLATO_FAMILIAR : SANCOCHO_O_ATOLLADO;
+      expect(`${plato.nombre}: ${plato.grupos?.[0]}`).toBe(`${plato.nombre}: ${sopa}`);
     }
+    const extras = gruposCentenario.flatMap((g) => g.opciones).map((o) => o.precioExtra);
+    expect(new Set(extras)).toEqual(new Set(['0']));
   });
 });
