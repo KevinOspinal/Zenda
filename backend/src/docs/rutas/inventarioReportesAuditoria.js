@@ -9,9 +9,14 @@ import { esquemaRangoReporte } from '../../modules/reportes/reportes.schemas.js'
 import { cuerpo, operacion, parametros, respuesta } from '../ayudantes.js';
 import { ID, RANGO } from '../ejemplos.js';
 
-const VEN_INVENTARIO = /** @type {const} */ (['dueno', 'administrador', 'cajero']);
-const MUEVEN_INVENTARIO = /** @type {const} */ (['dueno', 'administrador']);
-const VEN_REPORTES = /** @type {const} */ (['dueno', 'administrador']);
+const VEN_INVENTARIO = /** @type {const} */ ([
+  'administrador_zenda',
+  'dueno',
+  'administrador',
+  'cajero',
+]);
+const MUEVEN_INVENTARIO = /** @type {const} */ (['administrador_zenda', 'dueno', 'administrador']);
+const VEN_REPORTES = /** @type {const} */ (['administrador_zenda', 'dueno', 'administrador']);
 
 /** Parámetros de fecha comunes a los reportes. */
 const parametrosRango = parametros('query', esquemaRangoReporte, {
@@ -302,7 +307,7 @@ ${REGLAS_REPORTES}`,
     get: operacion({
       etiqueta: 'Auditoría',
       resumen: 'Consultar las acciones sensibles',
-      roles: ['dueno'],
+      roles: ['administrador_zenda', 'dueno'],
       descripcion: `
 Quién hizo cada acción sensible y cuándo. Los registros **nunca se editan ni se borran**.
 

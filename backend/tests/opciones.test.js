@@ -426,9 +426,14 @@ describe('aislamiento y régimen', () => {
   });
 
   it('al pasar a no responsable, las adiciones quedan sin impuesto como los productos', async () => {
-    const res = await llamar('patch', '/negocios/actual', otroNegocio.encabezados.dueno, {
-      regimenImpuesto: 'no_responsable',
-    });
+    const res = await llamar(
+      'patch',
+      '/negocios/actual',
+      otroNegocio.encabezados.administrador_zenda,
+      {
+        regimenImpuesto: 'no_responsable',
+      },
+    );
     const grupos = await llamar('get', '/grupos-opciones', otroNegocio.encabezados.dueno);
 
     expect(res.status).toBe(200);

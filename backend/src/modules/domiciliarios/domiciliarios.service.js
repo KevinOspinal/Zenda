@@ -2,9 +2,9 @@
 // Domiciliarios del negocio: quienes llevan los domicilios. La caja les asigna los pedidos al
 // despacharlos. No se borran: se desactivan, para conservar su historial.
 //
-// Acceso a Zenda: el dueño puede darle a un domiciliario un usuario (rol domiciliario) para
-// que vea sus entregas en el celular y las marque como entregadas. Sin acceso, la caja sigue
-// manejando sus domicilios como siempre.
+// Acceso a Zenda: el administrador de Zenda puede darle a un domiciliario un usuario (rol
+// domiciliario) para que vea sus entregas en el celular y las marque como entregadas. Sin
+// acceso, la caja sigue manejando sus domicilios como siempre.
 import { ACCIONES, registrarAuditoria } from '../../lib/auditoria.js';
 import { hashearContrasena } from '../../lib/contrasenas.js';
 import { AppError } from '../../lib/errors.js';
@@ -88,8 +88,8 @@ export async function actualizarDomiciliario(sesion, id, datos) {
 
 /**
  * Le da acceso a Zenda a un domiciliario: un usuario con rol domiciliario, con el correo y la
- * contraseña que el dueño le entrega. Si ya tuvo acceso y se le quitó, se reactiva con estos
- * datos. Queda en la auditoría (la contraseña nunca).
+ * contraseña que se le entregan. Si ya tuvo acceso y se le quitó, se reactiva con estos datos.
+ * Queda en la auditoría (la contraseña nunca).
  * @param {DatosSesion} sesion
  * @param {string} id
  * @param {{ email: string, contrasena: string }} datos

@@ -5,7 +5,7 @@ import { esquemaGrupoOpciones } from '../../modules/opciones/opciones.schemas.js
 import { TODOS, cuerpo, operacion, parametros, respuesta } from '../ayudantes.js';
 import { GRUPO_ADICIONES, ID } from '../ejemplos.js';
 
-const EDITAN_MENU = /** @type {const} */ (['dueno', 'administrador']);
+const EDITAN_MENU = /** @type {const} */ (['administrador_zenda', 'dueno', 'administrador']);
 
 const parametroId = parametros('path', esquemaParamsId, {
   id: { descripcion: 'Id del grupo de opciones.', ejemplo: ID.grupoAdiciones },

@@ -1,7 +1,8 @@
 // @ts-check
-// Pruebas de la gestión de usuarios: crear empleados, permisos, cambio de rol y
-// desactivación (que cierran sesiones), protección de la cuenta del dueño,
-// restablecer y cambiar contraseña, auditoría y aislamiento entre negocios.
+// Pruebas de la gestión de usuarios: solo el administrador de Zenda maneja las cuentas (crea
+// empleados y dueños), cambio de rol y desactivación (que cierran sesiones), protección de su
+// cuenta y del único dueño, restablecer y cambiar contraseña, auditoría y aislamiento entre
+// negocios.
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
@@ -31,7 +32,7 @@ afterAll(async () => {
  * Petición autenticada con el rol indicado.
  * @param {'get' | 'post' | 'patch'} metodo
  * @param {string} ruta
- * @param {'dueno' | 'administrador' | 'cajero' | 'mesero'} rol
+ * @param {'administrador_zenda' | 'dueno' | 'administrador' | 'cajero' | 'mesero'} rol
  * @param {Record<string, unknown>} [cuerpo]
  */
 function llamar(metodo, ruta, rol, cuerpo) {
@@ -48,12 +49,12 @@ function login(email, password = CONTRASENA) {
 }
 
 /**
- * Crea un empleado como dueño.
+ * Crea un empleado como administrador de Zenda.
  * @param {string} email
- * @param {'administrador' | 'cajero' | 'mesero'} rol
+ * @param {'dueno' | 'administrador' | 'cajero' | 'mesero'} rol
  */
 async function crearEmpleado(email, rol = 'mesero') {
-  const res = await llamar('post', '/usuarios', 'dueno', {
+  const res = await llamar('post', '/usuarios', 'administrador_zenda', {
     nombre: `Empleado ${email}`,
     email,
     rol,
@@ -63,8 +64,8 @@ async function crearEmpleado(email, rol = 'mesero') {
 }
 
 describe('crear y consultar empleados', () => {
-  it('el dueño crea un empleado que ya puede iniciar sesión', async () => {
-    const res = await llamar('post', '/usuarios', 'dueno', {
+  it('el administrador de Zenda crea un empleado que ya puede iniciar sesión', async () => {
+    const res = await llamar('post', '/usuarios', 'administrador_zenda', {
       nombre: 'Sofía Martínez',
       email: 'Sofia@Negocio.TEST',
       rol: 'mesero',
@@ -85,25 +86,26 @@ describe('crear y consultar empleados', () => {
   });
 
   it('valida la contraseña, el rol y el correo repetido', async () => {
-    const corta = await llamar('post', '/usuarios', 'dueno', {
+    const corta = await llamar('post', '/usuarios', 'administrador_zenda', {
       nombre: 'X',
       email: 'x@negocio.test',
       rol: 'mesero',
       contrasena: 'abc12',
     });
-    const sinNumeros = await llamar('post', '/usuarios', 'dueno', {
+    const sinNumeros = await llamar('post', '/usuarios', 'administrador_zenda', {
       nombre: 'X',
       email: 'x@negocio.test',
       rol: 'mesero',
       contrasena: 'soloLetras',
     });
-    const otroDueno = await llamar('post', '/usuarios', 'dueno', {
+    // El rol de administrador de Zenda no se asigna desde la app.
+    const otroZenda = await llamar('post', '/usuarios', 'administrador_zenda', {
       nombre: 'X',
       email: 'x@negocio.test',
-      rol: 'dueno',
+      rol: 'administrador_zenda',
       contrasena: CONTRASENA,
     });
-    const repetido = await llamar('post', '/usuarios', 'dueno', {
+    const repetido = await llamar('post', '/usuarios', 'administrador_zenda', {
       nombre: 'Otra Sofía',
       email: 'sofia@negocio.test',
       rol: 'cajero',
@@ -112,26 +114,46 @@ describe('crear y consultar empleados', () => {
 
     expect(corta.status).toBe(400);
     expect(sinNumeros.status).toBe(400);
-    expect(otroDueno.status).toBe(400);
+    expect(otroZenda.status).toBe(400);
     expect(repetido.status).toBe(409);
   });
 
-  it('el administrador consulta pero no crea; cajero y mesero no acceden', async () => {
-    const lista = await llamar('get', '/usuarios', 'administrador');
-    const crear = await llamar('post', '/usuarios', 'administrador', {
-      nombre: 'X',
-      email: 'y@negocio.test',
-      rol: 'mesero',
+  it('crea al dueño del negocio', async () => {
+    const res = await llamar('post', '/usuarios', 'administrador_zenda', {
+      nombre: 'Alexis Díaz',
+      email: 'alexis@negocio.test',
+      rol: 'dueno',
       contrasena: CONTRASENA,
     });
-    const cajero = await llamar('get', '/usuarios', 'cajero');
-    const mesero = await llamar('get', '/usuarios', 'mesero');
+
+    expect(res.status).toBe(201);
+    expect(res.body.rol).toBe('dueno');
+    expect((await login('alexis@negocio.test')).status).toBe(200);
+  });
+
+  it('solo el administrador de Zenda ve y maneja las cuentas: ni el dueño las ve', async () => {
+    const lista = await llamar('get', '/usuarios', 'administrador_zenda');
+    const empleado = await crearEmpleado('privado@negocio.test');
+    const intentos = await Promise.all(
+      /** @type {const} */ (['dueno', 'administrador', 'cajero', 'mesero']).flatMap((rol) => [
+        llamar('get', '/usuarios', rol),
+        llamar('get', `/usuarios/${empleado.id}`, rol),
+        llamar('post', '/usuarios', rol, {
+          nombre: 'X',
+          email: `y-${rol}@negocio.test`,
+          rol: 'mesero',
+          contrasena: CONTRASENA,
+        }),
+        llamar('patch', `/usuarios/${empleado.id}`, rol, { activo: false }),
+        llamar('post', `/usuarios/${empleado.id}/restablecer-contrasena`, rol, {
+          contrasenaNueva: 'Nueva2026',
+        }),
+      ]),
+    );
 
     expect(lista.status).toBe(200);
     expect(lista.body.every((/** @type {object} */ u) => !('passwordHash' in u))).toBe(true);
-    expect(crear.status).toBe(403);
-    expect(cajero.status).toBe(403);
-    expect(mesero.status).toBe(403);
+    expect(intentos.map((res) => res.status)).toEqual(intentos.map(() => 403));
   });
 
   it('crear un empleado queda en la auditoría', async () => {
@@ -149,7 +171,9 @@ describe('editar, cambiar rol y desactivar', () => {
     const empleado = await crearEmpleado('ascenso@negocio.test', 'mesero');
     const { body: sesion } = await login('ascenso@negocio.test');
 
-    const res = await llamar('patch', `/usuarios/${empleado.id}`, 'dueno', { rol: 'cajero' });
+    const res = await llamar('patch', `/usuarios/${empleado.id}`, 'administrador_zenda', {
+      rol: 'cajero',
+    });
     const renovar = await request(app)
       .post('/auth/refresh')
       .send({ refreshToken: sesion.refreshToken });
@@ -168,37 +192,78 @@ describe('editar, cambiar rol y desactivar', () => {
   it('un empleado desactivado no puede iniciar sesión; al reactivarlo sí', async () => {
     const empleado = await crearEmpleado('retirado@negocio.test');
 
-    await llamar('patch', `/usuarios/${empleado.id}`, 'dueno', { activo: false });
+    await llamar('patch', `/usuarios/${empleado.id}`, 'administrador_zenda', { activo: false });
     const desactivado = await login('retirado@negocio.test');
-    await llamar('patch', `/usuarios/${empleado.id}`, 'dueno', { activo: true });
+    await llamar('patch', `/usuarios/${empleado.id}`, 'administrador_zenda', { activo: true });
     const reactivado = await login('retirado@negocio.test');
 
     expect(desactivado.status).toBe(401);
     expect(reactivado.status).toBe(200);
   });
 
-  it('la cuenta del dueño no se puede desactivar ni cambiar de rol', async () => {
-    const desactivar = await llamar('patch', `/usuarios/${negocio.usuarios.dueno}`, 'dueno', {
+  it('la cuenta del administrador de Zenda no se puede desactivar ni cambiar de rol', async () => {
+    const cuenta = `/usuarios/${negocio.usuarios.administrador_zenda}`;
+    const desactivar = await llamar('patch', cuenta, 'administrador_zenda', { activo: false });
+    const cambiarRol = await llamar('patch', cuenta, 'administrador_zenda', { rol: 'dueno' });
+    const cambiarNombre = await llamar('patch', cuenta, 'administrador_zenda', {
+      nombre: 'Kevin Acevedo',
+    });
+
+    expect(desactivar.status).toBe(422);
+    expect(desactivar.body.error.code).toBe('CUENTA_ZENDA_PROTEGIDA');
+    expect(cambiarRol.status).toBe(422);
+    expect(cambiarNombre.status).toBe(200);
+  });
+
+  it('al único dueño activo no se le quita el rol ni se desactiva: primero se crea el nuevo', async () => {
+    // Un negocio aparte, para no dejar sin dueño al de las demás pruebas.
+    const cambiaDeDueno = await crearNegocioDePrueba('780000003');
+    /**
+     * @param {'post' | 'patch'} metodo
+     * @param {string} ruta
+     * @param {Record<string, unknown>} cuerpo
+     */
+    const comoZenda = (metodo, ruta, cuerpo) =>
+      request(app)
+        [metodo](ruta)
+        .set('Authorization', cambiaDeDueno.encabezados.administrador_zenda)
+        .send(cuerpo);
+    const dueno = `/usuarios/${cambiaDeDueno.usuarios.dueno}`;
+
+    const desactivar = await comoZenda('patch', dueno, { activo: false });
+    const cambiarRol = await comoZenda('patch', dueno, { rol: 'administrador' });
+    const nuevo = await comoZenda('post', '/usuarios', {
+      nombre: 'Dueño Nuevo',
+      email: 'nuevo@780000003.test',
+      rol: 'dueno',
+      contrasena: CONTRASENA,
+    });
+    const desactivarElAnterior = await comoZenda('patch', dueno, { activo: false });
+    const desactivarElNuevo = await comoZenda('patch', `/usuarios/${nuevo.body.id}`, {
       activo: false,
-    });
-    const cambiarRol = await llamar('patch', `/usuarios/${negocio.usuarios.dueno}`, 'dueno', {
-      rol: 'mesero',
-    });
-    const cambiarNombre = await llamar('patch', `/usuarios/${negocio.usuarios.dueno}`, 'dueno', {
-      nombre: 'Andrés Gómez',
     });
 
     expect(desactivar.status).toBe(422);
     expect(desactivar.body.error.code).toBe('DUENO_PROTEGIDO');
     expect(cambiarRol.status).toBe(422);
-    expect(cambiarNombre.status).toBe(200);
+    expect(nuevo.status).toBe(201);
+    expect(desactivarElAnterior.status).toBe(200);
+    // Ahora el nuevo es el único dueño activo.
+    expect(desactivarElNuevo.status).toBe(422);
   });
 
   it('no se pueden ver ni editar empleados de otro negocio', async () => {
-    const ver = await llamar('get', `/usuarios/${otroNegocio.usuarios.cajero}`, 'dueno');
-    const editar = await llamar('patch', `/usuarios/${otroNegocio.usuarios.cajero}`, 'dueno', {
-      activo: false,
-    });
+    const ver = await llamar(
+      'get',
+      `/usuarios/${otroNegocio.usuarios.cajero}`,
+      'administrador_zenda',
+    );
+    const editar = await llamar(
+      'patch',
+      `/usuarios/${otroNegocio.usuarios.cajero}`,
+      'administrador_zenda',
+      { activo: false },
+    );
 
     expect(ver.status).toBe(404);
     expect(editar.status).toBe(404);
@@ -206,15 +271,18 @@ describe('editar, cambiar rol y desactivar', () => {
 });
 
 describe('contraseñas', () => {
-  it('el dueño restablece la contraseña: quita el bloqueo, cierra sesiones y la nueva funciona', async () => {
+  it('el administrador de Zenda restablece la contraseña: quita el bloqueo, cierra sesiones y la nueva funciona', async () => {
     const empleado = await crearEmpleado('olvido@negocio.test');
     const { body: sesion } = await login('olvido@negocio.test');
     for (let intento = 0; intento < 5; intento++) await login('olvido@negocio.test', 'mala1234');
 
-    const bloqueado = await llamar('get', `/usuarios/${empleado.id}`, 'dueno');
-    const res = await llamar('post', `/usuarios/${empleado.id}/restablecer-contrasena`, 'dueno', {
-      contrasenaNueva: 'Nueva2026',
-    });
+    const bloqueado = await llamar('get', `/usuarios/${empleado.id}`, 'administrador_zenda');
+    const res = await llamar(
+      'post',
+      `/usuarios/${empleado.id}/restablecer-contrasena`,
+      'administrador_zenda',
+      { contrasenaNueva: 'Nueva2026' },
+    );
     const conVieja = await login('olvido@negocio.test');
     const conNueva = await login('olvido@negocio.test', 'Nueva2026');
     const renovar = await request(app)

@@ -20,7 +20,7 @@ import { menuLaIndustria } from './datos/menuLaIndustria.js';
 
 /** @typedef {import('../src/lib/negocio.js').TransaccionPrisma} TransaccionPrisma */
 /** @typedef {import('./datos/menuLaIndustria.js').CategoriaMenu} CategoriaMenu */
-/** @typedef {'dueno' | 'administrador' | 'cajero' | 'mesero' | 'cocina'} Rol */
+/** @typedef {'administrador_zenda' | 'dueno' | 'administrador' | 'cajero' | 'mesero' | 'cocina'} Rol */
 
 /**
  * @typedef {object} DatosNegocio
@@ -40,6 +40,8 @@ const LA_INDUSTRIA = {
   nit: '900111222',
   ciudad: 'Cali',
   usuarios: [
+    // La cuenta del equipo de Zenda en el negocio: maneja los usuarios y la facturación.
+    { nombre: 'Soporte Zenda', email: 'zenda@laindustria.test', rol: 'administrador_zenda' },
     { nombre: 'Andrés Gómez', email: 'dueno@laindustria.test', rol: 'dueno' },
     { nombre: 'Paola Ríos', email: 'admin@laindustria.test', rol: 'administrador' },
     { nombre: 'Camilo Torres', email: 'cajero@laindustria.test', rol: 'cajero' },

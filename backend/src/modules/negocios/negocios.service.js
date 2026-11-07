@@ -1,5 +1,6 @@
 // @ts-check
-// Registro de un negocio nuevo con su usuario dueño, y consulta y cambio de su configuración.
+// Registro de un negocio nuevo con la cuenta de quien lo registra, y consulta y cambio de su
+// configuración.
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { env } from '../../config/env.js';
@@ -50,17 +51,21 @@ export function registroHabilitado(configuracion = env) {
 }
 
 /**
- * Crea el negocio y su dueño en una sola transacción (si algo falla, no queda nada a
- * medias) y entrega la sesión iniciada del dueño.
+ * Crea el negocio y la cuenta de quien lo registra en una sola transacción (si algo falla, no
+ * queda nada a medias) y entrega su sesión iniciada.
+ *
+ * Quien registra es el equipo de Zenda (en producción el registro está cerrado y solo se abre
+ * para registrar a un cliente), así que su cuenta queda como administrador de Zenda. El dueño
+ * del restaurante se crea después desde Usuarios.
  *
  * @param {{
  *   negocio: { nombre: string, nit: string, ciudad?: string,
  *     regimenImpuesto: 'responsable_inc' | 'franquicia_iva' | 'no_responsable' },
- *   dueno: { nombre: string, email: string, contrasena: string },
+ *   cuenta: { nombre: string, email: string, contrasena: string },
  * }} datos
  * @throws {AppError} 403 si el registro está cerrado; 409 si el NIT ya está registrado.
  */
-export async function registrarNegocio({ negocio, dueno }) {
+export async function registrarNegocio({ negocio, cuenta }) {
   if (!registroHabilitado()) {
     throw new AppError(
       403,
@@ -70,7 +75,7 @@ export async function registrarNegocio({ negocio, dueno }) {
   }
 
   // 1. El hash va fuera de la transacción: argon2 es lento a propósito.
-  const passwordHash = await hashearContrasena(dueno.contrasena);
+  const passwordHash = await hashearContrasena(cuenta.contrasena);
 
   // 2. El id se genera aquí porque hay que fijar el negocio activo antes de crearlo (RLS).
   const tenantId = randomUUID();
@@ -84,14 +89,14 @@ export async function registrarNegocio({ negocio, dueno }) {
       const usuario = await tx.usuario.create({
         data: {
           tenantId,
-          nombre: dueno.nombre,
-          email: dueno.email,
+          nombre: cuenta.nombre,
+          email: cuenta.email,
           passwordHash,
-          rol: 'dueno',
+          rol: 'administrador_zenda',
         },
       });
 
-      // 3. El dueño queda con la sesión iniciada para empezar a configurar su negocio.
+      // 3. La cuenta queda con la sesión iniciada para empezar a configurar el negocio.
       const sesion = await crearSesion(tx, usuario);
       return { negocio: creado, ...sesion };
     });

@@ -1,8 +1,9 @@
 // @ts-check
 // Rutas de los domiciliarios.
-// - Verlos: cajero, administrador y dueño (la caja elige quién lleva cada domicilio).
-// - Registrarlos y editarlos: administrador y dueño.
-// - Darles o quitarles acceso a Zenda: el dueño (igual que con los demás empleados).
+// - Verlos: cajero, administrador, dueño y administrador de Zenda (la caja elige quién lleva
+//   cada domicilio).
+// - Registrarlos, editarlos y darles o quitarles acceso a Zenda: solo el administrador de
+//   Zenda (igual que con las demás cuentas del negocio).
 // - Liquidarlos (recibir el dinero de sus domicilios contra entrega): la caja.
 import { Router } from 'express';
 import { esquemaParamsId } from '../../lib/esquemas.js';
@@ -17,9 +18,8 @@ import {
   esquemaFiltrosDomiciliarios,
 } from './domiciliarios.schemas.js';
 
-const consultan = permitirRoles('dueno', 'administrador', 'cajero');
-const gestionan = permitirRoles('dueno', 'administrador');
-const soloDueno = permitirRoles('dueno');
+const consultan = permitirRoles('administrador_zenda', 'dueno', 'administrador', 'cajero');
+const soloZenda = permitirRoles('administrador_zenda');
 
 export const rutasDomiciliarios = Router();
 rutasDomiciliarios.use(autenticar);
@@ -32,25 +32,25 @@ rutasDomiciliarios.get(
 );
 rutasDomiciliarios.post(
   '/',
-  gestionan,
+  soloZenda,
   validar({ body: esquemaCrearDomiciliario }),
   controlador.crear,
 );
 rutasDomiciliarios.patch(
   '/:id',
-  gestionan,
+  soloZenda,
   validar({ params: esquemaParamsId, body: esquemaActualizarDomiciliario }),
   controlador.actualizar,
 );
 rutasDomiciliarios.post(
   '/:id/acceso',
-  soloDueno,
+  soloZenda,
   validar({ params: esquemaParamsId, body: esquemaDarAcceso }),
   controlador.darAcceso,
 );
 rutasDomiciliarios.delete(
   '/:id/acceso',
-  soloDueno,
+  soloZenda,
   validar({ params: esquemaParamsId }),
   controlador.quitarAcceso,
 );

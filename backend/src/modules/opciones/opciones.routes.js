@@ -1,6 +1,6 @@
 // @ts-check
 // Rutas de los grupos de opciones de los productos. Todos los roles pueden consultarlos; solo
-// el dueño y el administrador los editan, igual que el menú.
+// el administrador de Zenda, el dueño y el administrador los editan, igual que el menú.
 import { Router } from 'express';
 import { esquemaParamsId } from '../../lib/esquemas.js';
 import { autenticar, obtenerSesion, permitirRoles } from '../../middlewares/auth.js';
@@ -9,7 +9,7 @@ import { esquemaGrupoOpciones } from './opciones.schemas.js';
 import * as servicio from './opciones.service.js';
 
 /** Roles que pueden cambiar el menú y los precios. */
-const editanMenu = permitirRoles('dueno', 'administrador');
+const editanMenu = permitirRoles('administrador_zenda', 'dueno', 'administrador');
 
 export const rutasGruposOpciones = Router();
 rutasGruposOpciones.use(autenticar);

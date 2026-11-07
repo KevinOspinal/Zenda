@@ -1,5 +1,6 @@
 // @ts-check
-// Rutas del menú. Todos los roles pueden consultarlo; solo el dueño y el administrador lo editan.
+// Rutas del menú. Todos los roles pueden consultarlo; solo lo editan el administrador de Zenda,
+// el dueño y el administrador.
 import { Router } from 'express';
 import { esquemaParamsId } from '../../lib/esquemas.js';
 import { autenticar, permitirRoles } from '../../middlewares/auth.js';
@@ -14,7 +15,7 @@ import {
 } from './menu.schemas.js';
 
 /** Roles que pueden cambiar el menú y los precios. */
-const editanMenu = permitirRoles('dueno', 'administrador');
+const editanMenu = permitirRoles('administrador_zenda', 'dueno', 'administrador');
 
 // /menu: vista para tomar pedidos (categorías con productos activos).
 export const rutasMenu = Router();

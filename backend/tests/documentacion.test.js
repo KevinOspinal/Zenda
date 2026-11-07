@@ -1,10 +1,11 @@
 // @ts-check
 // Pruebas de la documentación Swagger: que se sirva, que cada ruta del API esté
-// documentada (y que no haya documentación de rutas que ya no existen) y que cada
-// endpoint tenga la información mínima para entenderlo.
+// documentada (y que no haya documentación de rutas que ya no existen), que cada endpoint
+// tenga la información mínima para entenderlo y que diga exactamente quién puede usarlo.
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
+import { ROLES } from '../src/config/roles.js';
 import { documentoOpenApi } from '../src/docs/openapi.js';
 import { MODULOS } from '../src/rutas.js';
 
@@ -29,6 +30,40 @@ function rutasDeExpress() {
   }
   return rutas.sort();
 }
+
+/**
+ * Roles que deja pasar cada ruta real según su permitirRoles, con la clave de
+ * rutasDeExpress: "post /usuarios" → ['administrador_zenda']. Un permitirRoles del router
+ * (router.use) aplica a todas sus rutas. Las rutas sin permitirRoles no aparecen: las abre a
+ * todos los roles o revisan el rol dentro del servicio.
+ * @returns {Map<string, string[]>}
+ */
+function rolesDeExpress() {
+  const roles = new Map();
+  for (const [prefijo, router] of MODULOS) {
+    /** @type {string[] | undefined} */
+    let delRouter;
+    for (const capa of /** @type {any[]} */ (router.stack)) {
+      if (!capa.route) {
+        delRouter = capa.handle.rolesPermitidos ?? delRouter;
+        continue;
+      }
+      const deLaRuta = capa.route.stack.map((/** @type {any} */ c) => c.handle.rolesPermitidos);
+      const listas = [delRouter, ...deLaRuta].filter(Boolean);
+      if (listas.length === 0) continue;
+      // Si hay varias listas, pasa quien esté en todas.
+      const permitidos = ROLES.filter((rol) => listas.every((lista) => lista.includes(rol)));
+      const ruta = capa.route.path === '/' ? '' : capa.route.path.replace(/:(\w+)/g, '{$1}');
+      for (const metodo of Object.keys(capa.route.methods)) {
+        roles.set(`${metodo} ${prefijo}${ruta}`, permitidos);
+      }
+    }
+  }
+  return roles;
+}
+
+/** @param {string[]} roles */
+const enOrden = (roles) => [...roles].sort().join(', ');
 
 /** Operaciones documentadas: [clave, operación]. */
 function operacionesDocumentadas() {
@@ -97,5 +132,42 @@ describe('documentación Swagger', () => {
         }
       }
     }
+  });
+
+  it('cada ruta documenta exactamente los roles que la pueden usar', () => {
+    // La lectura de los permisos funciona: un caso conocido.
+    expect(rolesDeExpress().get('post /usuarios')).toEqual(['administrador_zenda']);
+    expect(rolesDeExpress().get('get /reportes/resumen')).toEqual([
+      'administrador_zenda',
+      'dueno',
+      'administrador',
+    ]);
+
+    const documentadas = new Map(operacionesDocumentadas());
+    const diferencias = [...rolesDeExpress()]
+      .filter(([clave, roles]) => {
+        const documentados = documentadas.get(clave)?.['x-roles'];
+        return !documentados || enOrden(documentados) !== enOrden(roles);
+      })
+      .map(
+        ([clave, roles]) =>
+          `${clave}: la ruta deja pasar a ${enOrden(roles)}; Swagger dice ` +
+          `${enOrden(documentadas.get(clave)?.['x-roles'] ?? [])}`,
+      );
+
+    expect(diferencias).toEqual([]);
+  });
+
+  it('el administrador de Zenda puede todo lo que puede el dueño', () => {
+    const enLasRutas = [...rolesDeExpress()];
+    const enSwagger = operacionesDocumentadas().map(([clave, operacion]) => [
+      clave,
+      operacion['x-roles'] ?? [],
+    ]);
+    const sinElAdministradorDeZenda = [...enLasRutas, ...enSwagger]
+      .filter(([, roles]) => roles.includes('dueno') && !roles.includes('administrador_zenda'))
+      .map(([clave]) => clave);
+
+    expect(sinElAdministradorDeZenda).toEqual([]);
   });
 });

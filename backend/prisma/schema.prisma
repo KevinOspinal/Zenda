@@ -26,6 +26,10 @@ enum RolUsuario {
   cocina
   // Quien lleva los domicilios: solo ve los que tiene asignados y los marca como entregados.
   domiciliario
+  // El equipo de Zenda, que vende y atiende el software: puede todo lo del dueño y además
+  // maneja los usuarios, los domiciliarios y la facturación. Nadie lo asigna desde la app: lo
+  // crea el registro del negocio o scripts/crear-administrador-zenda.js.
+  administrador_zenda
 
   @@map("rol_usuario")
 }

@@ -11,7 +11,7 @@ import {
 import { TODOS, cuerpo, operacion, parametros, respuesta } from '../ayudantes.js';
 import { ID, PRODUCTO_HAMBURGUESA } from '../ejemplos.js';
 
-const EDITAN_MENU = /** @type {const} */ (['dueno', 'administrador']);
+const EDITAN_MENU = /** @type {const} */ (['administrador_zenda', 'dueno', 'administrador']);
 
 const CATEGORIA = { id: ID.categoria, tenantId: ID.negocio, nombre: 'Hamburguesas', orden: 0 };
 

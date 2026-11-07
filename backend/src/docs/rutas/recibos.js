@@ -9,7 +9,7 @@ export const documentacionRecibos = {
     get: operacion({
       etiqueta: 'Recibos',
       resumen: 'Listar los últimos recibos de venta',
-      roles: ['dueno', 'administrador', 'cajero'],
+      roles: ['administrador_zenda', 'dueno', 'administrador', 'cajero'],
       descripcion: `
 Los últimos 20 recibos de venta del negocio, del más reciente al más antiguo, con un resumen
 de su pedido (mesa o número y cliente, total y métodos de pago) para reconocerlo en la caja.

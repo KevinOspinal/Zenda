@@ -8,8 +8,9 @@ import { createHash, randomBytes } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { env } from '../config/env.js';
+import { ROLES } from '../config/roles.js';
 
-/** @typedef {'dueno' | 'administrador' | 'cajero' | 'mesero' | 'cocina' | 'domiciliario'} Rol */
+/** @typedef {import('../config/roles.js').Rol} Rol */
 
 /**
  * Datos del usuario autenticado que viajan dentro del token de acceso.
@@ -23,7 +24,7 @@ import { env } from '../config/env.js';
 const esquemaContenidoToken = z.object({
   sub: z.uuid(),
   tenantId: z.uuid(),
-  rol: z.enum(['dueno', 'administrador', 'cajero', 'mesero', 'cocina', 'domiciliario']),
+  rol: z.enum(ROLES),
   exp: z.number(),
 });
 

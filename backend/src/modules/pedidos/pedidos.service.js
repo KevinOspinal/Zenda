@@ -75,7 +75,13 @@ const ESTADOS_ABIERTOS = /** @type {const} */ (['abierto', 'enviado_a_cocina']);
 const ORDEN_COCINA = /** @type {const} */ (['pendiente', 'preparando', 'listo', 'entregado']);
 
 /** Roles que marcan un plato como "preparando" o "listo". El mesero no: eso lo sabe la cocina. */
-const PREPARAN = /** @type {const} */ (['cocina', 'cajero', 'administrador', 'dueno']);
+const PREPARAN = /** @type {const} */ ([
+  'cocina',
+  'cajero',
+  'administrador',
+  'dueno',
+  'administrador_zenda',
+]);
 
 /** Horas que la cocina sigue viendo un pedido cobrado que aún tiene platos por entregar. */
 const HORAS_COBRADO_EN_COCINA = 12;
@@ -85,7 +91,12 @@ const HORAS_COBRADO_EN_COCINA = 12;
  * el mesero y la cocina no los necesitan. El domiciliario solo ve los de sus entregas en curso
  * (ver veDatosDeEntrega).
  */
-const MANEJAN_DOMICILIOS = /** @type {const} */ (['cajero', 'administrador', 'dueno']);
+const MANEJAN_DOMICILIOS = /** @type {const} */ ([
+  'cajero',
+  'administrador',
+  'dueno',
+  'administrador_zenda',
+]);
 
 /** Horas que un domicilio sin entregar sigue en la lista de la caja. */
 const HORAS_DOMICILIO_EN_CURSO = 24;
@@ -102,8 +113,8 @@ const DETALLE_ENTREGA = /** @type {const} */ ({
  * El porcentaje de propina del negocio se usa para calcular la propina sugerida (ver `presentarPedido`).
  */
 /**
- * Quién tomó el pedido: su nombre y su rol. Si lo tomó el dueño, el administrador o el cajero,
- * no tiene un mesero asignado y sus platos los puede llevar cualquier mesero.
+ * Quién tomó el pedido: su nombre y su rol. Si no lo tomó un mesero (sino la caja, el dueño o
+ * un administrador), no tiene un mesero asignado y sus platos los puede llevar cualquier mesero.
  */
 const TOMADO_POR = /** @type {const} */ ({ select: { nombre: true, rol: true } });
 
@@ -1232,7 +1243,7 @@ function filtroComandasDeCocina() {
 /**
  * Revisa que el rol pueda marcar ese paso de la cocina.
  * - Preparando y listo: la cocina, el cajero (en cafeterías el cajero también prepara), el
- *   administrador y el dueño. El mesero no.
+ *   administrador, el dueño y el administrador de Zenda. El mesero no.
  * - Entregado: todos, menos la cocina fuera del mostrador. En una mesa el mesero confirma que
  *   el plato llegó; un domicilio sale cuando la caja lo despacha. En mostrador la cocina sí
  *   puede ("Ya salió"), porque lo entrega ella misma.

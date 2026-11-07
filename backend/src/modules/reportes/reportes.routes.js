@@ -1,5 +1,6 @@
 // @ts-check
-// Rutas de los reportes de ventas. Solo las ven el dueño y el administrador.
+// Rutas de los reportes de ventas. Solo las ven el administrador de Zenda, el dueño y el
+// administrador.
 //
 // Módulo pequeño: los controladores son de una línea y van junto a las rutas.
 import { Router } from 'express';
@@ -9,7 +10,7 @@ import { esquemaRangoReporte } from './reportes.schemas.js';
 import * as servicio from './reportes.service.js';
 
 export const rutasReportes = Router();
-rutasReportes.use(autenticar, permitirRoles('dueno', 'administrador'));
+rutasReportes.use(autenticar, permitirRoles('administrador_zenda', 'dueno', 'administrador'));
 
 /** Todos los reportes reciben el mismo rango de fechas: ?desde=AAAA-MM-DD&hasta=AAAA-MM-DD */
 const validarRango = validar({ query: esquemaRangoReporte });

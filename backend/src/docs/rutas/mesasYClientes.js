@@ -10,8 +10,13 @@ import { esquemaActualizarMesa, esquemaCrearMesa } from '../../modules/mesas/mes
 import { TODOS, cuerpo, operacion, parametros, respuesta } from '../ayudantes.js';
 import { CLIENTE, ID, MESA } from '../ejemplos.js';
 
-const EDITAN_MESAS = /** @type {const} */ (['dueno', 'administrador']);
-const GESTIONAN_CLIENTES = /** @type {const} */ (['dueno', 'administrador', 'cajero']);
+const EDITAN_MESAS = /** @type {const} */ (['administrador_zenda', 'dueno', 'administrador']);
+const GESTIONAN_CLIENTES = /** @type {const} */ ([
+  'administrador_zenda',
+  'dueno',
+  'administrador',
+  'cajero',
+]);
 
 const idMesa = parametros('path', esquemaParamsId, {
   id: { descripcion: 'Id de la mesa.', ejemplo: ID.mesa },

@@ -151,8 +151,8 @@ describe('rol cocina', () => {
     }
   });
 
-  it('el dueño puede crear la cuenta de la cocina', async () => {
-    const res = await llamar('post', '/usuarios', negocio.encabezados.dueno, {
+  it('el administrador de Zenda crea la cuenta de la cocina', async () => {
+    const res = await llamar('post', '/usuarios', negocio.encabezados.administrador_zenda, {
       nombre: 'Cocina principal',
       email: 'tableta-cocina@808000001.test',
       rol: 'cocina',

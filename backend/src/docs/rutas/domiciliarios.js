@@ -16,8 +16,14 @@ const idDomiciliario = parametros('path', esquemaParamsId, {
 });
 const CON_ACCESO = { ...DOMICILIARIO, acceso: { email: 'pedro@laindustria.test', activo: true } };
 
-const CONSULTAN = /** @type {const} */ (['dueno', 'administrador', 'cajero']);
-const GESTIONAN = /** @type {const} */ (['dueno', 'administrador']);
+const CONSULTAN = /** @type {const} */ ([
+  'administrador_zenda',
+  'dueno',
+  'administrador',
+  'cajero',
+]);
+/** Registrarlos, editarlos y darles acceso: como las demás cuentas del negocio. */
+const GESTIONAN = /** @type {const} */ (['administrador_zenda']);
 
 export const documentacionDomiciliarios = {
   '/domiciliarios': {
@@ -70,9 +76,9 @@ borran: así se conserva el historial de los domicilios que llevaron.`,
     post: operacion({
       etiqueta: 'Domiciliarios',
       resumen: 'Darle acceso a Zenda a un domiciliario',
-      roles: ['dueno'],
+      roles: [...GESTIONAN],
       descripcion: `
-Crea su usuario (rol \`domiciliario\`) con el correo y la contraseña que el dueño le entrega.
+Crea su usuario (rol \`domiciliario\`) con el correo y la contraseña que se le entregan.
 Desde su celular ve **solo sus entregas**, navega con Google Maps o Waze y las marca como
 entregadas. Si ya tuvo acceso y se le quitó, se reactiva con estos datos.
 
@@ -91,7 +97,7 @@ entregadas. Si ya tuvo acceso y se le quitó, se reactiva con estos datos.
     delete: operacion({
       etiqueta: 'Domiciliarios',
       resumen: 'Quitarle el acceso a Zenda a un domiciliario',
-      roles: ['dueno'],
+      roles: [...GESTIONAN],
       descripcion: `
 Su usuario queda inactivo y se cierran sus sesiones. Sigue siendo domiciliario: la caja le
 puede asignar domicilios como siempre. Si no tiene acceso, 409 \`SIN_ACCESO\`. Queda en la
@@ -111,7 +117,7 @@ auditoría (\`quitar_acceso_domiciliario\`).`,
     post: operacion({
       etiqueta: 'Domiciliarios',
       resumen: 'Liquidar a un domiciliario (recibir el dinero de sus domicilios)',
-      roles: ['dueno', 'administrador', 'cajero'],
+      roles: ['administrador_zenda', 'dueno', 'administrador', 'cajero'],
       descripcion: `
 El domiciliario trae a la caja el dinero de sus domicilios **contra entrega** ya entregados
 (los que están **por liquidar**). Cada uno queda cobrado por su total, con el método con que
