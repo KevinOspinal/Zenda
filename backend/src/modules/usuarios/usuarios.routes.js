@@ -1,7 +1,6 @@
 // @ts-check
-// Rutas de la gestión de usuarios.
-// - Consultar: dueño y administrador.
-// - Crear, editar y restablecer contraseñas: solo el dueño.
+// Rutas de la gestión de usuarios: consultarlos, crearlos, editarlos y restablecer sus
+// contraseñas. Solo el administrador de Zenda: el dueño no maneja las cuentas del negocio.
 //
 // Módulo pequeño: los controladores son de una línea y van junto a las rutas.
 import { Router } from 'express';
@@ -15,31 +14,30 @@ import {
 } from './usuarios.schemas.js';
 import * as servicio from './usuarios.service.js';
 
-const consultan = permitirRoles('dueno', 'administrador');
-const soloDueno = permitirRoles('dueno');
+const soloZenda = permitirRoles('administrador_zenda');
 
 export const rutasUsuarios = Router();
 rutasUsuarios.use(autenticar);
 
 // GET /usuarios
-rutasUsuarios.get('/', consultan, async (_req, res) => {
+rutasUsuarios.get('/', soloZenda, async (_req, res) => {
   res.json(await servicio.listarUsuarios(obtenerSesion(res)));
 });
 
 // GET /usuarios/:id
-rutasUsuarios.get('/:id', consultan, validar({ params: esquemaParamsId }), async (_req, res) => {
+rutasUsuarios.get('/:id', soloZenda, validar({ params: esquemaParamsId }), async (_req, res) => {
   res.json(await servicio.obtenerUsuario(obtenerSesion(res), res.locals.entrada.params.id));
 });
 
 // POST /usuarios → 201
-rutasUsuarios.post('/', soloDueno, validar({ body: esquemaCrearUsuario }), async (_req, res) => {
+rutasUsuarios.post('/', soloZenda, validar({ body: esquemaCrearUsuario }), async (_req, res) => {
   res.status(201).json(await servicio.crearUsuario(obtenerSesion(res), res.locals.entrada.body));
 });
 
 // PATCH /usuarios/:id
 rutasUsuarios.patch(
   '/:id',
-  soloDueno,
+  soloZenda,
   validar({ params: esquemaParamsId, body: esquemaActualizarUsuario }),
   async (_req, res) => {
     const { params, body } = res.locals.entrada;
@@ -50,7 +48,7 @@ rutasUsuarios.patch(
 // POST /usuarios/:id/restablecer-contrasena → 204
 rutasUsuarios.post(
   '/:id/restablecer-contrasena',
-  soloDueno,
+  soloZenda,
   validar({ params: esquemaParamsId, body: esquemaRestablecerContrasena }),
   async (_req, res) => {
     const { params, body } = res.locals.entrada;

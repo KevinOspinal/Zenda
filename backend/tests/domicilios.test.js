@@ -126,10 +126,15 @@ beforeAll(async () => {
     ids.gaseosa = (await crearProducto('Gaseosa personal', '4000')).id;
   });
 
-  const domiciliario = await llamar('post', '/domiciliarios', negocio.encabezados.dueno, {
-    nombre: 'Pedro Gómez',
-    telefono: '3001234567',
-  });
+  const domiciliario = await llamar(
+    'post',
+    '/domiciliarios',
+    negocio.encabezados.administrador_zenda,
+    {
+      nombre: 'Pedro Gómez',
+      telefono: '3001234567',
+    },
+  );
   ids.domiciliario = domiciliario.body.id;
 
   await llamar('post', '/caja/abrir', negocio.encabezados.cajero, { montoInicial: 100000 });
@@ -306,17 +311,32 @@ describe('domicilios', () => {
   });
 
   it('no sale con un domiciliario inactivo ni con uno de otro negocio', async () => {
-    const inactivo = await llamar('post', '/domiciliarios', negocio.encabezados.dueno, {
-      nombre: 'Luis Prado',
-      telefono: '3011112233',
-    });
-    await llamar('patch', `/domiciliarios/${inactivo.body.id}`, negocio.encabezados.dueno, {
-      activo: false,
-    });
-    const ajeno = await llamar('post', '/domiciliarios', otroNegocio.encabezados.dueno, {
-      nombre: 'Ajeno',
-      telefono: '3020000000',
-    });
+    const inactivo = await llamar(
+      'post',
+      '/domiciliarios',
+      negocio.encabezados.administrador_zenda,
+      {
+        nombre: 'Luis Prado',
+        telefono: '3011112233',
+      },
+    );
+    await llamar(
+      'patch',
+      `/domiciliarios/${inactivo.body.id}`,
+      negocio.encabezados.administrador_zenda,
+      {
+        activo: false,
+      },
+    );
+    const ajeno = await llamar(
+      'post',
+      '/domiciliarios',
+      otroNegocio.encabezados.administrador_zenda,
+      {
+        nombre: 'Ajeno',
+        telefono: '3020000000',
+      },
+    );
     const pedido = await domicilioListoParaSalir();
 
     const conInactivo = await llamar(
@@ -487,28 +507,46 @@ describe('entregar pedidos sin mesa', () => {
 });
 
 describe('domiciliarios', () => {
-  it('los registra la gerencia; la caja los ve; el mesero no', async () => {
-    const delCajero = await llamar('post', '/domiciliarios', negocio.encabezados.cajero, {
-      nombre: 'No',
-      telefono: '3000000000',
-    });
+  it('los registra el administrador de Zenda; el dueño y la caja los ven; el mesero no', async () => {
+    const intentos = await Promise.all(
+      /** @type {const} */ (['dueno', 'administrador', 'cajero']).map((rol) =>
+        llamar('post', '/domiciliarios', negocio.encabezados[rol], {
+          nombre: 'No',
+          telefono: '3000000000',
+        }),
+      ),
+    );
+    const editarloElDueno = await llamar(
+      'patch',
+      `/domiciliarios/${ids.domiciliario}`,
+      negocio.encabezados.dueno,
+      { nombre: 'Otro nombre' },
+    );
+    const delDueno = await llamar('get', '/domiciliarios', negocio.encabezados.dueno);
     const lista = await llamar('get', '/domiciliarios', negocio.encabezados.cajero);
     const delMesero = await llamar('get', '/domiciliarios', negocio.encabezados.mesero);
 
-    expect(delCajero.status).toBe(403);
+    expect(intentos.map((res) => res.status)).toEqual([403, 403, 403]);
+    expect(editarloElDueno.status).toBe(403);
+    expect(delDueno.status).toBe(200);
     expect(lista.status).toBe(200);
     expect(lista.body.map((/** @type {any} */ d) => d.nombre)).toContain('Pedro Gómez');
     expect(delMesero.status).toBe(403);
   });
 
   it('se desactivan en lugar de borrarse; ?activos=true trae solo los activos', async () => {
-    const creado = await llamar('post', '/domiciliarios', negocio.encabezados.administrador, {
+    const creado = await llamar('post', '/domiciliarios', negocio.encabezados.administrador_zenda, {
       nombre: 'Marta Ruiz',
       telefono: '+57 312 555 0000',
     });
-    await llamar('patch', `/domiciliarios/${creado.body.id}`, negocio.encabezados.administrador, {
-      activo: false,
-    });
+    await llamar(
+      'patch',
+      `/domiciliarios/${creado.body.id}`,
+      negocio.encabezados.administrador_zenda,
+      {
+        activo: false,
+      },
+    );
 
     const todos = await llamar('get', '/domiciliarios', negocio.encabezados.cajero);
     const activos = await llamar('get', '/domiciliarios?activos=true', negocio.encabezados.cajero);
@@ -518,7 +556,7 @@ describe('domiciliarios', () => {
   });
 
   it('valida el teléfono', async () => {
-    const res = await llamar('post', '/domiciliarios', negocio.encabezados.dueno, {
+    const res = await llamar('post', '/domiciliarios', negocio.encabezados.administrador_zenda, {
       nombre: 'Sin número',
       telefono: 'abc',
     });

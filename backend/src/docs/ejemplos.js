@@ -187,7 +187,8 @@ export const DOMICILIARIO = Object.freeze({
 
 /**
  * Domicilio de ejemplo: el mismo pedido llevado a una dirección, con $3.000 de domicilio.
- * Los datos de entrega solo los ven el cajero, el administrador y el dueño.
+ * Los datos de entrega solo los ven el cajero, el administrador, el dueño y el administrador
+ * de Zenda.
  */
 export const PEDIDO_DOMICILIO = Object.freeze({
   ...PEDIDO,

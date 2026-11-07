@@ -1,5 +1,5 @@
 // @ts-check
-// Documentación de /usuarios (gestión de empleados).
+// Documentación de /usuarios (las cuentas del negocio). Solo el administrador de Zenda.
 import { esquemaParamsId } from '../../lib/esquemas.js';
 import {
   esquemaActualizarUsuario,
@@ -9,7 +9,7 @@ import {
 import { cuerpo, operacion, parametros, respuesta } from '../ayudantes.js';
 import { ID } from '../ejemplos.js';
 
-const CONSULTAN = /** @type {const} */ (['dueno', 'administrador']);
+const SOLO_ZENDA = /** @type {const} */ (['administrador_zenda']);
 
 const ID_EMPLEADO = 'd7e8f9a0-b1c2-4d3e-8f4a-5b6c7d8e9f00';
 
@@ -31,7 +31,9 @@ const idEmpleado = parametros('path', esquemaParamsId, {
 const DESCRIPCIONES = {
   nombre: 'Nombre completo del empleado.',
   email: 'Correo con el que inicia sesión. Único en el negocio; no importan las mayúsculas.',
-  rol: '`administrador`, `cajero` o `mesero`. El dueño no se asigna: hay uno por negocio.',
+  rol:
+    '`dueno`, `administrador`, `cajero`, `mesero` o `cocina`. El administrador de Zenda no se ' +
+    'asigna desde aquí: lo crea el registro del negocio.',
   contrasena: 'Contraseña inicial: mínimo 8 caracteres, con al menos una letra y un número.',
   activo: '`false` desactiva al empleado (no puede iniciar sesión); `true` lo reactiva.',
   contrasenaNueva: 'Mínimo 8 caracteres, con al menos una letra y un número.',
@@ -42,10 +44,11 @@ export const documentacionUsuarios = {
     get: operacion({
       etiqueta: 'Usuarios',
       resumen: 'Listar los empleados',
-      roles: [...CONSULTAN],
+      roles: [...SOLO_ZENDA],
       descripcion: `
 Todos los usuarios del negocio: primero los activos, luego por nombre. Nunca incluye
-contraseñas.
+contraseñas. Las cuentas del negocio las maneja solo el administrador de Zenda: el dueño no
+ve este módulo.
 
 \`bloqueado\` es \`true\` si el usuario está bloqueado ahora mismo por 5 intentos fallidos
 de inicio de sesión (se desbloquea solo en 15 minutos o restableciendo su contraseña).`,
@@ -68,9 +71,9 @@ de inicio de sesión (se desbloquea solo en 15 minutos o restableciendo su contr
     post: operacion({
       etiqueta: 'Usuarios',
       resumen: 'Crear un empleado',
-      roles: ['dueno'],
+      roles: [...SOLO_ZENDA],
       descripcion: `
-Crea un empleado con su rol y una contraseña inicial. Entrégale la contraseña de forma
+Crea un empleado (o el dueño) con su rol y una contraseña inicial. Entrégale la contraseña de forma
 segura y pídele que la cambie con \`POST /auth/cambiar-contrasena\`.
 
 Si el correo ya existe en el negocio, responde 409. Queda en la **auditoría**.`,
@@ -92,7 +95,7 @@ Si el correo ya existe en el negocio, responde 409. Queda en la **auditoría**.`
     get: operacion({
       etiqueta: 'Usuarios',
       resumen: 'Ver un empleado',
-      roles: [...CONSULTAN],
+      roles: [...SOLO_ZENDA],
       descripcion: 'Datos de un empleado (sin contraseña).',
       parametros: idEmpleado,
       respuestas: { 200: respuesta('El empleado.', EMPLEADO) },
@@ -101,14 +104,17 @@ Si el correo ya existe en el negocio, responde 409. Queda en la **auditoría**.`
     patch: operacion({
       etiqueta: 'Usuarios',
       resumen: 'Editar, cambiar el rol o desactivar un empleado',
-      roles: ['dueno'],
+      roles: [...SOLO_ZENDA],
       descripcion: `
 Envía solo lo que cambia.
 
 - **Cambiar el rol** o **desactivar** cierra las sesiones del empleado: no sigue trabajando
   con permisos que ya no tiene (su token actual vence en máximo 15 minutos).
 - Los usuarios **no se borran**: se desactivan, para conservar quién hizo cada venta.
-- La **cuenta del dueño** no se puede desactivar ni cambiar de rol (422 \`DUENO_PROTEGIDO\`).
+- La **cuenta del administrador de Zenda** no se puede desactivar ni cambiar de rol (422
+  \`CUENTA_ZENDA_PROTEGIDA\`).
+- Al **único dueño activo** tampoco: el negocio quedaría sin dueño (422
+  \`DUENO_PROTEGIDO\`). Para reemplazarlo, primero se crea el nuevo.
 - Los cambios quedan en la **auditoría** con el valor anterior y el nuevo.`,
       parametros: idEmpleado,
       cuerpo: cuerpo(esquemaActualizarUsuario, {
@@ -128,9 +134,9 @@ Envía solo lo que cambia.
     post: operacion({
       etiqueta: 'Usuarios',
       resumen: 'Restablecer la contraseña de un empleado',
-      roles: ['dueno'],
+      roles: [...SOLO_ZENDA],
       descripcion: `
-Para cuando un empleado olvidó su contraseña: el dueño le asigna una nueva.
+Para cuando un empleado olvidó su contraseña: el administrador de Zenda le asigna una nueva.
 
 También **quita el bloqueo** por intentos fallidos y **cierra sus sesiones**. Queda en la
 auditoría (sin la contraseña).`,

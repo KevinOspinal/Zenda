@@ -17,8 +17,8 @@ import {
 import { ATIENDEN, TODOS, cuerpo, operacion, parametros, respuesta } from '../ayudantes.js';
 import { ID, PEDIDO, PEDIDO_DOMICILIO } from '../ejemplos.js';
 
-const COBRAN = /** @type {const} */ (['dueno', 'administrador', 'cajero']);
-const ANULAN = /** @type {const} */ (['dueno', 'administrador']);
+const COBRAN = /** @type {const} */ (['administrador_zenda', 'dueno', 'administrador', 'cajero']);
+const ANULAN = /** @type {const} */ (['administrador_zenda', 'dueno', 'administrador']);
 
 const idPedido = parametros('path', esquemaParamsId, {
   id: { descripcion: 'Id del pedido.', ejemplo: ID.pedido },

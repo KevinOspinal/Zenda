@@ -5,8 +5,13 @@ import { esquemaAbrirCaja, esquemaCerrarCaja } from '../../modules/caja/caja.sch
 import { TODOS, cuerpo, operacion, parametros, respuesta } from '../ayudantes.js';
 import { ID } from '../ejemplos.js';
 
-const MANEJAN_CAJA = /** @type {const} */ (['dueno', 'administrador', 'cajero']);
-const VEN_HISTORIAL = /** @type {const} */ (['dueno', 'administrador']);
+const MANEJAN_CAJA = /** @type {const} */ ([
+  'administrador_zenda',
+  'dueno',
+  'administrador',
+  'cajero',
+]);
+const VEN_HISTORIAL = /** @type {const} */ (['administrador_zenda', 'dueno', 'administrador']);
 
 const TURNO_ABIERTO = {
   id: ID.turno,

@@ -92,7 +92,7 @@ async function prepararLocal(nit, nombres, conAcceso) {
   /** @type {Local['domiciliarios']} */
   const domiciliarios = {};
   for (const nombre of nombres) {
-    const creado = await llamar('post', '/domiciliarios', negocio.encabezados.dueno, {
+    const creado = await llamar('post', '/domiciliarios', negocio.encabezados.administrador_zenda, {
       nombre,
       telefono: '3001234567',
     });
@@ -103,7 +103,7 @@ async function prepararLocal(nit, nombres, conAcceso) {
     const acceso = await llamar(
       'post',
       `/domiciliarios/${domiciliarios[nombre].id}/acceso`,
-      negocio.encabezados.dueno,
+      negocio.encabezados.administrador_zenda,
       { email, contrasena: CONTRASENA },
     );
     expect(acceso.status).toBe(201);
@@ -204,24 +204,33 @@ describe('acceso del domiciliario a Zenda', () => {
     expect(sesion.body.usuario.rol).toBe('domiciliario');
   });
 
-  it('solo el dueño lo da, una vez y con un correo que nadie más use', async () => {
+  it('solo el administrador de Zenda lo da, una vez y con un correo que nadie más use', async () => {
     const luis = `/domiciliarios/${local.domiciliarios.Luis.id}/acceso`;
     const pedro = `/domiciliarios/${local.domiciliarios.Pedro.id}/acceso`;
     const datos = { email: 'luis@812000001.test', contrasena: CONTRASENA };
 
+    const delDueno = await llamar('post', luis, local.negocio.encabezados.dueno, datos);
     const delAdministrador = await llamar(
       'post',
       luis,
       local.negocio.encabezados.administrador,
       datos,
     );
-    const otraVez = await llamar('post', pedro, local.negocio.encabezados.dueno, datos);
-    const correoAjeno = await llamar('post', luis, local.negocio.encabezados.dueno, {
+    const quitarloElDueno = await llamar('delete', pedro, local.negocio.encabezados.dueno);
+    const otraVez = await llamar(
+      'post',
+      pedro,
+      local.negocio.encabezados.administrador_zenda,
+      datos,
+    );
+    const correoAjeno = await llamar('post', luis, local.negocio.encabezados.administrador_zenda, {
       ...datos,
       email: 'cajero@812000001.test',
     });
 
+    expect(delDueno.status).toBe(403);
     expect(delAdministrador.status).toBe(403);
+    expect(quitarloElDueno.status).toBe(403);
     expect(otraVez.body.error.code).toBe('ACCESO_EXISTENTE');
     expect(correoAjeno.body.error.code).toBe('YA_EXISTE');
   });
@@ -234,7 +243,7 @@ describe('acceso del domiciliario a Zenda', () => {
     const res = await llamar(
       'patch',
       `/usuarios/${usuario.usuarioId}`,
-      local.negocio.encabezados.dueno,
+      local.negocio.encabezados.administrador_zenda,
       { rol: 'cajero' },
     );
 
@@ -596,9 +605,9 @@ describe('quitar el acceso', () => {
   it('ya no entra; si se le devuelve, entra de nuevo', async () => {
     const ruta = `/domiciliarios/${local.domiciliarios.Ana.id}/acceso`;
 
-    const quitado = await llamar('delete', ruta, local.negocio.encabezados.dueno);
+    const quitado = await llamar('delete', ruta, local.negocio.encabezados.administrador_zenda);
     const sinAcceso = await ingresar(local.nit, 'ana@812000001.test');
-    const devuelto = await llamar('post', ruta, local.negocio.encabezados.dueno, {
+    const devuelto = await llamar('post', ruta, local.negocio.encabezados.administrador_zenda, {
       email: 'ana@812000001.test',
       contrasena: CONTRASENA,
     });

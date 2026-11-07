@@ -3,11 +3,12 @@
 // - Tomar pedidos, agregar o quitar ítems, enviar a cocina y dividir: todos menos la cocina.
 // - Ver los pedidos y avanzar los platos: todos. Cada paso tiene su regla en el servicio: la
 //   cocina marca "preparando" y "listo"; el mesero, "entregado".
-// - Cobrar: cajero, administrador y dueño (el mesero no cobra).
+// - Cobrar: cajero, administrador, dueño y administrador de Zenda (el mesero no cobra).
 // - Domicilios (corregir sus datos y despacharlos) y entregar pedidos (sin mesa, o de mesa
-//   cobrados que no van a cocina): cajero, administrador y dueño. Registrar un domicilio también (lo revisa el servicio). El
-//   domiciliario consulta y entrega solo los domicilios que lleva él (lo revisa el servicio).
-// - Anular: administrador y dueño.
+//   cobrados que no van a cocina): cajero, administrador, dueño y administrador de Zenda.
+//   Registrar un domicilio también (lo revisa el servicio). El domiciliario consulta y entrega
+//   solo los domicilios que lleva él (lo revisa el servicio).
+// - Anular: administrador, dueño y administrador de Zenda.
 import { Router } from 'express';
 import { esquemaParamsId } from '../../lib/esquemas.js';
 import { autenticar, permitirRoles } from '../../middlewares/auth.js';
@@ -27,10 +28,16 @@ import {
   esquemaParamsItem,
 } from './pedidos.schemas.js';
 
-const atienden = permitirRoles('dueno', 'administrador', 'cajero', 'mesero');
-const cobran = permitirRoles('dueno', 'administrador', 'cajero');
-const anulan = permitirRoles('dueno', 'administrador');
-const entregan = permitirRoles('dueno', 'administrador', 'cajero', 'domiciliario');
+const atienden = permitirRoles('administrador_zenda', 'dueno', 'administrador', 'cajero', 'mesero');
+const cobran = permitirRoles('administrador_zenda', 'dueno', 'administrador', 'cajero');
+const anulan = permitirRoles('administrador_zenda', 'dueno', 'administrador');
+const entregan = permitirRoles(
+  'administrador_zenda',
+  'dueno',
+  'administrador',
+  'cajero',
+  'domiciliario',
+);
 
 export const rutasPedidos = Router();
 rutasPedidos.use(autenticar);

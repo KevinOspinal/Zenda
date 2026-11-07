@@ -39,7 +39,11 @@ export const MENSAJES_DE_ERROR = Object.freeze({
   // Permisos
   SIN_PERMISO: 'Tu rol no permite esta acción.',
   REGISTRO_DESHABILITADO: 'El registro de negocios no está disponible.',
-  DUENO_PROTEGIDO: 'El dueño no se puede modificar desde aquí.',
+  // Cuentas que no se pueden desactivar ni cambiar de rol (el negocio quedaría sin quien lo
+  // atienda o sin dueño).
+  CUENTA_ZENDA_PROTEGIDA: 'La cuenta del administrador de Zenda no se desactiva ni cambia de rol.',
+  DUENO_PROTEGIDO: 'Es el único dueño del negocio: crea primero la cuenta del nuevo dueño.',
+  ROL_DOMICILIARIO: 'El acceso de un domiciliario se maneja desde Domiciliarios.',
 
   // Registros que ya no existen (otro dispositivo pudo cambiarlos)
   NO_ENCONTRADO: 'Ya no existe; puede que alguien lo haya cambiado.',

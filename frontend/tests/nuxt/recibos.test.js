@@ -80,10 +80,13 @@ const botonConTexto = (/** @type {string} */ texto) =>
     [...document.querySelectorAll('button')].find((boton) => boton.textContent?.includes(texto))
   );
 
-/** @param {string} regimenImpuesto */
-function sesionDeNegocio(regimenImpuesto) {
+/**
+ * @param {string} regimenImpuesto
+ * @param {'administrador_zenda' | 'dueno'} [rol]
+ */
+function sesionDeNegocio(regimenImpuesto, rol = 'dueno') {
   const sesion = useSesionStore();
-  sesion.usuario = { id: 'u1', nombre: 'Andrés', email: 'a@x.test', rol: 'dueno' };
+  sesion.usuario = { id: 'u1', nombre: 'Andrés', email: 'a@x.test', rol };
   sesion.negocio = { id: 'n1', nombre: 'La Esquina', nit: '1020304050', regimenImpuesto };
   return sesion;
 }
@@ -206,7 +209,7 @@ describe('últimos recibos', () => {
 
 describe('cómo factura el negocio', () => {
   it('pasar a "sin factura electrónica" pide confirmación y actualiza la sesión', async () => {
-    const sesion = sesionDeNegocio('responsable_inc');
+    const sesion = sesionDeNegocio('responsable_inc', 'administrador_zenda');
     const negocio = { id: 'n1', nombre: 'La Esquina', regimenImpuesto: 'responsable_inc' };
     simularBackend(fetchFalso, {
       'PATCH /negocios/actual': (opciones) => ({

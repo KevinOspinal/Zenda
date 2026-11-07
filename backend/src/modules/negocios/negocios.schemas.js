@@ -90,7 +90,9 @@ export const esquemaRegistroNegocio = z.object({
     // Define qué impuesto se cobra (ver src/config/impuestos.js).
     regimenImpuesto: esquemaRegimen.default('responsable_inc'),
   }),
-  dueno: z.object({
+  // La cuenta de quien registra el negocio: queda como administrador de Zenda (el dueño lo
+  // crea después desde Usuarios). Ver src/config/roles.js.
+  cuenta: z.object({
     nombre: textoObligatorio(120),
     email: z.string().trim().toLowerCase().pipe(z.email('correo inválido')),
     contrasena: esquemaContrasenaNueva,

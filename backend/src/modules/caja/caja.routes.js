@@ -1,8 +1,8 @@
 // @ts-check
 // Rutas de la caja.
 // - Saber si la caja está abierta (sin montos): todos los roles.
-// - Abrir, ver y cerrar el turno: cajero, administrador y dueño.
-// - Historial de turnos y arqueos: administrador y dueño.
+// - Abrir, ver y cerrar el turno: cajero, administrador, dueño y administrador de Zenda.
+// - Historial de turnos y arqueos: administrador, dueño y administrador de Zenda.
 import { Router } from 'express';
 import { esquemaParamsId } from '../../lib/esquemas.js';
 import { autenticar, permitirRoles } from '../../middlewares/auth.js';
@@ -10,8 +10,8 @@ import { validar } from '../../middlewares/validar.js';
 import * as controlador from './caja.controller.js';
 import { esquemaAbrirCaja, esquemaCerrarCaja } from './caja.schemas.js';
 
-const manejanCaja = permitirRoles('dueno', 'administrador', 'cajero');
-const venHistorial = permitirRoles('dueno', 'administrador');
+const manejanCaja = permitirRoles('administrador_zenda', 'dueno', 'administrador', 'cajero');
+const venHistorial = permitirRoles('administrador_zenda', 'dueno', 'administrador');
 
 export const rutasCaja = Router();
 rutasCaja.use(autenticar);

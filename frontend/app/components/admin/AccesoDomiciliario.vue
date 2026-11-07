@@ -1,7 +1,8 @@
 <!--
-  Darle acceso a Zenda a un domiciliario (solo el dueño): el correo y la contraseña con que
-  entrará desde su celular, con el NIT del negocio. Así ve sus entregas con el mapa y las marca
-  como entregadas. Si ya tuvo acceso y se le quitó, se reactiva con estos datos.
+  Darle acceso a Zenda a un domiciliario (solo el administrador de Zenda): el correo y la
+  contraseña con que entrará desde su celular, con el NIT del negocio. Así ve sus entregas con
+  el mapa y las marca como entregadas. Si ya tuvo acceso y se le quitó, se reactiva con estos
+  datos.
 -->
 <script setup>
 import { z } from 'zod';

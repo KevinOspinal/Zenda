@@ -1,6 +1,7 @@
 // @ts-check
-// Gestión de los empleados del negocio: listar, crear, editar, desactivar y restablecer
-// contraseñas. Solo el dueño hace cambios; el administrador solo consulta.
+// Gestión de las cuentas del negocio: listar, crear, editar, desactivar y restablecer
+// contraseñas. Lo hace solo el administrador de Zenda (ver usuarios.routes.js), que también
+// crea al dueño.
 //
 // Los usuarios no se borran: se desactivan, porque sus pedidos y cierres de caja deben
 // seguir mostrando quién los hizo.
@@ -11,7 +12,7 @@ import { conNegocio } from '../../lib/negocio.js';
 import { revocarSesionesDeUsuario } from '../auth/auth.service.js';
 
 /** @typedef {import('../../lib/tokens.js').DatosSesion} DatosSesion */
-/** @typedef {'administrador' | 'cajero' | 'mesero' | 'cocina'} RolAsignable */
+/** @typedef {'dueno' | 'administrador' | 'cajero' | 'mesero' | 'cocina'} RolAsignable */
 
 /** Datos públicos de un usuario: nunca se devuelve el hash de la contraseña. */
 const CAMPOS_PUBLICOS = /** @type {const} */ ({
@@ -93,8 +94,10 @@ export async function crearUsuario(sesion, { contrasena, ...datos }) {
  *
  * - Si cambia el rol o se desactiva, se cierran sus sesiones: así no sigue trabajando
  *   con permisos que ya no tiene. Su token de acceso actual vence en máximo 15 minutos.
- * - La cuenta del dueño no se puede desactivar ni cambiar de rol: el negocio nunca debe
- *   quedarse sin dueño.
+ * - La cuenta de un administrador de Zenda no se puede desactivar ni cambiar de rol desde la
+ *   app: así nadie deja al negocio sin quien lo atiende.
+ * - Al único dueño activo tampoco: el negocio quedaría sin dueño. Para reemplazarlo, primero
+ *   se crea el nuevo.
  *
  * @param {DatosSesion} sesion
  * @param {string} id
@@ -102,19 +105,31 @@ export async function crearUsuario(sesion, { contrasena, ...datos }) {
  */
 export async function actualizarUsuario(sesion, id, datos) {
   const usuario = await conNegocio(sesion.tenantId, async (tx) => {
-    // 1. Buscar al empleado.
+    // 1. Buscar la cuenta.
     const actual = await tx.usuario.findUnique({ where: { id } });
     if (!actual) throw errorUsuarioNoEncontrado();
 
-    // 2. Proteger la cuenta del dueño.
+    // 2. Proteger la cuenta del administrador de Zenda y la del único dueño activo.
     const cambiaRol = datos.rol !== undefined && datos.rol !== actual.rol;
-    const cambiaActivo = datos.activo !== undefined && datos.activo !== actual.activo;
-    if (actual.rol === 'dueno' && (cambiaRol || cambiaActivo)) {
+    const pierdeAcceso = cambiaRol || (datos.activo === false && actual.activo);
+    if (actual.rol === 'administrador_zenda' && pierdeAcceso) {
       throw new AppError(
         422,
-        'DUENO_PROTEGIDO',
-        'La cuenta del dueño no se puede desactivar ni cambiar de rol',
+        'CUENTA_ZENDA_PROTEGIDA',
+        'La cuenta del administrador de Zenda no se puede desactivar ni cambiar de rol',
       );
+    }
+    if (actual.rol === 'dueno' && actual.activo && pierdeAcceso) {
+      const otrosDuenos = await tx.usuario.count({
+        where: { rol: 'dueno', activo: true, id: { not: id } },
+      });
+      if (otrosDuenos === 0) {
+        throw new AppError(
+          422,
+          'DUENO_PROTEGIDO',
+          'Es el único dueño del negocio: crea primero al nuevo dueño',
+        );
+      }
     }
 
     // 3. El acceso de un domiciliario se maneja desde Domiciliarios: su usuario no cambia de

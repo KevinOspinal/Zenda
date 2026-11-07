@@ -1,6 +1,7 @@
 <!--
-  Anular un pedido (dueño y administrador). Explica la consecuencia y exige el motivo, que
-  queda en la auditoría. Es la única acción de la caja que pide confirmación.
+  Anular un pedido (dueño, administrador y administrador de Zenda). Explica la consecuencia y
+  exige el motivo, que queda en la auditoría. Es la única acción de la caja que pide
+  confirmación.
 -->
 <script setup>
 const props = defineProps({

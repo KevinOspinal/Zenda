@@ -1,6 +1,7 @@
 // @ts-check
 // Consulta de la auditoría: quién cambió precios, anuló ventas, cerró la caja o ajustó
-// el inventario, y cuándo. Solo la ve el dueño. Los registros nunca se editan ni se borran.
+// el inventario, y cuándo. Solo la ven el dueño y el administrador de Zenda. Los registros
+// nunca se editan ni se borran.
 //
 // Módulo pequeño: la ruta, la validación y la consulta están juntas en este archivo.
 import { Router } from 'express';
@@ -20,7 +21,7 @@ export const esquemaFiltrosAuditoria = z.object({
 });
 
 export const rutasAuditoria = Router();
-rutasAuditoria.use(autenticar, permitirRoles('dueno'));
+rutasAuditoria.use(autenticar, permitirRoles('administrador_zenda', 'dueno'));
 
 rutasAuditoria.get('/', validar({ query: esquemaFiltrosAuditoria }), async (_req, res) => {
   const { accion, desde, hasta } = res.locals.entrada.query;

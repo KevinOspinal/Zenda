@@ -43,7 +43,15 @@ describe('seed de datos de ejemplo', () => {
       categorias: menuLaIndustria.length,
       productos: totalProductosMenu,
       mesas: 10,
-      roles: ['administrador', 'cajero', 'cocina', 'domiciliario', 'dueno', 'mesero'],
+      roles: [
+        'administrador',
+        'administrador_zenda',
+        'cajero',
+        'cocina',
+        'domiciliario',
+        'dueno',
+        'mesero',
+      ],
     });
   });
 

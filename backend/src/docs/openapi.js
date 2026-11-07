@@ -35,13 +35,14 @@ venta: **mesa → pedido → cocina → cobro**, con caja, inventario, reportes 
 > (o usa \`POST /auth/refresh\`) y vuelve a autorizar.
 
 **¿Negocio nuevo?** Regístralo con \`POST /negocios/registro\`: la respuesta ya trae el
-token del dueño.
+token de tu cuenta (administrador de Zenda).
 
 **Usuarios de prueba** (negocio "La Industria", NIT \`900111222\`, contraseña = \`SEED_CONTRASENA\`
 de tu archivo \`.env\`):
 
 | Rol | Correo |
 |---|---|
+| Administrador Zenda | \`zenda@laindustria.test\` |
 | Dueño | \`dueno@laindustria.test\` |
 | Administrador | \`admin@laindustria.test\` |
 | Cajero | \`cajero@laindustria.test\` |
@@ -68,7 +69,8 @@ de tu archivo \`.env\`):
 
 | Rol | Puede |
 |---|---|
-| **Dueño** | Todo, incluidos los empleados (usuarios) y la auditoría |
+| **Administrador Zenda** | Todo, y es el único que maneja los usuarios, los domiciliarios y la facturación |
+| **Dueño** | Menú, mesas, inventario, caja, reportes, configuración y auditoría; no los usuarios, los domiciliarios ni la facturación |
 | **Administrador** | Menú, mesas, inventario, caja, anulaciones y reportes |
 | **Cajero** | Caja, cobros, clientes y consulta de inventario |
 | **Mesero** | Tomar pedidos, enviarlos a cocina y consultar menú y mesas. **No cobra** |
@@ -268,7 +270,7 @@ export const documentoOpenApi = {
     {
       name: 'Negocios',
       description:
-        'Registro de un restaurante o cafetería nuevo con su dueño, y configuración del negocio (propina sugerida).',
+        'Registro de un restaurante o cafetería nuevo y su configuración (propina, recibo, Bre-B y facturación).',
     },
     {
       name: 'Autenticación',
@@ -277,7 +279,7 @@ export const documentoOpenApi = {
     {
       name: 'Usuarios',
       description:
-        'Empleados del negocio: crear, cambiar rol, desactivar y restablecer contraseñas.',
+        'Cuentas del negocio: crear, cambiar rol, desactivar y restablecer contraseñas. Solo el administrador de Zenda.',
     },
     { name: 'Menú', description: 'Categorías y productos. El menú para tomar pedidos.' },
     { name: 'Mesas', description: 'Mesas del local y su estado (libre u ocupada).' },
@@ -301,7 +303,10 @@ export const documentoOpenApi = {
       description: 'Stock de los productos que lo controlan, compras y ajustes.',
     },
     { name: 'Reportes', description: 'Ventas del periodo, por producto y por método de pago.' },
-    { name: 'Auditoría', description: 'Registro de acciones sensibles. Solo lo ve el dueño.' },
+    {
+      name: 'Auditoría',
+      description: 'Registro de acciones sensibles. Lo ven el dueño y el administrador de Zenda.',
+    },
   ],
   paths: {
     ...documentacionNegocios,

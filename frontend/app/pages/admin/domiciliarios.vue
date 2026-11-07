@@ -1,8 +1,9 @@
 <!--
   Domiciliarios del negocio: quienes llevan los domicilios. La caja les asigna los pedidos al
   despacharlos. No se borran; se desactivan para conservar su historial.
-  El dueño les puede dar acceso a Zenda: entran desde su celular, ven sus entregas con el mapa
-  y las marcan como entregadas. Sin acceso, la caja maneja sus domicilios como siempre.
+  Solo la ve el administrador de Zenda, que los registra y les puede dar acceso a Zenda: entran
+  desde su celular, ven sus entregas con el mapa y las marcan como entregadas. Sin acceso, la
+  caja maneja sus domicilios como siempre (el dueño y la caja los ven al despachar).
 -->
 <script setup>
 definePageMeta({ seccion: 'domiciliarios' });
@@ -43,7 +44,7 @@ function alGuardar() {
   cargar();
 }
 
-// Acceso a Zenda (solo el dueño).
+// Acceso a Zenda (solo el administrador de Zenda).
 const accesoAbierto = ref(false);
 const conAcceso = ref(/** @type {any} */ (null));
 /** @param {any} domiciliario */

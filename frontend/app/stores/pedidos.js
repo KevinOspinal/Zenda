@@ -254,7 +254,8 @@ export const usePedidosStore = defineStore('pedidos', () => {
   }
 
   /**
-   * Anula un pedido (dueño y administrador). Exige el motivo; queda en la auditoría.
+   * Anula un pedido (la gerencia: dueño, administradores). Exige el motivo; queda en la
+   * auditoría.
    * @param {string} pedidoId
    * @param {string} motivo
    */

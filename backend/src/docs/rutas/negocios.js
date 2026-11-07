@@ -35,8 +35,10 @@ export const documentacionNegocios = {
       resumen: 'Registrar un negocio nuevo',
       roles: null,
       descripcion: `
-Crea un restaurante o cafetería con su **usuario dueño**, en una sola operación, y entrega
-la **sesión iniciada** del dueño para que empiece a configurarlo: menú, mesas y empleados.
+Crea un restaurante o cafetería con la **cuenta de quien lo registra**, en una sola
+operación, y entrega su **sesión iniciada** para que empiece a configurarlo: menú, mesas y
+empleados. Quien registra es el equipo de Zenda, así que la cuenta queda como **administrador
+de Zenda**; el dueño del restaurante se crea después con \`POST /usuarios\`.
 
 **Reglas**
 - El **NIT** es único en todo el sistema (si ya existe, 409 \`NIT_YA_REGISTRADO\`). Es el
@@ -57,10 +59,10 @@ la **sesión iniciada** del dueño para que empiece a configurarlo: menú, mesas
             ciudad: 'Medellín',
             regimenImpuesto: 'responsable_inc',
           },
-          dueno: {
-            nombre: 'María López',
-            email: 'maria@laesquina.test',
-            contrasena: 'Esquina2026',
+          cuenta: {
+            nombre: 'Kevin Acevedo',
+            email: 'kevin@zenda.test',
+            contrasena: 'Zenda2026',
           },
         },
         descripciones: {
@@ -69,13 +71,13 @@ la **sesión iniciada** del dueño para que empiece a configurarlo: menú, mesas
           'negocio.ciudad': 'Ciudad donde opera. Opcional.',
           'negocio.regimenImpuesto':
             '`responsable_inc` (por defecto), `franquicia_iva` o `no_responsable`.',
-          'dueno.nombre': 'Nombre completo del dueño.',
-          'dueno.email': 'Correo con el que el dueño iniciará sesión.',
-          'dueno.contrasena': 'Mínimo 8 caracteres, con al menos una letra y un número.',
+          'cuenta.nombre': 'Nombre completo de quien registra el negocio.',
+          'cuenta.email': 'Correo con el que iniciará sesión en este negocio.',
+          'cuenta.contrasena': 'Mínimo 8 caracteres, con al menos una letra y un número.',
         },
       }),
       respuestas: {
-        201: respuesta('Negocio registrado. El dueño ya tiene la sesión iniciada.', {
+        201: respuesta('Negocio registrado, con la sesión de quien lo registró iniciada.', {
           negocio: {
             id: ID_NEGOCIO_NUEVO,
             nombre: 'Café La Esquina',
@@ -89,9 +91,9 @@ la **sesión iniciada** del dueño para que empiece a configurarlo: menú, mesas
           expiraEnSegundos: 900,
           usuario: {
             id: 'a9b8c7d6-e5f4-4321-9a8b-7c6d5e4f3a2b',
-            nombre: 'María López',
-            email: 'maria@laesquina.test',
-            rol: 'dueno',
+            nombre: 'Kevin Acevedo',
+            email: 'kevin@zenda.test',
+            rol: 'administrador_zenda',
           },
         }),
         403: respuesta('El registro está cerrado en este servidor.', {
@@ -120,11 +122,12 @@ en la precuenta y en el cobro por transferencia.`,
     patch: operacion({
       etiqueta: 'Negocios',
       resumen: 'Cambiar la configuración del negocio',
-      roles: ['dueno'],
+      roles: ['administrador_zenda', 'dueno'],
       descripcion: `
 Cambia la configuración del negocio. Envía solo lo que cambia.
 
-**Régimen de impuestos** (\`regimenImpuesto\`). Decide si el negocio factura electrónicamente
+**Régimen de impuestos** (\`regimenImpuesto\`). Solo lo cambia el **administrador de Zenda**
+(al dueño le responde 403). Decide si el negocio factura electrónicamente
 (\`facturaElectronica\` en la respuesta):
 - \`responsable_inc\` (INC 8 %) o \`franquicia_iva\` (IVA 19 %): factura electrónica.
 - \`no_responsable\`: no cobra impuestos ni factura electrónicamente. En cada cobro se emite un

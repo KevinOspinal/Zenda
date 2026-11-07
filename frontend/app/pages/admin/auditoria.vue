@@ -1,6 +1,7 @@
 <!--
-  Auditoría (solo el dueño): quién anuló ventas, cambió precios, cerró la caja o ajustó el
-  inventario, y cuándo. Se filtra por acción y por fechas. El registro no se puede editar.
+  Auditoría (el dueño y el administrador de Zenda): quién anuló ventas, cambió precios, cerró
+  la caja o ajustó el inventario, y cuándo. Se filtra por acción y por fechas. El registro no se
+  puede editar.
 -->
 <script setup>
 definePageMeta({ seccion: 'auditoria' });

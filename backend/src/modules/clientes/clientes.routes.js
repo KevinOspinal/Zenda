@@ -1,5 +1,6 @@
 // @ts-check
-// Rutas de los clientes. Los gestionan quienes facturan: cajero, administrador y dueño.
+// Rutas de los clientes. Los gestionan quienes facturan: cajero, administrador, dueño y
+// administrador de Zenda.
 // El mesero no accede: no necesita ver datos personales (Ley 1581 de 2012).
 import { Router } from 'express';
 import { esquemaParamsId } from '../../lib/esquemas.js';
@@ -13,7 +14,10 @@ import {
 } from './clientes.schemas.js';
 
 export const rutasClientes = Router();
-rutasClientes.use(autenticar, permitirRoles('dueno', 'administrador', 'cajero'));
+rutasClientes.use(
+  autenticar,
+  permitirRoles('administrador_zenda', 'dueno', 'administrador', 'cajero'),
+);
 
 rutasClientes.get('/', validar({ query: esquemaFiltrosClientes }), controlador.listarClientes);
 rutasClientes.get('/:id', validar({ params: esquemaParamsId }), controlador.obtenerCliente);

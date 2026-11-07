@@ -215,9 +215,12 @@ describe('negocio que factura electrónicamente', () => {
 
 describe('cambio de régimen', () => {
   it('a no responsable: los productos quedan sin impuesto y emite recibos', async () => {
-    const res = await llamar('patch', '/negocios/actual', cambiaDeRegimen.encabezados.dueno, {
-      regimenImpuesto: 'no_responsable',
-    });
+    const res = await llamar(
+      'patch',
+      '/negocios/actual',
+      cambiaDeRegimen.encabezados.administrador_zenda,
+      { regimenImpuesto: 'no_responsable' },
+    );
 
     expect(res.status).toBe(200);
     expect(res.body.facturaElectronica).toBe(false);
@@ -241,7 +244,7 @@ describe('cambio de régimen', () => {
   });
 
   it('de vuelta a impuesto al consumo: los productos vuelven a llevarlo', async () => {
-    await llamar('patch', '/negocios/actual', cambiaDeRegimen.encabezados.dueno, {
+    await llamar('patch', '/negocios/actual', cambiaDeRegimen.encabezados.administrador_zenda, {
       regimenImpuesto: 'responsable_inc',
     });
 
@@ -250,17 +253,38 @@ describe('cambio de régimen', () => {
     expect(pedido.recibo).toBeNull();
   });
 
-  it('solo el dueño lo cambia', async () => {
-    const res = await llamar(
+  it('solo el administrador de Zenda lo cambia: el dueño cambia lo demás, la facturación no', async () => {
+    const cambio = { regimenImpuesto: 'no_responsable' };
+    const delDueno = await llamar(
+      'patch',
+      '/negocios/actual',
+      cambiaDeRegimen.encabezados.dueno,
+      cambio,
+    );
+    const conOtrosDatos = await llamar(
+      'patch',
+      '/negocios/actual',
+      cambiaDeRegimen.encabezados.dueno,
+      { ...cambio, pieRecibo: 'Gracias' },
+    );
+    const delAdministrador = await llamar(
       'patch',
       '/negocios/actual',
       cambiaDeRegimen.encabezados.administrador,
-      {
-        regimenImpuesto: 'no_responsable',
-      },
+      cambio,
+    );
+    const otrosDatos = await llamar(
+      'patch',
+      '/negocios/actual',
+      cambiaDeRegimen.encabezados.dueno,
+      { pieRecibo: 'Gracias por venir' },
     );
 
-    expect(res.status).toBe(403);
+    expect(delDueno.status).toBe(403);
+    expect(conOtrosDatos.status).toBe(403);
+    expect(delAdministrador.status).toBe(403);
+    expect(otrosDatos.status).toBe(200);
+    expect(otrosDatos.body.regimenImpuesto).toBe('responsable_inc');
   });
 
   it('valida los datos del recibo', async () => {

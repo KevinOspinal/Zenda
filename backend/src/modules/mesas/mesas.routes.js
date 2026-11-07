@@ -1,5 +1,6 @@
 // @ts-check
-// Rutas de las mesas. Todos los roles las consultan; solo el dueño y el administrador las editan.
+// Rutas de las mesas. Todos los roles las consultan; solo las editan el administrador de Zenda,
+// el dueño y el administrador.
 import { Router } from 'express';
 import { esquemaParamsId } from '../../lib/esquemas.js';
 import { autenticar, permitirRoles } from '../../middlewares/auth.js';
@@ -7,7 +8,7 @@ import { validar } from '../../middlewares/validar.js';
 import * as controlador from './mesas.controller.js';
 import { esquemaActualizarMesa, esquemaCrearMesa } from './mesas.schemas.js';
 
-const editanMesas = permitirRoles('dueno', 'administrador');
+const editanMesas = permitirRoles('administrador_zenda', 'dueno', 'administrador');
 
 export const rutasMesas = Router();
 rutasMesas.use(autenticar);

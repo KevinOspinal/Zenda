@@ -39,14 +39,19 @@ export function autenticar(req, res, next) {
 
 /**
  * Permite el paso solo a los roles indicados. Debe ir después de `autenticar`.
+ *
+ * El administrador de Zenda puede todo lo que puede el dueño: toda ruta que deja pasar al
+ * dueño debe dejarlo pasar a él también (lo revisa tests/documentacion.test.js).
+ *
  * @param {...Rol} roles
- * @returns {import('express').RequestHandler}
+ * @returns {import('express').RequestHandler & { rolesPermitidos: Rol[] }}
  *
  * @example
- * router.put('/productos/:id', autenticar, permitirRoles('dueno', 'administrador'), ...);
+ * router.put('/productos/:id', autenticar, permitirRoles('administrador_zenda', 'dueno', 'administrador'), ...);
  */
 export function permitirRoles(...roles) {
-  return (_req, res, next) => {
+  /** @type {import('express').RequestHandler} */
+  const revisarRol = (_req, res, next) => {
     const sesion = obtenerSesion(res);
     if (!roles.includes(sesion.rol)) {
       next(new AppError(403, 'SIN_PERMISO', 'No tiene permiso para esta acción'));
@@ -54,6 +59,9 @@ export function permitirRoles(...roles) {
     }
     next();
   };
+  // Los roles quedan a la vista para que la prueba de la documentación compare cada ruta con
+  // lo que dice Swagger sobre quién puede usarla.
+  return Object.assign(revisarRol, { rolesPermitidos: roles });
 }
 
 /**
