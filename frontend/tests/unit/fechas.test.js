@@ -8,6 +8,7 @@ import {
   formatearFechaCorta,
   formatearFechaYHora,
   formatearHora,
+  formatearMesYAnio,
   haceCuanto,
   minutosTranscurridos,
 } from '../../app/utils/fechas.js';
@@ -37,6 +38,12 @@ describe('hora y fecha en Colombia', () => {
 
   it('da la fecha y la hora completas, como van en un recibo', () => {
     expect(conEspaciosNormales(formatearFechaYHora(NOCHE_DEL_26))).toBe('26/10/2026 7:45 p. m.');
+  });
+
+  it('da el mes y el año, sin puntos ni "de": desde cuándo existe una cuenta', () => {
+    expect(formatearMesYAnio(NOCHE_DEL_26)).toBe('oct 2026');
+    // El 1 de noviembre a las 2 a. m. en UTC todavía es octubre en Colombia.
+    expect(formatearMesYAnio('2026-11-01T02:00:00Z')).toBe('oct 2026');
   });
 
   it('rechaza fechas inválidas', () => {

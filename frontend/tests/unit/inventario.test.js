@@ -1,7 +1,7 @@
 // @ts-check
-// Pruebas de la lógica del inventario: el estado del stock, los contadores, la búsqueda, el
-// orden, los grupos por categoría y el historial (stock después de cada movimiento, días,
-// puntos de la gráfica y resumen de la semana).
+// Pruebas de la lógica del inventario: el estado del stock, los contadores, el orden, los
+// grupos por categoría y el historial (stock después de cada movimiento, días, puntos de la
+// gráfica y resumen de la semana). La búsqueda se prueba en busqueda.test.js.
 import { describe, expect, it } from 'vitest';
 import {
   ESTADOS_STOCK,
@@ -10,7 +10,6 @@ import {
   agruparPorCategoria,
   agruparPorDia,
   claseDeMovimiento,
-  coincideBusqueda,
   compararPorUrgencia,
   conteoPorEstado,
   estadoDeStock,
@@ -59,20 +58,6 @@ describe('conteoPorEstado', () => {
     ];
 
     expect(conteoPorEstado(productos)).toEqual({ revisar: 2, agotado: 1, bajo: 1, con_stock: 1 });
-  });
-});
-
-describe('coincideBusqueda', () => {
-  it('encuentra por palabras, en cualquier orden y sin importar tildes ni mayúsculas', () => {
-    expect(coincideBusqueda('Gaseosa 1.5 L', 'gaseosa 1.5')).toBe(true);
-    expect(coincideBusqueda('Gaseosa 1.5 L', '1.5 GASEOSA')).toBe(true);
-    expect(coincideBusqueda('Limonada de coco', 'limonáda')).toBe(true);
-    expect(coincideBusqueda('Agua', 'jugo')).toBe(false);
-  });
-
-  it('una búsqueda vacía o solo con espacios encuentra todo', () => {
-    expect(coincideBusqueda('Agua', '')).toBe(true);
-    expect(coincideBusqueda('Agua', '   ')).toBe(true);
   });
 });
 

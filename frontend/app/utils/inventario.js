@@ -2,8 +2,8 @@
 // Lógica del inventario que no depende de la pantalla:
 // - El estado del stock de cada producto (por revisar, agotado, bajo o con stock) y los
 //   contadores del resumen, que también filtran.
-// - La búsqueda por nombre, el orden (lo que necesita atención va primero) y los grupos por
-//   categoría de la carta.
+// - El orden (lo que necesita atención va primero) y los grupos por categoría de la carta.
+//   La búsqueda por nombre está en utils/busqueda.js (la comparten otras pantallas).
 // - El historial de un producto: cuánto quedó después de cada movimiento, agrupado por día,
 //   los puntos de la gráfica y lo que se vendió y compró en la última semana.
 // Son funciones puras, sin Vue ni el API, para probarlas fácil (tests/unit/inventario.test.js).
@@ -106,29 +106,6 @@ export function conteoPorEstado(productos) {
 }
 
 // ───────────────────────────── Búsqueda, orden y grupos ─────────────────────────────
-
-/**
- * Pasa un texto a minúsculas y sin tildes, para buscar sin importar cómo se escribió.
- * @param {string} texto
- */
-function normalizar(texto) {
-  return texto
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase();
-}
-
-/**
- * El nombre contiene todas las palabras buscadas, en cualquier orden y sin importar tildes ni
- * mayúsculas: "gaseosa 1.5" encuentra "Gaseosa 1.5 L". Una búsqueda vacía encuentra todo.
- * @param {string} nombre
- * @param {string} busqueda
- */
-export function coincideBusqueda(nombre, busqueda) {
-  const palabras = normalizar(busqueda).split(/\s+/).filter(Boolean);
-  const texto = normalizar(nombre);
-  return palabras.every((palabra) => texto.includes(palabra));
-}
 
 /**
  * Orden del inventario: primero los productos activos; luego lo más urgente (por revisar,

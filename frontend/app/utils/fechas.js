@@ -71,6 +71,23 @@ export function formatearFechaCorta(fecha) {
   return `${parte('weekday')} ${parte('day')} ${parte('month')}`;
 }
 
+const MES_Y_ANIO = new Intl.DateTimeFormat('es-CO', {
+  month: 'short',
+  year: 'numeric',
+  timeZone: ZONA_HORARIA,
+});
+
+/**
+ * Mes y año en Colombia: "oct 2026" (por ejemplo, desde cuándo existe una cuenta).
+ * @param {ValorFecha} fecha
+ */
+export function formatearMesYAnio(fecha) {
+  const partes = MES_Y_ANIO.formatToParts(aFecha(fecha));
+  /** @param {Intl.DateTimeFormatPartTypes} tipo */
+  const parte = (tipo) => (partes.find((p) => p.type === tipo)?.value ?? '').replace(/\.$/, '');
+  return `${parte('month')} ${parte('year')}`;
+}
+
 /**
  * Día en Colombia en formato YYYY-MM-DD (el de los filtros `desde` y `hasta` del API).
  * @param {ValorFecha} [fecha] Por defecto, ahora.
