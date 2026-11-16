@@ -13,7 +13,7 @@ const props = defineProps({
 });
 
 const sesion = useSesionStore();
-const ahora = useNow({ interval: 30_000 });
+const ahora = useAhora(30_000);
 
 const entrega = computed(() => props.pedido.entrega);
 const ciudad = computed(() => sesion.negocio?.ciudad ?? null);

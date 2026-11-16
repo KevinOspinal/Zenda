@@ -10,10 +10,9 @@ export const TODAS_LAS_ZONAS = 'Todas';
 export function useMapaDeMesas() {
   const mesas = useMesasStore();
   const pedidos = usePedidosStore();
-  // El tiempo de cada mesa y la espera de la cocina se ponen al día cada 30 segundos. En
-  // VueUse 15, useNow ya no acepta `interval`: sin un `scheduler` cambia en cada cuadro (60 veces
-  // por segundo), el mapa se vuelve a pintar sin parar y las tarjetas no alcanzan a deslizarse.
-  const ahora = useNow({ scheduler: (actualizar) => useIntervalFn(actualizar, 30_000) });
+  // El tiempo de cada mesa y la espera de la cocina se ponen al día cada 30 segundos (no en
+  // cada cuadro: el mapa se repintaría sin parar y las tarjetas no alcanzarían a deslizarse).
+  const ahora = useAhora(30_000);
 
   const zonaActiva = ref(TODAS_LAS_ZONAS);
   /** Filtro del resumen (libres, ocupadas…), o null para ver todas. */

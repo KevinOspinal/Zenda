@@ -7,7 +7,7 @@ definePageMeta({ seccion: 'pedidos' });
 
 const pedidos = usePedidosStore();
 const sesion = useSesionStore();
-const ahora = useNow({ interval: 30_000 });
+const ahora = useAhora(30_000);
 
 pedidos.cargarActivos();
 

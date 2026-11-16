@@ -24,7 +24,7 @@ const emit = defineEmits({
   liquidar: () => true,
 });
 
-const ahora = useNow({ interval: 30_000 });
+const ahora = useAhora(30_000);
 const etapa = computed(() => etapaDelDomicilio(props.domicilio));
 const enCamino = computed(() => etapa.value === 'en_camino');
 const porLiquidar = computed(() => etapa.value === 'por_liquidar');

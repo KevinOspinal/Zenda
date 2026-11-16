@@ -11,7 +11,7 @@ useHead({ title: 'Cocina · Zenda' });
 const pedidos = usePedidosStore();
 const conexion = useConexionStore();
 const toast = useToast();
-const ahora = useNow({ interval: 15_000 });
+const ahora = useAhora(15_000);
 
 pedidos.cargarActivos();
 
