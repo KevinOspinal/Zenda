@@ -15,7 +15,20 @@ export default withNuxt(
       'no-console': 'warn',
       // Nada de v-html: un texto que venga del API podría inyectar código en la página.
       'vue/no-v-html': 'error',
+      // useNow de VueUse 15 cambia en cada cuadro si no recibe un scheduler (ver useAhora).
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "CallExpression[callee.name='useNow']",
+          message: 'Usa useAhora(cadaMs): useNow sin scheduler se actualiza en cada cuadro.',
+        },
+      ],
     },
+  },
+  // useAhora es el único lugar donde se llama a useNow, con su scheduler.
+  {
+    files: ['app/composables/useAhora.js'],
+    rules: { 'no-restricted-syntax': 'off' },
   },
   // Desactiva las reglas de estilo que maneja Prettier (al final, para que gane).
   prettier,

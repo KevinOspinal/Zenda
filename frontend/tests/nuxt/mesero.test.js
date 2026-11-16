@@ -2,7 +2,7 @@
 // Pruebas de las pantallas del mesero con un backend simulado: tomar pedido, mapa de mesas,
 // avisos de platos listos y la mesa que ya pagó y espera sus platos.
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h, ref, toRef } from 'vue';
 import TomarPedido from '~/components/pedidos/TomarPedido.vue';
 import { usePedidoEnCurso } from '~/composables/usePedidoEnCurso.js';
@@ -80,6 +80,22 @@ beforeEach(() => {
   const sesion = useSesionStore();
   sesion.usuario = { id: 'laura', nombre: 'Laura', email: 'laura@x.test', rol: 'mesero' };
 });
+// Cada prueba vuelve a la pantalla de happy-dom por defecto (1024 × 768).
+afterEach(() => pantalla(1024, 768));
+
+/**
+ * Cambia el tamaño de la pantalla simulada. En el mapa de mesas, desde 1024 px tocar una mesa
+ * ocupada abre la vista rápida; en pantallas más chicas abre su pedido.
+ * @param {number} width
+ * @param {number} height
+ */
+function pantalla(width, height) {
+  const ventana =
+    /** @type {{ happyDOM: { setViewport: (tamano: { width: number, height: number }) => void } }} */ (
+      /** @type {unknown} */ (window)
+    );
+  ventana.happyDOM.setViewport({ width, height });
+}
 
 describe('tomar un pedido nuevo', () => {
   it('tocar varios productos muy rápido crea UN solo pedido y agrega el resto a ese', async () => {
@@ -166,11 +182,16 @@ describe('mapa de mesas', () => {
     await vi.waitFor(() => expect(pagina.text()).toContain('Mesa 4'));
     expect(pagina.text()).toContain('Libre');
     expect(pagina.text()).toContain('¡Listo!');
-    expect(pagina.text()).toContain('1 con platos listos');
+    // El contador "Platos listos" del resumen (el valor final, el que oye un lector de pantalla).
+    const contador = pagina
+      .findAll('[aria-label="Filtrar mesas"] button')
+      .find((boton) => boton.text().includes('Platos listos'));
+    expect(contador?.find('.sr-only').text()).toBe('1');
     expect(pagina.text()).not.toContain('La caja está cerrada');
   });
 
-  it('una mesa que ya pagó sigue ocupada hasta que le lleven los platos: abre ese pedido', async () => {
+  it('en el celular, una mesa que ya pagó sigue ocupada hasta que le lleven los platos: tocarla abre ese pedido', async () => {
+    pantalla(390, 844);
     const pagado = { ...mesa4ConDosListos(), estado: 'pagado', enviadoACocinaEn: AHORA };
     simularBackend(fetchFalso, {
       'GET /mesas': () => MESAS,
@@ -185,6 +206,51 @@ describe('mapa de mesas', () => {
     expect(pagina.text()).toContain('¡Listo!');
     await pagina.find('button[aria-label^="Mesa 4"]').trigger('click');
     expect(navegarFalso).toHaveBeenCalledWith('/pedidos/p4');
+  });
+
+  it('en tablet y PC, tocar una mesa ocupada abre la vista rápida y ahí se entregan sus platos listos', async () => {
+    pantalla(1280, 800);
+    // Con precios: la vista rápida muestra la cuenta (2 × 17.000 + 4.000 = 38.000).
+    const pedido = {
+      ...PEDIDO_MESA_4,
+      items: PEDIDO_MESA_4.items.map((item, indice) => ({
+        ...item,
+        precioUnitario: indice === 0 ? '17000' : '4000',
+      })),
+    };
+    /** @type {unknown[]} */
+    const entregas = [];
+    simularBackend(fetchFalso, {
+      'GET /mesas': () => MESAS,
+      'GET /pedidos': () => [pedido],
+      'GET /caja/estado': () => ({ abierta: true, turnoId: 't1', abiertoEn: '' }),
+      'PATCH /pedidos/p4/cocina': (opciones) => {
+        entregas.push(opciones.body);
+        return {
+          ...pedido,
+          items: pedido.items.map((item) =>
+            item.estadoCocina === 'listo' ? { ...item, estadoCocina: 'entregado' } : item,
+          ),
+        };
+      },
+    });
+
+    const pagina = await mountSuspended(PaginaMesas);
+    await vi.waitFor(() => expect(pagina.text()).toContain('Mesa 4'));
+    await pagina.find('button[aria-label^="Mesa 4"]').trigger('click');
+
+    // La vista rápida, al lado del mapa: no se sale de la pantalla.
+    const vistaRapida = () => pagina.find('aside[aria-label="Vista rápida de Mesa 4"]');
+    await vi.waitFor(() => expect(vistaRapida().exists()).toBe(true));
+    expect(navegarFalso).not.toHaveBeenCalled();
+    expect(vistaRapida().text()).toContain('IND Classic Artesanal');
+    expect(vistaRapida().find('a[href="/pedidos/p4"]').exists()).toBe(true);
+
+    const entregar = vistaRapida()
+      .findAll('button')
+      .find((boton) => boton.text().includes('Entregar el plato listo'));
+    await entregar?.trigger('click');
+    await vi.waitFor(() => expect(entregas).toEqual([{ estadoCocina: 'entregado' }]));
   });
 
   it('una mesa ocupada sin nada en curso deja tomar un pedido nuevo', async () => {

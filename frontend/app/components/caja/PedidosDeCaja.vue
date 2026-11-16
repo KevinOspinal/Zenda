@@ -17,7 +17,7 @@ const emit = defineEmits({
   'nuevo-domicilio': () => true,
 });
 
-const ahora = useNow({ interval: 30_000 });
+const ahora = useAhora(30_000);
 const busqueda = ref('');
 
 /** @typedef {import('~/utils/pedidos.js').TipoPedido} TipoPedido */

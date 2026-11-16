@@ -7,7 +7,7 @@
 <script setup>
 const sesion = useSesionStore();
 const conexion = useConexionStore();
-const ahora = useNow({ interval: 15_000 });
+const ahora = useAhora(15_000);
 const confirmandoSalida = ref(false);
 const esCuentaDeCocina = computed(() => sesion.rol === 'cocina');
 

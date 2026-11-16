@@ -9,6 +9,7 @@
 // comanda nueva, cuando le agregan platos a una que ya tenía o cuando anulan una de su tablero.
 // El domiciliario solo atiende sus entregas: cada cambio de un domicilio se le consulta al API,
 // que solo le responde los suyos (ver stores/entregas.js).
+// Cobrar y anular también mueven el inventario: si está a la vista, se vuelve a traer.
 export default defineNuxtPlugin(() => {
   const socket = useTiempoReal();
   const sesion = useSesionStore();
@@ -17,6 +18,7 @@ export default defineNuxtPlugin(() => {
   const caja = useCajaStore();
   const domicilios = useDomiciliosStore();
   const entregas = useEntregasStore();
+  const inventario = useInventarioStore();
   const preferencias = usePreferenciasStore();
   const sonidos = useSonidos();
   const toast = useToast();
@@ -193,6 +195,7 @@ export default defineNuxtPlugin(() => {
     if (esDomiciliario()) return alCambiarPedido(datos);
     pedidos.alCerrarPedido(datos);
     caja.alCambiarVentas();
+    inventario.alCambiarVentas(); // cobrar descuenta del inventario
     if (datos.tipo === 'domicilio') domicilios.alCambiarPedido(datos);
   });
   socket.on(E.PEDIDO_ANULADO, (datos) => {
@@ -200,12 +203,14 @@ export default defineNuxtPlugin(() => {
     avisarAnuladoEnLaCocina(datos);
     pedidos.alCerrarPedido(datos);
     caja.alCambiarVentas();
+    inventario.alCambiarVentas(); // anular devuelve al inventario lo vendido
     if (datos.tipo === 'domicilio') domicilios.alCambiarPedido(datos);
   });
 
   // Al conectar (y al reconectar) se recarga lo necesario: mientras estuvo desconectado se
   // pudieron perder eventos. Los pedidos y la caja se cargan siempre, para que los avisos
-  // del mesero funcionen desde que entra; las mesas, solo si alguna pantalla ya las usó.
+  // del mesero funcionen desde que entra; las mesas y el inventario, solo si alguna pantalla
+  // ya los usó.
   socket.on('connect', () => {
     if (!sesion.activa) return;
     // El domiciliario solo ve sus entregas: el API no le da los demás pedidos.
@@ -217,5 +222,6 @@ export default defineNuxtPlugin(() => {
     caja.cargarEstado();
     if (mesas.estadoCarga === 'listo') mesas.cargar();
     if (domicilios.estadoCarga === 'listo') domicilios.cargar();
+    if (inventario.estadoCarga === 'listo') inventario.cargar({ conCarta: false });
   });
 });

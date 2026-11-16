@@ -40,6 +40,13 @@ export default defineNuxtConfig({
         // Color de la barra del navegador en el celular: el índigo de la marca (700).
         { name: 'theme-color', content: '#432dd7' },
       ],
+      // Ícono de la pestaña (el logo en SVG, con .ico para navegadores viejos) y el del
+      // iPhone al agregar la app a la pantalla de inicio. Los archivos están en public/.
+      link: [
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'icon', href: '/favicon.ico', sizes: '48x48' },
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+      ],
     },
   },
 

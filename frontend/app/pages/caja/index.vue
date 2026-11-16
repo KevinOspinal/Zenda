@@ -15,7 +15,7 @@ const domicilios = useDomiciliosStore();
 const sesion = useSesionStore();
 const toast = useToast();
 const pantallaGrande = useMediaQuery('(min-width: 1024px)');
-const ahora = useNow({ interval: 60_000 });
+const ahora = useAhora(60_000);
 
 caja.cargarTurno();
 pedidos.cargarActivos();
