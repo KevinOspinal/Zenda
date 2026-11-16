@@ -1,77 +1,225 @@
 <!--
   Pantalla de carga: se ve mientras la app arranca y recupera la sesión guardada.
   Es HTML y CSS puros porque aparece antes de que cargue la app (y Nuxt UI).
+
+  - El logo de Zenda (el tiquete de comanda con la Z, los mismos trazos de public/favicon.svg)
+    con un halo suave detrás, el nombre y una barra de progreso delgada.
+  - El tiquete sale del cuadro una vez, como una comanda que se imprime; luego el halo respira y
+    la barra se desliza. Con "reducir movimiento", todo queda quieto y la barra solo late.
+  - Solo aparece si la carga tarda más de 150 ms: si la app arranca rápido, solo se ve el color
+    de fondo y nada parpadea.
+  - Sigue el tema que el usuario eligió en la app (la clase dark o light que @nuxtjs/color-mode
+    pone en <html> antes de pintar) y, si no hay, el del sistema.
+  - Al terminar de cargar se desvanece (plugins/00.pantalla-de-carga.client.js).
 -->
-<div class="zenda-carga" role="status" aria-label="Cargando Zenda">
-  <div class="zenda-carga__logo">
-    <svg viewBox="0 0 24 24" width="36" height="36" aria-hidden="true">
-      <g
-        fill="none"
-        stroke="currentColor"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        stroke-width="2"
-      >
-        <path
-          d="M11 20a10 10 0 0 0 10-10a25.9 25.9 0 0 0-1.04-7.281a1 1 0 0 0-1.755-.325C15.833 5.5 13 5.5 9.8 6.1A7 7 0 0 0 11 20"
-        />
-        <path d="M2 21a5 5 0 0 1 2.911-4.544C7.613 15.212 8.351 15.24 11 13" />
-      </g>
-    </svg>
+<div class="zenda-carga" role="status">
+  <div class="zenda-carga__contenido">
+    <div class="zenda-carga__marca" aria-hidden="true">
+      <span class="zenda-carga__halo"></span>
+      <span class="zenda-carga__logo">
+        <!-- El tiquete, inclinado, con la Z encima. Coordenadas en una cuadrícula de 512. -->
+        <svg viewBox="0 0 512 512" width="80" height="80" focusable="false">
+          <g transform="rotate(-8 256 256)">
+            <g class="zenda-carga__tiquete">
+              <path
+                fill="#fff"
+                d="M180 112H332Q360 112 360 140V392l-26-20l-26 20l-26-20l-26 20l-26-20l-26 20l-26-20l-26 20V140Q152 112 180 112Z"
+              />
+              <path
+                fill="#432dd7"
+                stroke="#432dd7"
+                stroke-width="10"
+                stroke-linejoin="round"
+                d="M200 180H312V210L242 290H312V320H200V290L270 210H200Z"
+              />
+            </g>
+          </g>
+        </svg>
+      </span>
+    </div>
+    <p class="zenda-carga__nombre">Zenda</p>
+    <span class="zenda-carga__barra" aria-hidden="true"><span></span></span>
+    <span class="zenda-carga__oculto">Cargando Zenda…</span>
   </div>
-  <p class="zenda-carga__nombre">Zenda</p>
 </div>
 
 <style>
-  /* Colores de Zenda: fondo claro u oscuro según el sistema, logo en el índigo de la marca
-     (los mismos tonos de Tailwind que usa la app: índigo 700 y 400, slate 900). */
+  /* Colores de Zenda, los mismos tonos de Tailwind que usa la app: el cuadro va de índigo 600 a
+     violeta 600 (como el ícono de la pestaña), la Z en índigo 700, el fondo blanco o slate 900. */
   .zenda-carga {
+    --zc-fondo: #fff;
+    --zc-texto: #0f172b;
+    --zc-riel: rgb(100 116 139 / 0.16);
+    --zc-barra: linear-gradient(90deg, #4f39f6, #7f22fe);
+    --zc-halo: rgb(99 102 241 / 0.4);
     position: fixed;
     inset: 0;
-    display: grid;
-    place-content: center;
-    justify-items: center;
-    gap: 14px;
-    background: #fff;
-    font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
-  }
-  .zenda-carga__logo {
+    z-index: 2147483647;
     display: grid;
     place-items: center;
-    width: 72px;
-    height: 72px;
-    border-radius: 20px;
-    background: #432dd7;
-    color: #fff;
-    animation: zenda-latido 1.4s ease-in-out infinite;
+    background: var(--zc-fondo);
+    font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
+    transition: opacity 200ms ease-out;
   }
-  .zenda-carga__nombre {
-    margin: 0;
-    font-size: 20px;
-    font-weight: 700;
-    color: #0f172b;
-  }
-  @keyframes zenda-latido {
-    50% {
-      transform: scale(0.94);
-      opacity: 0.85;
-    }
+  /* Tema oscuro: el que eligió el usuario en la app o, si no hay elección, el del sistema. */
+  html.dark .zenda-carga {
+    --zc-fondo: #0f172b;
+    --zc-texto: #fff;
+    --zc-riel: rgb(148 163 184 / 0.18);
+    --zc-barra: linear-gradient(90deg, #7c86ff, #a684ff);
+    --zc-halo: rgb(124 134 255 / 0.35);
   }
   @media (prefers-color-scheme: dark) {
-    .zenda-carga {
-      background: #0f172b;
-    }
-    .zenda-carga__logo {
-      background: #7c86ff;
-      color: #0f172b;
-    }
-    .zenda-carga__nombre {
-      color: #fff;
+    html:not(.light):not(.dark) .zenda-carga {
+      --zc-fondo: #0f172b;
+      --zc-texto: #fff;
+      --zc-riel: rgb(148 163 184 / 0.18);
+      --zc-barra: linear-gradient(90deg, #7c86ff, #a684ff);
+      --zc-halo: rgb(124 134 255 / 0.35);
     }
   }
+
+  /* La app ya cargó: se desvanece y deja pasar los toques. */
+  .zenda-carga--saliendo {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .zenda-carga__contenido {
+    display: grid;
+    justify-items: center;
+    opacity: 0;
+    animation: zenda-carga-aparece 300ms ease-out 150ms forwards;
+  }
+
+  .zenda-carga__marca {
+    position: relative;
+    display: grid;
+    place-items: center;
+  }
+  .zenda-carga__halo {
+    position: absolute;
+    inset: -36px;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, var(--zc-halo), transparent);
+    animation: zenda-carga-respira 2.4s ease-in-out 600ms infinite;
+  }
+  .zenda-carga__logo {
+    position: relative;
+    display: block;
+    width: 80px;
+    height: 80px;
+    overflow: hidden;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #4f39f6, #7f22fe);
+    box-shadow: 0 12px 28px -10px rgb(79 57 246 / 0.6);
+  }
+  .zenda-carga__logo svg {
+    display: block;
+  }
+  .zenda-carga__tiquete {
+    filter: drop-shadow(0 8px 10px rgb(30 26 77 / 0.35));
+    animation: zenda-carga-imprime 650ms cubic-bezier(0.2, 0.8, 0.2, 1) 300ms both;
+  }
+
+  .zenda-carga__nombre {
+    margin: 18px 0 0;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    color: var(--zc-texto);
+  }
+
+  .zenda-carga__barra {
+    position: relative;
+    display: block;
+    width: 112px;
+    height: 4px;
+    margin-top: 22px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--zc-riel);
+  }
+  .zenda-carga__barra > span {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 40%;
+    border-radius: inherit;
+    background: var(--zc-barra);
+    animation: zenda-carga-avanza 1.3s ease-in-out infinite;
+  }
+
+  /* Solo para lectores de pantalla. */
+  .zenda-carga__oculto {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  @keyframes zenda-carga-aparece {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  /* El tiquete sube desde abajo del cuadro, a lo largo de su inclinación, como al imprimirse. */
+  @keyframes zenda-carga-imprime {
+    from {
+      transform: translateY(300px);
+    }
+    to {
+      transform: none;
+    }
+  }
+  @keyframes zenda-carga-respira {
+    0%,
+    100% {
+      opacity: 0.55;
+      transform: scale(0.92);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.06);
+    }
+  }
+  @keyframes zenda-carga-avanza {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(250%);
+    }
+  }
+  @keyframes zenda-carga-late {
+    50% {
+      opacity: 0.45;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .zenda-carga__logo {
+    .zenda-carga__contenido {
+      animation-name: zenda-carga-late-entrada;
+    }
+    .zenda-carga__tiquete,
+    .zenda-carga__halo {
       animation: none;
+    }
+    .zenda-carga__barra > span {
+      width: 100%;
+      animation: zenda-carga-late 1.6s ease-in-out infinite;
+    }
+  }
+  @keyframes zenda-carga-late-entrada {
+    to {
+      opacity: 1;
     }
   }
 </style>
