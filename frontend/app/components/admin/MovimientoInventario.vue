@@ -14,7 +14,13 @@ const props = defineProps({
 });
 
 const abierto = defineModel('abierto', { type: Boolean, default: false });
-const emit = defineEmits({ registrado: () => true });
+const emit = defineEmits({
+  /**
+   * Se registró: lo que respondió el API, con el stock nuevo.
+   * @param {{ productoId: string, nombre: string, stock: string }} _resultado
+   */
+  registrado: (_resultado) => true,
+});
 
 const cantidad = ref(/** @type {number | null} */ (null));
 const motivo = ref('');
@@ -47,13 +53,13 @@ async function registrar() {
   registrando.value = true;
   error.value = '';
   try {
-    await useApi().post('/inventario/movimientos', {
+    const resultado = await useApi().post('/inventario/movimientos', {
       tipo: props.tipo,
       productoId: props.producto.id,
       cantidad: cantidad.value,
       ...(props.tipo === 'ajuste' ? { motivo: motivo.value.trim() } : {}),
     });
-    emit('registrado');
+    emit('registrado', resultado);
     abierto.value = false;
   } catch (fallo) {
     error.value = fallo instanceof ErrorApi ? fallo.message : MENSAJE_ERROR_GENERICO;

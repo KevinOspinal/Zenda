@@ -13,10 +13,11 @@
   --animate-aparecer: aparecer 400ms ease-out both; /* entrada suave, de abajo hacia arriba */
   --animate-sacudir: sacudir 350ms ease-in-out; /* "no": datos de ingreso incorrectos */
 
-  /* Animaciones del mapa de mesas (también con motion-safe:). */
+  /* Animaciones del mapa de mesas y del inventario (también con motion-safe:). */
   --animate-respirar: respirar 2.4s ease-in-out infinite; /* mesa con platos listos: halo */
   --animate-campana: campana 2.4s ease-in-out infinite; /* campana de platos listos */
-  --animate-onda: onda 400ms ease-out both; /* una mesa que cambió en vivo */
+  --animate-onda: onda 400ms ease-out both; /* una mesa o un producto que cambió en vivo */
+  --animate-latido: latido 2.4s ease-in-out infinite; /* inventario por revisar: el ícono late */
 
   @keyframes respirar {
     0%,
@@ -45,6 +46,16 @@
     }
     40% {
       transform: rotate(-4deg);
+    }
+  }
+  @keyframes latido {
+    0%,
+    30%,
+    100% {
+      transform: scale(1);
+    }
+    12% {
+      transform: scale(1.18);
     }
   }
   @keyframes onda {
