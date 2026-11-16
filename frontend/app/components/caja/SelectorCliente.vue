@@ -1,6 +1,7 @@
 <!--
   Cliente para la factura, opcional: sin cliente, la factura va a "consumidor final".
-  Se busca por nombre o número de documento, o se registra uno nuevo ahí mismo.
+  Se busca por nombre o número de documento, o se registra uno nuevo ahí mismo (si el
+  documento ya estaba registrado, se puede usar ese cliente de una vez).
 -->
 <script setup>
 /** @typedef {import('~/stores/clientes.js').Cliente} Cliente */
@@ -115,7 +116,13 @@ function elegir(elegido) {
           <UButton color="neutral" variant="ghost" label="Cancelar" @click="abierto = false" />
         </div>
       </template>
-      <FormularioCliente v-else @guardado="elegir" @cancelar="registrando = false" />
+      <FormularioCliente
+        v-else
+        texto-existente="Usar este cliente"
+        @guardado="elegir"
+        @existente="elegir"
+        @cancelar="registrando = false"
+      />
     </div>
   </div>
 </template>
