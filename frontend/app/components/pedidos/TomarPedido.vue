@@ -36,6 +36,7 @@ const {
   cantidades,
   enCurso,
   enviando,
+  reintentando,
   items,
   total,
   estadoPedido,
@@ -184,6 +185,7 @@ function personalizar(producto) {
         :estado-pedido="estadoPedido"
         :procesando="enCurso > 0"
         :enviando="enviando"
+        :reintentando="reintentando"
         :puede-cobrar="puedeCobrar"
         @quitar="quitar"
         @enviar="enviar"

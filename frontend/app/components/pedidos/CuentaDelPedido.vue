@@ -2,7 +2,7 @@
   La cuenta mientras se toma un pedido, adaptada al dispositivo:
   - Tablet horizontal y PC: panel fijo a la derecha del menú.
   - Celular: barra fija sobre la navegación ("Ver cuenta · 3 productos · $ 38.000") que abre
-    la cuenta en un panel desde abajo.
+    la cuenta en un panel desde abajo. Si la señal falla, encima dice "Enviando… sin señal".
 -->
 <script setup>
 const props = defineProps({
@@ -23,6 +23,8 @@ const props = defineProps({
   },
   procesando: { type: Boolean, default: false },
   enviando: { type: Boolean, default: false },
+  /** La señal falló y lo último que se tocó se está enviando de nuevo. */
+  reintentando: { type: Boolean, default: false },
   puedeCobrar: { type: Boolean, default: false },
 });
 
@@ -53,6 +55,7 @@ const totalProductos = computed(() => sumar(props.items.map((i) => i.cantidad)).
         :estado-pedido="estadoPedido"
         :procesando="procesando"
         :enviando="enviando"
+        :reintentando="reintentando"
         :puede-cobrar="puedeCobrar"
         @quitar="emit('quitar', $event)"
         @enviar="emit('enviar')"
@@ -71,6 +74,19 @@ const totalProductos = computed(() => sumar(props.items.map((i) => i.cantidad)).
         v-if="items.length || procesando"
         class="fixed inset-x-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-20"
       >
+        <!-- Sin señal: lo que se tocó se sigue enviando solo, sin duplicarse. -->
+        <div
+          v-if="reintentando"
+          class="mb-2 overflow-hidden rounded-xl bg-default shadow-lg ring-1 ring-warning/40"
+          role="status"
+        >
+          <p
+            class="flex items-center justify-center gap-2 bg-warning/10 px-4 py-2 text-sm font-semibold text-highlighted"
+          >
+            <UIcon name="i-lucide-wifi-off" class="size-4 text-warning" />
+            Enviando… sin señal
+          </p>
+        </div>
         <button
           type="button"
           class="flex w-full items-center justify-between gap-3 rounded-xl bg-primary px-5 py-4 text-inverted shadow-lg transition active:scale-[0.98] motion-reduce:transition-none"
@@ -98,6 +114,7 @@ const totalProductos = computed(() => sumar(props.items.map((i) => i.cantidad)).
           :estado-pedido="estadoPedido"
           :procesando="procesando"
           :enviando="enviando"
+          :reintentando="reintentando"
           :puede-cobrar="puedeCobrar"
           @quitar="emit('quitar', $event)"
           @enviar="emit('enviar')"

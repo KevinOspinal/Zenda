@@ -25,6 +25,8 @@ const props = defineProps({
   procesando: { type: Boolean, default: false },
   /** Se está enviando a la cocina. */
   enviando: { type: Boolean, default: false },
+  /** La señal falló y lo último que se tocó se está enviando de nuevo. */
+  reintentando: { type: Boolean, default: false },
   /** Quien toma el pedido también puede cobrarlo (cajero, administrador o dueño). */
   puedeCobrar: { type: Boolean, default: false },
 });
@@ -55,6 +57,15 @@ const hayPrecuenta = computed(() => Boolean(props.pedidoId) && props.items.lengt
     </div>
 
     <div class="space-y-3 border-t border-default pt-4">
+      <UAlert
+        v-if="reintentando"
+        color="warning"
+        variant="subtle"
+        icon="i-lucide-wifi-off"
+        title="Enviando… sin señal"
+        description="Lo seguimos intentando solos; no se duplica nada."
+        role="status"
+      />
       <div class="flex items-baseline justify-between gap-3">
         <span class="font-semibold text-toned">Total</span>
         <CifraAnimada

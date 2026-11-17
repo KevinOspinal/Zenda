@@ -8,6 +8,10 @@
 // - El total siempre lo calcula el backend: se usa el pedido que responde el API.
 // - Agregar un producto suena al instante (como el contador de la tarjeta); quitarlo, cuando
 //   el API lo confirma.
+// - Con mala señal, cada acción se repite sola unos segundos ("Enviando… sin señal") sin
+//   duplicar nada: el pedido nuevo lleva siempre el mismo uuidOffline hasta crearse y cada
+//   toque de un producto lleva su propia clave. Si al final no se pudo, el aviso del producto
+//   trae "Reintentar", con la misma clave.
 
 /**
  * @param {object} opciones
@@ -100,6 +104,9 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
   /** @type {Promise<unknown>} */
   let fila = Promise.resolve();
   const enCurso = ref(0);
+  /** La señal falló y la operación en curso se está repitiendo sola. */
+  const reintentando = ref(false);
+  const alReintentar = () => (reintentando.value = true);
   /**
    * @template T
    * @param {() => Promise<T>} operacion
@@ -107,7 +114,11 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
    */
   function enFila(operacion) {
     enCurso.value += 1;
-    const resultado = fila.then(operacion).finally(() => (enCurso.value -= 1));
+    const resultado = fila.then(operacion).finally(() => {
+      enCurso.value -= 1;
+      // Salió bien (volvió la señal) o se dejó de intentar (lo dice el aviso del error).
+      reintentando.value = false;
+    });
     fila = resultado.catch(() => {});
     return resultado;
   }
@@ -145,16 +156,74 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
     if (error.codigo === 'CAJA_CERRADA') caja.alCerrarse();
     if (['PEDIDO_CERRADO', 'PEDIDO_ANULADO'].includes(error.codigo)) cargarPedido();
     if (error.codigo === 'MESA_OCUPADA') pedidos.cargarActivos();
+    // Ya no estaba (por ejemplo, un intento anterior sí lo quitó): se muestra como quedó.
+    if (error.codigo === 'ITEM_NO_ENCONTRADO') cargarPedido();
+  }
+
+  /**
+   * El producto no llegó por la señal: se avisa con "Reintentar", que lo vuelve a enviar con
+   * la misma clave (si el primer envío sí había llegado, no se duplica).
+   * @param {unknown} error
+   * @param {{ id: string, nombre: string }} producto
+   * @param {DetalleDelProducto} detalle
+   * @param {string} clave
+   */
+  function avisarFallaAlAgregar(error, producto, detalle, clave) {
+    if (!esFallaPasajera(error)) {
+      avisarError(error);
+      return;
+    }
+    toast.add({
+      title: `No se pudo enviar: ${producto.nombre}`,
+      description: 'No hay señal. Toca Reintentar: no se duplica.',
+      icon: 'i-lucide-wifi-off',
+      color: 'error',
+      // Más tiempo que un aviso normal: hay que verlo para no perder el producto.
+      duration: 15_000,
+      actions: [
+        {
+          label: 'Reintentar',
+          icon: 'i-lucide-rotate-cw',
+          color: 'neutral',
+          variant: 'outline',
+          onClick: () => enviarProducto(producto, detalle, clave),
+        },
+      ],
+    });
   }
 
   // 4. Acciones.
   /**
-   * Agrega un producto. Si el pedido aún no existe, lo crea con este primer producto.
-   * @param {{ id: string, nombre: string }} producto
-   * @param {{ cantidad?: number, notas?: string | null, opciones?: string[] }} [detalle]
+   * El pedido nuevo se crea siempre con este uuidOffline, aunque falle y se intente otra vez:
+   * si un intento anterior sí llegó, el API devuelve ese pedido en lugar de crear otro.
+   */
+  let uuidDelPedidoNuevo = generarUuid();
+  /** Ya se intentó crear el pedido con ese uuidOffline (y no se supo si llegó). */
+  let seIntentoCrear = false;
+
+  /**
+   * @typedef {{ cantidad?: number, notas?: string | null, opciones?: string[] }} DetalleDelProducto
    *   `opciones`: ids de las opciones elegidas (término, adiciones...).
    */
-  async function agregar(producto, { cantidad = 1, notas = '', opciones = [] } = {}) {
+
+  /**
+   * Agrega un producto. Si el pedido aún no existe, lo crea con este primer producto.
+   * @param {{ id: string, nombre: string }} producto
+   * @param {DetalleDelProducto} [detalle]
+   */
+  function agregar(producto, detalle = {}) {
+    // Cada toque lleva su propia clave: dos toques son dos productos; un toque repetido, uno.
+    return enviarProducto(producto, detalle, generarUuid());
+  }
+
+  /**
+   * Envía un producto al pedido (o crea el pedido con él).
+   * @param {{ id: string, nombre: string }} producto
+   * @param {DetalleDelProducto} detalle
+   * @param {string} clave La claveIdempotencia del toque.
+   */
+  async function enviarProducto(producto, detalle, clave) {
+    const { cantidad = 1, notas = '', opciones = [] } = detalle;
     sumarEnCamino(producto.id, cantidad);
     sonidos.productoAgregado();
     try {
@@ -164,17 +233,33 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
           cantidad,
           ...(notas ? { notas } : {}),
           ...(opciones.length ? { opciones } : {}),
+          claveIdempotencia: clave,
         };
         if (idActual.value) {
-          await pedidos.agregarItem(idActual.value, item);
+          await pedidos.agregarItem(idActual.value, item, { alReintentar });
           return;
         }
-        const nuevo = await pedidos.crear({ mesaId: mesaId.value || undefined, items: [item] });
+
+        // Pedido nuevo: se crea con este producto.
+        const repetido = seIntentoCrear;
+        seIntentoCrear = true;
+        const nuevo = await pedidos.crear(
+          { mesaId: mesaId.value || undefined, items: [item], uuidOffline: uuidDelPedidoNuevo },
+          { alReintentar },
+        );
+        uuidDelPedidoNuevo = generarUuid();
+        seIntentoCrear = false;
         idCreado.value = nuevo.id;
         alCrear(nuevo.id);
+
+        // Si lo había creado un intento anterior (con otro producto), este falta: se agrega.
+        const llego = (nuevo.items ?? []).some(
+          (/** @type {any} */ i) => i.claveIdempotencia === clave,
+        );
+        if (repetido && !llego) await pedidos.agregarItem(nuevo.id, item, { alReintentar });
       });
     } catch (error) {
-      avisarError(error);
+      avisarFallaAlAgregar(error, producto, detalle, clave);
     } finally {
       sumarEnCamino(producto.id, -cantidad);
     }
@@ -186,7 +271,7 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
    */
   async function quitar(item) {
     try {
-      await enFila(() => pedidos.quitarItem(idActual.value, item.id));
+      await enFila(() => pedidos.quitarItem(idActual.value, item.id, { alReintentar }));
       sonidos.productoQuitado();
       toast.add({
         title: `Quitaste ${item.producto.nombre}`,
@@ -226,7 +311,8 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
   async function enviarACocina() {
     enviando.value = true;
     try {
-      await enFila(() => pedidos.enviarACocina(idActual.value));
+      // Va en la fila: espera a que lleguen los productos que se acaban de tocar.
+      await enFila(() => pedidos.enviarACocina(idActual.value, { alReintentar }));
       toast.add({
         title: 'Enviado a cocina',
         description: titulo.value,
@@ -254,6 +340,7 @@ export function usePedidoEnCurso({ pedidoId, mesaId, alCrear }) {
     cantidades,
     enCurso,
     enviando,
+    reintentando,
     items: computed(() => pedido.value?.items ?? []),
     total: computed(() => pedido.value?.total ?? '0'),
     estadoPedido: computed(() => pedido.value?.estado ?? 'nuevo'),

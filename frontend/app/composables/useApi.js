@@ -4,7 +4,8 @@
 // - si el token venció, lo renueva (una sola vez aunque fallen varias peticiones a la vez)
 //   y repite la petición;
 // - convierte cualquier error en un ErrorApi con un mensaje amable (ver utils/errores.js);
-// - si falla algo que hizo la persona (guardar, cobrar, enviar...), suena el error.
+// - si falla algo que hizo la persona (guardar, cobrar, enviar...), suena el error;
+// - si se le pide, repite sola una acción que falló por la señal (ver utils/reintentos.js).
 // Las pantallas no llaman al API directo: usan los stores, y los stores usan useApi.
 
 /** Tiempo máximo de espera de una petición: sin límite, una red caída dejaría la pantalla esperando. */
@@ -16,6 +17,16 @@ const ESPERA_MAXIMA_MS = 15_000;
  * @property {unknown} [cuerpo] Datos que se envían como JSON.
  * @property {Record<string, unknown>} [consulta] Parámetros de la URL (?desde=...).
  * @property {string | null} [token] Token de acceso. Sin él, la petición va sin sesión.
+ */
+
+/**
+ * Reintentos de una acción que se puede repetir sin duplicar nada (ver utils/reintentos.js).
+ * @typedef {object} AjustesDeReintento
+ * @property {boolean} [reintentar] Repetirla sola si falla por la conexión.
+ * @property {(reintento: number) => void} [alReintentar] Avisa cada reintento, para mostrar
+ *   "Enviando… sin señal".
+ * @property {readonly string[]} [yaSeHizoSi] Códigos que, en un reintento, muestran que el
+ *   intento anterior sí llegó. Entonces se devuelve YA_SE_HIZO en lugar de fallar.
  */
 
 /**
@@ -99,14 +110,20 @@ export function useApi() {
   /**
    * @param {string} ruta
    * @param {OpcionesPeticion} [opciones]
+   * @param {AjustesDeReintento} [ajustes]
    * @returns {Promise<any>}
    */
-  async function pedir(ruta, opciones = {}) {
+  async function pedir(ruta, opciones = {}, { reintentar = false, alReintentar, yaSeHizoSi } = {}) {
     try {
-      return await pedirConSesion(ruta, opciones);
+      if (!reintentar) return await pedirConSesion(ruta, opciones);
+      return await conReintentos(() => pedirConSesion(ruta, opciones), {
+        alReintentar,
+        yaSeHizoSi,
+      });
     } catch (error) {
-      // Falló algo que hizo la persona: además del mensaje en pantalla, suena el error. Las
-      // consultas no suenan: si falla una carga, la pantalla lo muestra con "Reintentar".
+      // Falló algo que hizo la persona: además del mensaje en pantalla, suena el error (una
+      // sola vez, después de los reintentos). Las consultas no suenan: si falla una carga, la
+      // pantalla lo muestra con "Reintentar".
       if (opciones.metodo && opciones.metodo !== 'GET') sonidos.error();
       throw error;
     }
@@ -121,8 +138,9 @@ export function useApi() {
     /**
      * @param {string} ruta
      * @param {unknown} [cuerpo]
+     * @param {AjustesDeReintento} [ajustes]
      */
-    post: (ruta, cuerpo) => pedir(ruta, { metodo: 'POST', cuerpo }),
+    post: (ruta, cuerpo, ajustes) => pedir(ruta, { metodo: 'POST', cuerpo }, ajustes),
     /**
      * @param {string} ruta
      * @param {unknown} cuerpo
@@ -134,7 +152,10 @@ export function useApi() {
      * @param {unknown} cuerpo
      */
     put: (ruta, cuerpo) => pedir(ruta, { metodo: 'PUT', cuerpo }),
-    /** @param {string} ruta */
-    eliminar: (ruta) => pedir(ruta, { metodo: 'DELETE' }),
+    /**
+     * @param {string} ruta
+     * @param {AjustesDeReintento} [ajustes]
+     */
+    eliminar: (ruta, ajustes) => pedir(ruta, { metodo: 'DELETE' }, ajustes),
   };
 }

@@ -67,6 +67,13 @@ const VACIO = Object.freeze({
 });
 const datos = reactive({ ...VACIO });
 const error = ref('');
+/**
+ * uuidOffline de este domicilio: el mismo en cada intento de guardar. Si un intento se quedó
+ * sin respuesta pero sí llegó, guardar otra vez devuelve ese domicilio en lugar de repetirlo.
+ */
+let uuidDelDomicilio = generarUuid();
+/** La señal falló y se está guardando de nuevo. */
+const reintentando = ref(false);
 const esContraEntrega = computed(() => datos.formaPago === 'contra_entrega');
 
 // Al abrir, el formulario empieza limpio con el valor del domicilio del negocio.
@@ -76,6 +83,7 @@ watch(
     if (!estaAbierto) return;
     Object.assign(datos, VACIO);
     error.value = '';
+    uuidDelDomicilio = generarUuid();
     try {
       const negocio = await useApi().get('/negocios/actual');
       if (!datos.valorDomicilio) datos.valorDomicilio = montoComoTexto(negocio.valorDomicilio);
@@ -89,20 +97,24 @@ watch(
 async function guardar() {
   error.value = '';
   try {
-    const pedido = await domicilios.crear({
-      nombreCliente: datos.nombreCliente.trim(),
-      origen: datos.origen,
-      ...(datos.valorDomicilio ? { valorDomicilio: datos.valorDomicilio } : {}),
-      entrega: {
-        telefono: datos.telefono.trim(),
-        direccion: datos.direccion.trim(),
-        ...(datos.indicaciones.trim() ? { indicaciones: datos.indicaciones.trim() } : {}),
-        formaPago: datos.formaPago,
-        // "Con cuánto paga" solo existe contra entrega: el de pago anticipado ya pagó.
-        ...(esContraEntrega.value && datos.pagaCon ? { pagaCon: datos.pagaCon } : {}),
-        ...(datos.ubicacionUrl.trim() ? { ubicacionUrl: datos.ubicacionUrl.trim() } : {}),
+    const pedido = await domicilios.crear(
+      {
+        uuidOffline: uuidDelDomicilio,
+        nombreCliente: datos.nombreCliente.trim(),
+        origen: datos.origen,
+        ...(datos.valorDomicilio ? { valorDomicilio: datos.valorDomicilio } : {}),
+        entrega: {
+          telefono: datos.telefono.trim(),
+          direccion: datos.direccion.trim(),
+          ...(datos.indicaciones.trim() ? { indicaciones: datos.indicaciones.trim() } : {}),
+          formaPago: datos.formaPago,
+          // "Con cuánto paga" solo existe contra entrega: el de pago anticipado ya pagó.
+          ...(esContraEntrega.value && datos.pagaCon ? { pagaCon: datos.pagaCon } : {}),
+          ...(datos.ubicacionUrl.trim() ? { ubicacionUrl: datos.ubicacionUrl.trim() } : {}),
+        },
       },
-    });
+      { alReintentar: () => (reintentando.value = true) },
+    );
     abierto.value = false;
     toast.add({
       title: `Domicilio ${nombreDelPedido(pedido)} registrado`,
@@ -113,6 +125,8 @@ async function guardar() {
     await navigateTo(`/pedidos/${pedido.id}`);
   } catch (fallo) {
     error.value = fallo instanceof ErrorApi ? fallo.message : MENSAJE_ERROR_GENERICO;
+  } finally {
+    reintentando.value = false;
   }
 }
 </script>
@@ -226,7 +240,7 @@ async function guardar() {
             loading-auto
             icon="i-lucide-arrow-right"
             trailing
-            label="Registrar y agregar productos"
+            :label="reintentando ? 'Enviando… sin señal' : 'Registrar y agregar productos'"
           />
         </div>
       </UForm>

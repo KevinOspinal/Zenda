@@ -53,11 +53,17 @@ export const useDomiciliosStore = defineStore('domicilios', () => {
 
   /**
    * Registra un domicilio, todavía sin productos: se agregan al tomar el pedido.
-   * @param {{ nombreCliente: string, origen: string, valorDomicilio?: string,
-   *   entrega: { telefono: string, direccion: string, indicaciones?: string, pagaCon?: string } }} datos
+   * Con el mismo uuidOffline, guardar otra vez (tras quedarse sin señal) no lo repite.
+   * @param {{ uuidOffline?: string, nombreCliente: string, origen: string,
+   *   valorDomicilio?: string, entrega: { telefono: string, direccion: string,
+   *   indicaciones?: string, pagaCon?: string } }} datos
+   * @param {{ alReintentar?: (reintento: number) => void }} [ajustes]
    */
-  async function crear(datos) {
-    const pedido = await usePedidosStore().crear({ tipo: 'domicilio', items: [], ...datos });
+  async function crear(datos, ajustes) {
+    const pedido = await usePedidosStore().crear(
+      { tipo: 'domicilio', items: [], ...datos },
+      ajustes,
+    );
     guardar(pedido);
     return pedido;
   }

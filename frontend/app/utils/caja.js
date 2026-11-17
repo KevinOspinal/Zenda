@@ -74,6 +74,22 @@ export function pagosParaApi(pagos) {
 }
 
 /**
+ * El cambio de un pedido ya cobrado, según sus pagos: lo que entregó el cliente en efectivo
+ * menos lo abonado. Sirve cuando la respuesta del cobro se perdió y se revisa el pedido.
+ * @param {{ pagos?: { monto: string, recibido?: string | null }[] }} pedido
+ * @returns {string} En el formato del API ("2000.00"), como el `cambio` del cobro.
+ */
+export function cambioDelPedidoCobrado(pedido) {
+  return sumar(
+    (pedido.pagos ?? [])
+      .filter((pago) => pago.recibido)
+      .map((pago) =>
+        Decimal.max(aDecimal(/** @type {string} */ (pago.recibido)).minus(pago.monto), 0),
+      ),
+  ).toFixed(2);
+}
+
+/**
  * Montos rápidos para el efectivo que entrega el cliente: el valor exacto y los redondos
  * más cercanos por encima (por ejemplo, para $ 38.000: 38.000, 40.000, 50.000 y 100.000).
  * @param {ValorDinero} aPagar
