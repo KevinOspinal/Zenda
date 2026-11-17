@@ -115,6 +115,22 @@ describe('conReintentos', () => {
     expect(reloj.ahora()).toBeLessThanOrEqual(LIMITE_DE_REINTENTOS_MS);
   });
 
+  it('aunque cada intento tarde un poco, el último cae en los 45 s (no se salta)', async () => {
+    // Sin señal el error llega casi al instante, pero no en 0 ms: antes, 30,6 s + 15 s de espera
+    // pasaban del límite y se dejaba de insistir a los 30 s.
+    const reloj = relojFalso(100);
+    const operacion = vi.fn(async () => {
+      reloj.tardar();
+      throw crearErrorSinConexion();
+    });
+
+    await expect(conReintentos(operacion, opcionesDe(reloj))).rejects.toBeInstanceOf(ErrorApi);
+    expect(operacion).toHaveBeenCalledTimes(7);
+    // La última espera se acorta a lo que falta para el límite.
+    expect(reloj.esperado.at(-1)).toBe(14_400);
+    expect(reloj.ahora()).toBe(LIMITE_DE_REINTENTOS_MS + 100);
+  });
+
   it('si cada intento se queda colgado 15 s, el límite se cuenta con ese tiempo', async () => {
     const reloj = relojFalso(15_000);
     const operacion = vi.fn(async () => {

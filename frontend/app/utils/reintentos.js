@@ -75,10 +75,11 @@ export async function conReintentos(
         return YA_SE_HIZO;
       }
 
-      // 2. Solo se repite una falla de la conexión, y solo si queda tiempo para esperar.
-      const espera = esperas[Math.min(intento, esperas.length - 1)] ?? 0;
-      const seAcabaElTiempo = ahora() - inicio + espera > limiteMs;
-      if (!esFallaPasajera(error) || seAcabaElTiempo) throw error;
+      // 2. Solo se repite una falla de la conexión, y solo si queda tiempo. La última espera
+      //    se acorta a lo que falte: así el último intento cae justo en el límite.
+      const quedaMs = limiteMs - (ahora() - inicio);
+      if (!esFallaPasajera(error) || quedaMs <= 0) throw error;
+      const espera = Math.min(esperas[Math.min(intento, esperas.length - 1)] ?? 0, quedaMs);
 
       // 3. Esperar y volver a intentar.
       alReintentar(intento + 1, /** @type {ErrorApi} */ (error));
