@@ -4,6 +4,8 @@
   exactamente con el total más la propina. Al cobrar, muestra el cambio en grande
   (CobroRegistrado). Si el pedido no ha ido a la cocina, no se cierra hasta decidir si va o no:
   así ningún pedido cobrado se queda sin preparar.
+  El cobro nunca se repite solo: si la señal falla, no se sabe si llegó. Antes de dejar cobrar
+  de nuevo se revisa el pedido: o "Ya quedó cobrado" (con su cambio) o "No llegó".
   En el celular ocupa toda la pantalla.
 -->
 <script setup>
@@ -34,6 +36,12 @@ const cobrando = ref(false);
 const resultado = ref(
   /** @type {{ pedido: any, cambio: string, advertencias: any[] } | null} */ (null),
 );
+/** La señal falló, pero el cobro sí había llegado: se avisa para no cobrar dos veces. */
+const yaEstabaCobrado = ref(false);
+/** Un cobro se quedó sin respuesta y aún no se sabe si llegó: hay que revisar antes de cobrar. */
+const cobroEnDuda = ref(false);
+/** "No llegó: puedes cobrar de nuevo". */
+const avisoNoLlego = ref(false);
 /** Se cobró sin pasar por la cocina: hasta decidir si va, la ventana no se cierra. */
 const faltaCocina = computed(() =>
   Boolean(resultado.value && faltaDecidirCocina(resultado.value.pedido)),
@@ -46,6 +54,9 @@ watch(
     if (!estaAbierto || !props.pedidoId) return;
     error.value = '';
     resultado.value = null;
+    yaEstabaCobrado.value = false;
+    cobroEnDuda.value = false;
+    avisoNoLlego.value = false;
     modoPropina.value = 'ninguna';
     propinaOtra.value = '';
     cliente.value = null;
@@ -53,6 +64,8 @@ watch(
     cargando.value = true;
     try {
       pedido.value = await pedidos.cargarDetalle(props.pedidoId);
+      // Ya se cobró (por ejemplo, un cobro anterior cuya respuesta se perdió): no se cobra otra vez.
+      if (pedido.value.estado === 'pagado') mostrarYaCobrado(pedido.value);
     } catch (fallo) {
       error.value = fallo instanceof ErrorApi ? fallo.message : MENSAJE_ERROR_GENERICO;
     } finally {
@@ -105,34 +118,90 @@ const titulo = computed(
 async function confirmar() {
   cobrando.value = true;
   error.value = '';
+  avisoNoLlego.value = false;
   try {
+    // 1. Si un cobro anterior se quedó sin respuesta, primero se revisa si sí llegó.
+    if (cobroEnDuda.value && (await revisarCobro()) !== 'sin_cobrar') return;
+
+    // 2. Cobrar, una sola vez.
     const respuesta = await pedidos.cobrar(props.pedidoId, {
       pagos: pagosParaApi(pagos.value),
       ...(aDecimal(propina.value).greaterThan(0) ? { propina: propina.value } : {}),
       ...(cliente.value ? { clienteId: cliente.value.id } : {}),
     });
-    resultado.value = respuesta;
-    for (const advertencia of respuesta.advertencias ?? []) {
-      toast.add({
-        title: `Revisa el inventario de ${advertencia.nombre}`,
-        description: `Quedó en ${formatearCantidad(advertencia.stock)} unidades.`,
-        icon: 'i-lucide-package',
-        color: 'warning',
-      });
-    }
-    emit('cobrado', respuesta);
+    mostrarResultado(respuesta);
   } catch (fallo) {
+    // 3. Sin respuesta: el cobro pudo llegar o no. Se revisa antes de dejar cobrar de nuevo.
+    //    Si el API dice que ya se cerró, también: puede ser este mismo cobro, que sí llegó.
+    if (
+      esFallaPasajera(fallo) ||
+      (fallo instanceof ErrorApi && fallo.codigo === 'PEDIDO_CERRADO')
+    ) {
+      cobroEnDuda.value = true;
+      if ((await revisarCobro()) === 'sin_cobrar') avisoNoLlego.value = true;
+      return;
+    }
     error.value = fallo instanceof ErrorApi ? fallo.message : MENSAJE_ERROR_GENERICO;
   } finally {
     cobrando.value = false;
   }
+}
+
+/**
+ * Revisa en el API si el pedido quedó cobrado y deja la pantalla como corresponde.
+ * @returns {Promise<'cobrado' | 'sin_cobrar' | 'anulado' | 'sin_saber'>}
+ */
+async function revisarCobro() {
+  let actual;
+  try {
+    actual = await pedidos.cargarDetalle(props.pedidoId);
+  } catch {
+    // Tampoco hay señal para revisar: no se deja cobrar hasta saberlo.
+    error.value =
+      'Sin señal: no sabemos si el cobro llegó. No cobres al cliente otra vez; vuelve a ' +
+      'tocar Confirmar cuando haya señal y lo revisamos primero.';
+    return 'sin_saber';
+  }
+  cobroEnDuda.value = false;
+  if (actual.estado === 'pagado') {
+    mostrarYaCobrado(actual);
+    return 'cobrado';
+  }
+  if (actual.estado === 'anulado') {
+    error.value = 'Este pedido se anuló: ya no se puede cobrar.';
+    return 'anulado';
+  }
+  return 'sin_cobrar';
+}
+
+/**
+ * El pedido ya estaba cobrado: se muestra como un cobro registrado, con su cambio.
+ * @param {any} cobrado
+ */
+function mostrarYaCobrado(cobrado) {
+  yaEstabaCobrado.value = true;
+  mostrarResultado({ pedido: cobrado, cambio: cambioDelPedidoCobrado(cobrado), advertencias: [] });
+}
+
+/** @param {{ pedido: any, cambio: string, advertencias: any[] }} respuesta */
+function mostrarResultado(respuesta) {
+  resultado.value = respuesta;
+  for (const advertencia of respuesta.advertencias ?? []) {
+    toast.add({
+      title: `Revisa el inventario de ${advertencia.nombre}`,
+      description: `Quedó en ${formatearCantidad(advertencia.stock)} unidades.`,
+      icon: 'i-lucide-package',
+      color: 'warning',
+    });
+  }
+  emit('cobrado', respuesta);
 }
 </script>
 
 <template>
   <UModal
     v-model:open="abierto"
-    :title="resultado ? 'Cobro registrado' : titulo"
+    :title="resultado ? (yaEstabaCobrado ? 'Ya quedó cobrado' : 'Cobro registrado') : titulo"
     :fullscreen="!pantallaGrande"
     :dismissible="!cobrando && !faltaCocina"
     :close="!faltaCocina"
@@ -154,7 +223,18 @@ async function confirmar() {
       />
 
       <!-- Cobro registrado: el cambio en grande y, si falta, qué pasa con la cocina. -->
-      <CobroRegistrado v-else-if="resultado" :resultado="resultado" @decidido="abierto = false" />
+      <div v-else-if="resultado">
+        <UAlert
+          v-if="yaEstabaCobrado"
+          color="info"
+          variant="subtle"
+          icon="i-lucide-shield-check"
+          title="Este pedido ya quedó cobrado"
+          description="El cobro sí se registró. No le cobres otra vez al cliente."
+          role="alert"
+        />
+        <CobroRegistrado :resultado="resultado" @decidido="abierto = false" />
+      </div>
 
       <!-- Armar el cobro. -->
       <div v-else class="space-y-6">
@@ -205,41 +285,55 @@ async function confirmar() {
         </div>
 
         <SelectorCliente v-model="cliente" />
-
-        <UAlert
-          v-if="error"
-          color="error"
-          variant="subtle"
-          icon="i-lucide-circle-alert"
-          :title="error"
-          role="alert"
-        />
       </div>
     </template>
 
     <!-- Mientras falte decidir lo de la cocina, sus botones son los únicos. -->
     <template v-if="!faltaCocina" #footer>
-      <div class="flex w-full justify-end gap-2">
-        <UButton v-if="resultado" size="xl" block label="Listo" @click="abierto = false" />
-        <template v-else>
-          <UButton
-            color="neutral"
-            variant="ghost"
-            size="xl"
-            label="Cancelar"
-            :disabled="cobrando"
-            @click="abierto = false"
+      <div class="w-full space-y-3">
+        <!-- Lo que pasó al confirmar va junto al botón: así se ve aunque el formulario sea
+             largo (por ejemplo, "El cobro no llegó" con la señal caída). -->
+        <template v-if="pedido && !resultado">
+          <UAlert
+            v-if="avisoNoLlego"
+            color="warning"
+            variant="subtle"
+            icon="i-lucide-wifi-off"
+            title="El cobro no llegó"
+            description="Lo revisamos: el pedido sigue sin cobrar. Puedes cobrar de nuevo."
+            role="alert"
           />
-          <UButton
-            size="xl"
-            icon="i-lucide-check"
-            class="flex-1 justify-center sm:flex-none"
-            :label="`Confirmar cobro · ${formatearPesos(estado.aPagar)}`"
-            :loading="cobrando"
-            :disabled="!puedeConfirmar"
-            @click="confirmar"
+          <UAlert
+            v-if="error"
+            color="error"
+            variant="subtle"
+            icon="i-lucide-circle-alert"
+            :title="error"
+            role="alert"
           />
         </template>
+        <div class="flex w-full justify-end gap-2">
+          <UButton v-if="resultado" size="xl" block label="Listo" @click="abierto = false" />
+          <template v-else>
+            <UButton
+              color="neutral"
+              variant="ghost"
+              size="xl"
+              label="Cancelar"
+              :disabled="cobrando"
+              @click="abierto = false"
+            />
+            <UButton
+              size="xl"
+              icon="i-lucide-check"
+              class="flex-1 justify-center sm:flex-none"
+              :label="`Confirmar cobro · ${formatearPesos(estado.aPagar)}`"
+              :loading="cobrando"
+              :disabled="!puedeConfirmar"
+              @click="confirmar"
+            />
+          </template>
+        </div>
       </div>
     </template>
   </UModal>

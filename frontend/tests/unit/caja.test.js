@@ -2,6 +2,7 @@
 // Pruebas de las cuentas de la caja: cobro, cambio, montos rápidos y conteo del efectivo.
 import { describe, expect, it } from 'vitest';
 import {
+  cambioDelPedidoCobrado,
   estadoDelCobro,
   montosRapidos,
   pagosParaApi,
@@ -99,5 +100,22 @@ describe('totalDelConteo', () => {
 
   it('ignora cantidades vacías o negativas', () => {
     expect(totalDelConteo({ 50000: Number.NaN, 2000: -1, 100: 4 }).toFixed(0)).toBe('400');
+  });
+});
+
+describe('cambioDelPedidoCobrado', () => {
+  it('es lo recibido en efectivo menos lo abonado, como el cambio que da el cobro', () => {
+    const pedido = {
+      pagos: [
+        { metodo: 'efectivo', monto: '30000.00', recibido: '50000.00' },
+        { metodo: 'tarjeta', monto: '8000.00', recibido: null },
+      ],
+    };
+    expect(cambioDelPedidoCobrado(pedido)).toBe('20000.00');
+  });
+
+  it('sin efectivo recibido (o sin pagos) no hay cambio', () => {
+    expect(cambioDelPedidoCobrado({ pagos: [{ monto: '38000.00', recibido: null }] })).toBe('0.00');
+    expect(cambioDelPedidoCobrado({})).toBe('0.00');
   });
 });

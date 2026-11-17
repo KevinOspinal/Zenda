@@ -335,7 +335,13 @@ describe('al tomar el pedido', () => {
     await pedidoEnCurso?.agregar(HAMBURGUESA, { opciones: ['o3', 'o1'] });
 
     expect(cuerpoEnviadoA('/pedidos').items).toEqual([
-      { productoId: 'p1', cantidad: 1, opciones: ['o3', 'o1'] },
+      // La clave identifica el toque: si se repite, el backend no lo duplica.
+      {
+        productoId: 'p1',
+        cantidad: 1,
+        opciones: ['o3', 'o1'],
+        claveIdempotencia: expect.any(String),
+      },
     ]);
   });
 

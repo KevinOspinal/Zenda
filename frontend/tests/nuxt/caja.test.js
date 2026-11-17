@@ -1,7 +1,8 @@
 // @ts-check
 // Pruebas de la caja con un backend simulado: abrir la caja, la pantalla con el turno (sus
 // tarjetas, la lista con filtros y cómo va el turno), el cobro completo con propina, efectivo
-// y cambio, y qué pasa con la cocina si se cobra antes de enviar el pedido.
+// y cambio, qué pasa con la cocina si se cobra antes de enviar el pedido y qué pasa si la
+// señal falla al cobrar (nunca se cobra dos veces).
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AbrirCaja from '~/components/caja/AbrirCaja.vue';
@@ -9,7 +10,7 @@ import ModalCobro from '~/components/caja/ModalCobro.vue';
 import PedidosDeCaja from '~/components/caja/PedidosDeCaja.vue';
 import PaginaCaja from '~/pages/caja/index.vue';
 import { useSesionStore } from '~/stores/sesion.js';
-import { errorDelApi, simularBackend } from './ayudantes.js';
+import { errorDeRed, errorDelApi, simularBackend } from './ayudantes.js';
 
 const { fetchFalso } = vi.hoisted(() => ({ fetchFalso: vi.fn() }));
 mockNuxtImport('$fetch', () => fetchFalso);
@@ -266,6 +267,102 @@ describe('cobrar', () => {
 
     await vi.waitFor(() => expect(document.body.textContent).toContain('No alcanza para'));
     expect(botonConTexto('Confirmar cobro')?.disabled).toBe(true);
+  });
+});
+
+describe('cobrar con mala señal', () => {
+  /** El pedido como queda en el servidor si el cobro sí llegó: pagó con un billete de $ 50.000. */
+  const PEDIDO_COBRADO = {
+    ...PEDIDO,
+    estado: 'pagado',
+    cerradoEn: new Date().toISOString(),
+    pagos: [{ metodo: 'efectivo', monto: '38000.00', recibido: '50000.00' }],
+  };
+
+  /** Llamadas al cobro. */
+  const cobrosEnviados = () =>
+    fetchFalso.mock.calls.filter(([ruta]) => ruta === '/pedidos/p1/cobrar');
+
+  /** Abre el cobro y lo deja listo para confirmar (un pago en efectivo por el total). */
+  async function abrirCobro() {
+    await mountSuspended(ModalCobro, { props: { pedidoId: 'p1', abierto: true } });
+    await vi.waitFor(() => expect(botonConTexto('Confirmar cobro')?.disabled).toBe(false));
+  }
+
+  it('si la respuesta se pierde pero el cobro llegó: "Ya quedó cobrado", con su cambio', async () => {
+    let enElServidor = PEDIDO;
+    simularBackend(fetchFalso, {
+      'GET /pedidos/p1': () => enElServidor,
+      'POST /pedidos/p1/cobrar': () => {
+        enElServidor = PEDIDO_COBRADO;
+        throw errorDeRed();
+      },
+    });
+    await abrirCobro();
+
+    botonConTexto('Confirmar cobro')?.click();
+
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain('Este pedido ya quedó cobrado'),
+    );
+    expect(document.body.textContent).toContain('No le cobres otra vez al cliente');
+    expect(document.body.textContent).toContain(pesos('12.000'));
+    // Un solo intento: el cobro nunca se repite solo.
+    expect(cobrosEnviados()).toHaveLength(1);
+  });
+
+  it('si el cobro no llegó, lo dice y deja cobrar de nuevo', async () => {
+    let senal = false;
+    simularBackend(fetchFalso, {
+      'GET /pedidos/p1': () => PEDIDO,
+      'POST /pedidos/p1/cobrar': () => {
+        if (!senal) throw errorDeRed();
+        return { pedido: { ...PEDIDO, estado: 'pagado' }, cambio: '0.00', advertencias: [] };
+      },
+    });
+    await abrirCobro();
+
+    botonConTexto('Confirmar cobro')?.click();
+    await vi.waitFor(() => expect(document.body.textContent).toContain('El cobro no llegó'));
+    expect(cobrosEnviados()).toHaveLength(1);
+
+    senal = true;
+    botonConTexto('Confirmar cobro')?.click();
+
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Cobro registrado'));
+    expect(cobrosEnviados()).toHaveLength(2);
+  });
+
+  it('si tampoco se puede revisar, no deja cobrar sin revisar primero', async () => {
+    let senal = true;
+    let enElServidor = PEDIDO;
+    simularBackend(fetchFalso, {
+      'GET /pedidos/p1': () => {
+        if (!senal) throw errorDeRed();
+        return enElServidor;
+      },
+      'POST /pedidos/p1/cobrar': () => {
+        // El cobro llega, pero la señal se cae antes de la respuesta.
+        enElServidor = PEDIDO_COBRADO;
+        senal = false;
+        throw errorDeRed();
+      },
+    });
+    await abrirCobro();
+
+    botonConTexto('Confirmar cobro')?.click();
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain('no sabemos si el cobro llegó'),
+    );
+
+    // Vuelve la señal: confirmar primero revisa, ve que ya se cobró y no cobra otra vez.
+    senal = true;
+    botonConTexto('Confirmar cobro')?.click();
+
+    await vi.waitFor(() =>
+      expect(document.body.textContent).toContain('Este pedido ya quedó cobrado'),
+    );
+    expect(cobrosEnviados()).toHaveLength(1);
   });
 });
 

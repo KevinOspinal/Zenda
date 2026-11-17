@@ -427,6 +427,114 @@ describe('venta de mostrador, pedido offline y anulación', () => {
   });
 });
 
+describe('reintentos sin duplicar (claveIdempotencia)', () => {
+  /** @param {string} pedidoId */
+  const itemsEnLaBase = (pedidoId) =>
+    conNegocio(negocio.tenantId, (tx) => tx.itemPedido.count({ where: { pedidoId } }));
+
+  /** Un pedido de mostrador abierto, con un agua. */
+  async function pedidoAbierto() {
+    const { body } = await llamar('post', '/pedidos', 'cajero', {
+      items: [{ productoId: ids.agua, cantidad: 1 }],
+    });
+    return body;
+  }
+
+  it('el mismo toque que llega dos veces agrega el producto una sola vez', async () => {
+    const pedido = await pedidoAbierto();
+    const toque = { productoId: ids.gaseosa, cantidad: 1, claveIdempotencia: randomUUID() };
+
+    const primero = await llamar('post', `/pedidos/${pedido.id}/items`, 'mesero', toque);
+    const reintento = await llamar('post', `/pedidos/${pedido.id}/items`, 'mesero', toque);
+
+    expect(primero.status).toBe(200);
+    expect(reintento.status).toBe(200);
+    expect(reintento.body.items).toHaveLength(2);
+    expect(reintento.body.total).toBe(primero.body.total);
+    expect(reintento.body.items[1].claveIdempotencia).toBe(toque.claveIdempotencia);
+    expect(await itemsEnLaBase(pedido.id)).toBe(2);
+  });
+
+  it('dos envíos simultáneos del mismo toque también dejan un solo producto', async () => {
+    const pedido = await pedidoAbierto();
+    const toque = { productoId: ids.gaseosa, cantidad: 1, claveIdempotencia: randomUUID() };
+
+    const respuestas = await Promise.all([
+      llamar('post', `/pedidos/${pedido.id}/items`, 'mesero', toque),
+      llamar('post', `/pedidos/${pedido.id}/items`, 'mesero', toque),
+    ]);
+
+    expect(respuestas.map((r) => r.status)).toEqual([200, 200]);
+    expect(await itemsEnLaBase(pedido.id)).toBe(2);
+  });
+
+  it('dos toques distintos del mismo producto sí suman dos', async () => {
+    const pedido = await pedidoAbierto();
+    const toque = { productoId: ids.gaseosa, cantidad: 1 };
+
+    await llamar('post', `/pedidos/${pedido.id}/items`, 'mesero', {
+      ...toque,
+      claveIdempotencia: randomUUID(),
+    });
+    await llamar('post', `/pedidos/${pedido.id}/items`, 'mesero', {
+      ...toque,
+      claveIdempotencia: randomUUID(),
+    });
+
+    expect(await itemsEnLaBase(pedido.id)).toBe(3);
+  });
+
+  it('un toque que ya llegó al crear el pedido no se agrega otra vez', async () => {
+    const toque = { productoId: ids.agua, cantidad: 1, claveIdempotencia: randomUUID() };
+    const { body: pedido } = await llamar('post', '/pedidos', 'cajero', {
+      uuidOffline: randomUUID(),
+      items: [toque],
+    });
+
+    const reintento = await llamar('post', `/pedidos/${pedido.id}/items`, 'cajero', toque);
+
+    expect(pedido.items[0].claveIdempotencia).toBe(toque.claveIdempotencia);
+    expect(reintento.status).toBe(200);
+    expect(reintento.body.items).toHaveLength(1);
+  });
+
+  it('si el toque llegó y luego se cobró, el reintento devuelve el pedido y no un error', async () => {
+    const pedido = await pedidoAbierto();
+    const toque = { productoId: ids.gaseosa, cantidad: 1, claveIdempotencia: randomUUID() };
+    const { body: conGaseosa } = await llamar(
+      'post',
+      `/pedidos/${pedido.id}/items`,
+      'cajero',
+      toque,
+    );
+    await llamar('post', `/pedidos/${pedido.id}/cobrar`, 'cajero', {
+      pagos: [{ metodo: 'transferencia', monto: conGaseosa.total }],
+    });
+
+    const reintento = await llamar('post', `/pedidos/${pedido.id}/items`, 'cajero', toque);
+    // Sin clave, agregar a un pedido cobrado sigue siendo un error.
+    const sinClave = await llamar('post', `/pedidos/${pedido.id}/items`, 'cajero', {
+      productoId: ids.gaseosa,
+      cantidad: 1,
+    });
+
+    expect(reintento.status).toBe(200);
+    expect(reintento.body.estado).toBe('pagado');
+    expect(sinClave.status).toBe(409);
+  });
+
+  it('la clave debe ser un UUID', async () => {
+    const pedido = await pedidoAbierto();
+    const res = await llamar('post', `/pedidos/${pedido.id}/items`, 'cajero', {
+      productoId: ids.agua,
+      cantidad: 1,
+      claveIdempotencia: 'otra-vez',
+    });
+
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('aislamiento entre negocios', () => {
   it('no se puede usar la mesa de otro negocio ni ver sus pedidos', async () => {
     const mesaAjena = await llamar('post', '/pedidos', 'mesero', { mesaId: ids.mesaAjena });

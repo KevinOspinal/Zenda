@@ -12,13 +12,24 @@
 // - Los eventos en vivo los mantienen al día (ver plugins/02.eventos-en-vivo.client.js).
 // - Las acciones que se hacen en este dispositivo suenan al terminar bien (enviar a la cocina,
 //   entregar, cobrar). Entregar suena al instante, junto con el cambio en pantalla.
+// - Crear, agregar, quitar y enviar a la cocina se repiten solos si la señal falla: el backend
+//   reconoce la repetición y no duplica nada (ver utils/reintentos.js). Cobrar no se repite
+//   solo: ver ModalCobro.
 
 /** Estados de un pedido que todavía se puede modificar o cobrar. */
 const ESTADOS_ACTIVOS = Object.freeze(['abierto', 'enviado_a_cocina']);
 
 /**
+ * Un producto para agregar. `claveIdempotencia` identifica el toque que lo pidió: si el mismo
+ * toque llega dos veces, el backend no lo duplica.
  * @typedef {{ productoId: string, cantidad: string | number, notas?: string | null,
- *   opciones?: string[] }} NuevoItem
+ *   opciones?: string[], claveIdempotencia?: string }} NuevoItem
+ */
+
+/**
+ * @typedef {object} AjustesDeEnvio
+ * @property {(reintento: number) => void} [alReintentar] Avisa que la señal falló y se está
+ *   repitiendo, para mostrar "Enviando… sin señal".
  */
 
 export const usePedidosStore = defineStore('pedidos', () => {
@@ -136,26 +147,39 @@ export const usePedidosStore = defineStore('pedidos', () => {
   /**
    * Crea un pedido con sus primeros productos. Sin mesa es una venta de mostrador; un
    * domicilio trae además su tipo y sus datos de entrega (ver stores/domicilios.js).
-   * El uuidOffline evita duplicarlo si la petición se repite.
-   * @param {{ mesaId?: string, items: NuevoItem[], [campo: string]: unknown }} datos
+   * El uuidOffline evita duplicarlo si la petición se repite: quien lo intenta de nuevo (por
+   * ejemplo, tras quedarse sin señal) debe enviar el mismo. Si ya existía, el API lo devuelve
+   * tal cual.
+   * @param {{ mesaId?: string, items: NuevoItem[], uuidOffline?: string,
+   *   [campo: string]: unknown }} datos
+   * @param {AjustesDeEnvio} [ajustes]
    */
-  async function crear({ mesaId, items, ...otrosDatos }) {
-    const pedido = await useApi().post('/pedidos', {
-      mesaId,
-      items,
-      uuidOffline: generarUuid(),
-      ...otrosDatos,
-    });
+  async function crear(
+    { mesaId, items, uuidOffline = generarUuid(), ...otrosDatos },
+    ajustes = {},
+  ) {
+    const pedido = await useApi().post(
+      '/pedidos',
+      { mesaId, items, uuidOffline, ...otrosDatos },
+      { reintentar: true, alReintentar: ajustes.alReintentar },
+    );
     guardar(pedido);
     return pedido;
   }
 
   /**
+   * Agrega un producto. Si no trae su claveIdempotencia, se le crea una: así sus reintentos
+   * no lo duplican.
    * @param {string} pedidoId
    * @param {NuevoItem} item
+   * @param {AjustesDeEnvio} [ajustes]
    */
-  async function agregarItem(pedidoId, item) {
-    const pedido = await useApi().post(`/pedidos/${pedidoId}/items`, item);
+  async function agregarItem(pedidoId, item, ajustes = {}) {
+    const pedido = await useApi().post(
+      `/pedidos/${pedidoId}/items`,
+      { ...item, claveIdempotencia: item.claveIdempotencia ?? generarUuid() },
+      { reintentar: true, alReintentar: ajustes.alReintentar },
+    );
     guardar(pedido);
     return pedido;
   }
@@ -163,16 +187,31 @@ export const usePedidosStore = defineStore('pedidos', () => {
   /**
    * @param {string} pedidoId
    * @param {string} itemId
+   * @param {AjustesDeEnvio} [ajustes]
    */
-  async function quitarItem(pedidoId, itemId) {
-    const pedido = await useApi().eliminar(`/pedidos/${pedidoId}/items/${itemId}`);
-    guardar(pedido);
-    return pedido;
+  async function quitarItem(pedidoId, itemId, ajustes = {}) {
+    const respuesta = await useApi().eliminar(`/pedidos/${pedidoId}/items/${itemId}`, {
+      reintentar: true,
+      alReintentar: ajustes.alReintentar,
+      // Si el reintento ya no encuentra el producto, el primer intento sí lo quitó (solo se
+      // perdió la respuesta): se trae el pedido como quedó.
+      yaSeHizoSi: ['ITEM_NO_ENCONTRADO'],
+    });
+    if (respuesta === YA_SE_HIZO) return cargarDetalle(pedidoId);
+    guardar(respuesta);
+    return respuesta;
   }
 
-  /** @param {string} pedidoId */
-  async function enviarACocina(pedidoId) {
-    const pedido = await useApi().post(`/pedidos/${pedidoId}/enviar-cocina`);
+  /**
+   * Envía el pedido a la cocina. Repetirlo no es un error: el backend lo deja igual.
+   * @param {string} pedidoId
+   * @param {AjustesDeEnvio} [ajustes]
+   */
+  async function enviarACocina(pedidoId, ajustes = {}) {
+    const pedido = await useApi().post(`/pedidos/${pedidoId}/enviar-cocina`, undefined, {
+      reintentar: true,
+      alReintentar: ajustes.alReintentar,
+    });
     guardar(pedido);
     sonidos.enviadoACocina();
     return pedido;
@@ -242,6 +281,8 @@ export const usePedidosStore = defineStore('pedidos', () => {
   /**
    * Cobra un pedido. Los pagos deben sumar exactamente el total más la propina.
    * Devuelve la respuesta del API: el pedido pagado, el cambio y las advertencias de stock.
+   * Nunca se repite solo: si la señal falla, ModalCobro revisa el pedido antes de dejar
+   * cobrar de nuevo (el dinero ya pudo cambiar de manos).
    * @param {string} pedidoId
    * @param {{ pagos: object[], propina?: string, clienteId?: string }} datos
    * @returns {Promise<{ pedido: any, cambio: string, advertencias: any[] }>}

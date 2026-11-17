@@ -573,27 +573,31 @@ model ContadorPedidos {
 /// Línea de un pedido. Copia el precio y la tasa del momento de la venta:
 /// si después cambia el menú, las ventas pasadas no se alteran.
 model ItemPedido {
-  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String       @map("tenant_id") @db.Uuid
-  pedidoId       String       @map("pedido_id") @db.Uuid
-  productoId     String       @map("producto_id") @db.Uuid
-  cantidad       Decimal      @db.Decimal(12, 3)
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String       @map("tenant_id") @db.Uuid
+  pedidoId          String       @map("pedido_id") @db.Uuid
+  productoId        String       @map("producto_id") @db.Uuid
+  cantidad          Decimal      @db.Decimal(12, 3)
   // Precio de una unidad con el impuesto incluido: el del plato más el de sus opciones
   // (ver `opciones`). Así el total, el cobro, la caja y el recibo no cambian sus cuentas.
-  precioUnitario Decimal      @map("precio_unitario") @db.Decimal(14, 2)
+  precioUnitario    Decimal      @map("precio_unitario") @db.Decimal(14, 2)
   // Porcentaje del plato, por ejemplo 19.00 para IVA del 19 %. Cada opción lleva el suyo.
-  tasaImpuesto   Decimal      @map("tasa_impuesto") @db.Decimal(5, 2)
-  estadoCocina   EstadoCocina @default(pendiente) @map("estado_cocina")
-  notas          String?
+  tasaImpuesto      Decimal      @map("tasa_impuesto") @db.Decimal(5, 2)
+  estadoCocina      EstadoCocina @default(pendiente) @map("estado_cocina")
+  notas             String?
   // Hora exacta en que se agregó. clock_timestamp() (y no now()) para que los ítems
   // agregados en una misma transacción conserven su orden. La cocina los atiende así.
-  creadoEn       DateTime     @default(dbgenerated("clock_timestamp()")) @map("creado_en") @db.Timestamptz(6)
+  creadoEn          DateTime     @default(dbgenerated("clock_timestamp()")) @map("creado_en") @db.Timestamptz(6)
+  // Código que la app genera en cada toque de "agregar". Si el mismo toque llega dos veces
+  // (la señal se cayó y la app reintentó), el ítem no se duplica. Único por negocio.
+  claveIdempotencia String?      @map("clave_idempotencia") @db.Uuid
 
   tenant   Tenant             @relation(fields: [tenantId], references: [id])
   pedido   Pedido             @relation(fields: [pedidoId], references: [id])
   producto Producto           @relation(fields: [productoId], references: [id])
   opciones ItemPedidoOpcion[]
 
+  @@unique([tenantId, claveIdempotencia])
   @@index([tenantId, pedidoId])
   @@map("items_pedido")
 }
