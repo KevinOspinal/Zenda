@@ -11,6 +11,14 @@ import { errorHandler, notFound } from './middlewares/errorHandler.js';
 import { MODULOS } from './rutas.js';
 
 /**
+ * Cuánto recuerda el navegador el permiso de CORS, en segundos. Sin esto, antes de cada
+ * petición con sesión pregunta si puede hacerla: un viaje de más que con mala señal se nota.
+ * Dos horas: es lo máximo que acepta Chrome y, si se quita un origen de la lista, deja de
+ * servirle pronto. No cambia quién tiene permiso: lo deciden CORS_ORIGENES y la sesión.
+ */
+const DURACION_PERMISO_CORS_S = 2 * 60 * 60;
+
+/**
  * Crea la app Express sin abrir el puerto, para poder probarla con Supertest.
  * @returns {import('express').Express}
  */
@@ -33,7 +41,7 @@ export function createApp() {
   );
   // Solo los orígenes configurados pueden llamar al API desde un navegador.
   // La autenticación va en el encabezado Authorization, no en cookies.
-  app.use(cors({ origin: env.CORS_ORIGENES }));
+  app.use(cors({ origin: env.CORS_ORIGENES, maxAge: DURACION_PERMISO_CORS_S }));
   // Lee cuerpos JSON con un límite de tamaño para evitar abusos.
   app.use(express.json({ limit: '1mb' }));
 

@@ -1,11 +1,12 @@
 // @ts-check
-// Pruebas de seguridad y estabilidad: cabeceras de seguridad, límite de peticiones por IP
-// y /health cuando un servicio está caído.
+// Pruebas de seguridad y estabilidad: cabeceras de seguridad, CORS, límite de peticiones
+// por IP y /health cuando un servicio está caído.
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import request from 'supertest';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
+import { env } from '../src/config/env.js';
 import { prisma } from '../src/lib/db.js';
 import { redis } from '../src/lib/redis.js';
 import { errorHandler } from '../src/middlewares/errorHandler.js';
@@ -36,6 +37,35 @@ describe('cabeceras de seguridad (helmet)', () => {
 
     expect(res.status).toBe(200);
     expect(res.headers['content-security-policy']).not.toContain('upgrade-insecure-requests');
+  });
+});
+
+describe('CORS', () => {
+  const ORIGEN_DE_LA_APP = env.CORS_ORIGENES[0];
+
+  /**
+   * La pregunta que hace el navegador antes de una petición con sesión.
+   * @param {string} origen
+   */
+  const preguntarPermiso = (origen) =>
+    request(app)
+      .options('/pedidos')
+      .set('Origin', origen)
+      .set('Access-Control-Request-Method', 'POST')
+      .set('Access-Control-Request-Headers', 'authorization,content-type');
+
+  it('al dominio de la app le da permiso por 2 horas, para no preguntar en cada petición', async () => {
+    const res = await preguntarPermiso(ORIGEN_DE_LA_APP);
+
+    expect(res.status).toBe(204);
+    expect(res.headers['access-control-allow-origin']).toBe(ORIGEN_DE_LA_APP);
+    expect(res.headers['access-control-max-age']).toBe('7200');
+  });
+
+  it('a un dominio que no está en la lista no le da permiso', async () => {
+    const res = await preguntarPermiso('https://otro-sitio.test');
+
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
   });
 });
 
