@@ -285,50 +285,55 @@ function mostrarResultado(respuesta) {
         </div>
 
         <SelectorCliente v-model="cliente" />
-
-        <UAlert
-          v-if="avisoNoLlego"
-          color="warning"
-          variant="subtle"
-          icon="i-lucide-wifi-off"
-          title="El cobro no llegó"
-          description="Lo revisamos: el pedido sigue sin cobrar. Puedes cobrar de nuevo."
-          role="alert"
-        />
-        <UAlert
-          v-if="error"
-          color="error"
-          variant="subtle"
-          icon="i-lucide-circle-alert"
-          :title="error"
-          role="alert"
-        />
       </div>
     </template>
 
     <!-- Mientras falte decidir lo de la cocina, sus botones son los únicos. -->
     <template v-if="!faltaCocina" #footer>
-      <div class="flex w-full justify-end gap-2">
-        <UButton v-if="resultado" size="xl" block label="Listo" @click="abierto = false" />
-        <template v-else>
-          <UButton
-            color="neutral"
-            variant="ghost"
-            size="xl"
-            label="Cancelar"
-            :disabled="cobrando"
-            @click="abierto = false"
+      <div class="w-full space-y-3">
+        <!-- Lo que pasó al confirmar va junto al botón: así se ve aunque el formulario sea
+             largo (por ejemplo, "El cobro no llegó" con la señal caída). -->
+        <template v-if="pedido && !resultado">
+          <UAlert
+            v-if="avisoNoLlego"
+            color="warning"
+            variant="subtle"
+            icon="i-lucide-wifi-off"
+            title="El cobro no llegó"
+            description="Lo revisamos: el pedido sigue sin cobrar. Puedes cobrar de nuevo."
+            role="alert"
           />
-          <UButton
-            size="xl"
-            icon="i-lucide-check"
-            class="flex-1 justify-center sm:flex-none"
-            :label="`Confirmar cobro · ${formatearPesos(estado.aPagar)}`"
-            :loading="cobrando"
-            :disabled="!puedeConfirmar"
-            @click="confirmar"
+          <UAlert
+            v-if="error"
+            color="error"
+            variant="subtle"
+            icon="i-lucide-circle-alert"
+            :title="error"
+            role="alert"
           />
         </template>
+        <div class="flex w-full justify-end gap-2">
+          <UButton v-if="resultado" size="xl" block label="Listo" @click="abierto = false" />
+          <template v-else>
+            <UButton
+              color="neutral"
+              variant="ghost"
+              size="xl"
+              label="Cancelar"
+              :disabled="cobrando"
+              @click="abierto = false"
+            />
+            <UButton
+              size="xl"
+              icon="i-lucide-check"
+              class="flex-1 justify-center sm:flex-none"
+              :label="`Confirmar cobro · ${formatearPesos(estado.aPagar)}`"
+              :loading="cobrando"
+              :disabled="!puedeConfirmar"
+              @click="confirmar"
+            />
+          </template>
+        </div>
       </div>
     </template>
   </UModal>
