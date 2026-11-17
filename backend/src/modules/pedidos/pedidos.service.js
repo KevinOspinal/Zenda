@@ -42,7 +42,10 @@ import { emitirReciboSiNoFactura } from './recibos.js';
 
 /** @typedef {import('../../lib/tokens.js').DatosSesion} DatosSesion */
 /** @typedef {import('../../lib/negocio.js').TransaccionPrisma} TransaccionPrisma */
-/** @typedef {{ productoId: string, cantidad: string, notas?: string, opciones?: string[] }} DatosItem */
+/**
+ * @typedef {{ productoId: string, cantidad: string, notas?: string, opciones?: string[],
+ *   claveIdempotencia?: string }} DatosItem
+ */
 /** @typedef {'efectivo' | 'tarjeta' | 'transferencia' | 'otro'} MetodoPago */
 /** @typedef {{ metodo: MetodoPago, monto: string, referencia?: string, recibido?: string }} DatosPago */
 /** @typedef {'pendiente' | 'preparando' | 'listo' | 'entregado'} EstadoCocina */
@@ -283,16 +286,41 @@ export function obtenerPedido(sesion, id) {
 
 /**
  * Agrega un ítem a un pedido abierto y recalcula los totales.
+ *
+ * Si llega una `claveIdempotencia` que ya se usó, no lo agrega otra vez: devuelve el pedido
+ * como está. Así, cuando la señal se cae y la app reintenta el mismo toque, el plato no se
+ * duplica en la cuenta ni en la cocina.
+ *
  * @param {DatosSesion} sesion
  * @param {string} pedidoId
  * @param {DatosItem} item
+ * @returns {Promise<{ pedido: object, agregado: boolean }>} `agregado` es false si ese toque
+ *   ya había llegado.
  */
-export function agregarItem(sesion, pedidoId, item) {
-  return conNegocio(sesion.tenantId, async (tx) => {
-    await buscarPedidoAbierto(tx, pedidoId);
-    await agregarItems(tx, sesion.tenantId, pedidoId, [item]);
-    return cargarPedido(tx, pedidoId, sesion);
-  });
+export async function agregarItem(sesion, pedidoId, item) {
+  const { claveIdempotencia } = item;
+  try {
+    return await conNegocio(sesion.tenantId, async (tx) => {
+      // 1. Idempotencia: si este mismo toque ya llegó, se devuelve el pedido tal cual.
+      if (claveIdempotencia && (await existeItemConClave(tx, sesion.tenantId, claveIdempotencia))) {
+        return { pedido: await cargarPedidoExistente(tx, pedidoId, sesion), agregado: false };
+      }
+
+      // 2. El pedido debe seguir abierto: agregar y recalcular.
+      await buscarPedidoAbierto(tx, pedidoId);
+      await agregarItems(tx, sesion.tenantId, pedidoId, [item]);
+      return { pedido: await cargarPedido(tx, pedidoId, sesion), agregado: true };
+    });
+  } catch (error) {
+    // Dos envíos simultáneos del mismo toque: el índice único frena al segundo.
+    if (claveIdempotencia && esViolacionDeUnicidad(error)) {
+      const pedido = await conNegocio(sesion.tenantId, (tx) =>
+        cargarPedidoExistente(tx, pedidoId, sesion),
+      );
+      return { pedido, agregado: false };
+    }
+    throw error;
+  }
 }
 
 /**
@@ -1037,7 +1065,13 @@ async function agregarItems(tx, tenantId, pedidoId, items) {
 
   const negocio = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId } });
 
-  for (const { productoId, cantidad, notas, opciones: idsOpciones = [] } of items) {
+  for (const {
+    productoId,
+    cantidad,
+    notas,
+    opciones: idsOpciones = [],
+    claveIdempotencia,
+  } of items) {
     // 1. El producto debe ser del negocio y estar activo.
     const producto = await tx.producto.findUnique({
       where: { id: productoId },
@@ -1073,6 +1107,7 @@ async function agregarItems(tx, tenantId, pedidoId, items) {
         productoId,
         cantidad,
         notas,
+        claveIdempotencia,
         precioUnitario,
         tasaImpuesto: obtenerTasaImpuesto(negocio.regimenImpuesto, producto.tipoImpuesto),
         opciones: {
@@ -1467,6 +1502,32 @@ async function cargarPedido(tx, pedidoId, sesion) {
     include: DETALLE_PEDIDO,
   });
   return presentarPedido(pedido, sesion);
+}
+
+/**
+ * Como cargarPedido, pero responde 404 (y no un error interno) si el pedido no existe.
+ * @param {TransaccionPrisma} tx
+ * @param {string} pedidoId
+ * @param {DatosSesion} sesion
+ */
+async function cargarPedidoExistente(tx, pedidoId, sesion) {
+  const pedido = await tx.pedido.findUnique({ where: { id: pedidoId }, include: DETALLE_PEDIDO });
+  if (!pedido) throw errorPedidoNoEncontrado();
+  return presentarPedido(pedido, sesion);
+}
+
+/**
+ * Si ya se guardó un ítem con esa clave de idempotencia (el mismo toque llegó antes).
+ * @param {TransaccionPrisma} tx
+ * @param {string} tenantId
+ * @param {string} claveIdempotencia
+ */
+async function existeItemConClave(tx, tenantId, claveIdempotencia) {
+  const item = await tx.itemPedido.findUnique({
+    where: { tenantId_claveIdempotencia: { tenantId, claveIdempotencia } },
+    select: { id: true },
+  });
+  return item !== null;
 }
 
 /**

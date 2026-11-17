@@ -44,8 +44,9 @@ export async function obtener(_req, res) {
  */
 export async function agregarItem(_req, res) {
   const { params, body } = res.locals.entrada;
-  const pedido = await servicio.agregarItem(obtenerSesion(res), params.id, body);
-  eventos.avisarPedidoActualizado(pedido);
+  const { pedido, agregado } = await servicio.agregarItem(obtenerSesion(res), params.id, body);
+  // Un reintento del mismo toque (misma claveIdempotencia) no genera un aviso nuevo.
+  if (agregado) eventos.avisarPedidoActualizado(pedido);
   res.json(pedido);
 }
 

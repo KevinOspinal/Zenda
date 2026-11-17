@@ -132,6 +132,8 @@ export const PEDIDO = Object.freeze({
       estadoCocina: 'pendiente',
       notas: 'Sin cebolla',
       creadoEn: '2026-10-26T22:15:03.140Z',
+      // La que mandó la app al agregarlo (null si no mandó ninguna).
+      claveIdempotencia: '3c9a1f6e-2b4d-4e8a-9f1c-7d5e6b4a2c10',
       producto: { nombre: 'IND Classic Artesanal' },
       // Opciones elegidas, como se vendieron. Las que tienen precio ya suman a precioUnitario.
       opciones: [
@@ -156,6 +158,7 @@ export const PEDIDO = Object.freeze({
       estadoCocina: 'pendiente',
       notas: null,
       creadoEn: '2026-10-26T22:15:03.150Z',
+      claveIdempotencia: null,
       producto: { nombre: 'Gaseosa personal 400 ml' },
       opciones: [],
     },

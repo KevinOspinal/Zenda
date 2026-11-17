@@ -110,6 +110,9 @@ export const esquemaItem = z.object({
     .max(30)
     .refine((ids) => new Set(ids).size === ids.length, 'hay opciones repetidas')
     .default([]),
+  // Lo genera la app en cada toque y lo repite si reintenta: si el mismo toque llega dos
+  // veces (la señal se cayó a mitad de camino), el ítem no se duplica.
+  claveIdempotencia: z.uuid('claveIdempotencia debe ser un UUID').optional(),
 });
 
 /**

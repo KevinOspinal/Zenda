@@ -37,6 +37,8 @@ const DESCRIPCIONES_ITEM = {
   notas: 'Indicaciones para la cocina, por ejemplo "Sin cebolla". Opcional.',
   opciones:
     'Ids de las opciones elegidas (término, adiciones...), de los grupos del producto en `GET /menu`. Los grupos obligatorios deben venir; las opciones con precio suman al precio del ítem.',
+  claveIdempotencia:
+    'UUID que la app genera en cada toque y repite si reintenta. Si ya llegó un ítem con esa clave, no se agrega otra vez. Opcional.',
 };
 
 /** El pedido de ejemplo ya cobrado. */
@@ -300,6 +302,10 @@ producto inactivo (422 \`PRODUCTO_INACTIVO\`).
   422 \`DEMASIADAS_OPCIONES\` si se pasa del máximo; 422 \`OPCION_NO_VALIDA\` si una opción no
   es del producto o está inactiva.
 
+**Reintentos sin duplicar** (\`claveIdempotencia\`): la app genera un UUID en cada toque y
+lo repite si la señal se cae y vuelve a enviar. Si ya llegó un ítem con esa clave, **no se
+agrega otra vez**: responde 200 con el pedido como está y sin aviso en tiempo real.
+
 📡 Avisa en tiempo real con \`pedido:actualizado\`, que incluye la comanda completa.`,
       parametros: idPedido,
       cuerpo: cuerpo(esquemaItem, {
@@ -308,11 +314,15 @@ producto inactivo (422 \`PRODUCTO_INACTIVO\`).
           cantidad: 1,
           opciones: [ID.opcionTresCuartos, ID.opcionQueso],
           notas: 'Sin cebolla',
+          claveIdempotencia: '3c9a1f6e-2b4d-4e8a-9f1c-7d5e6b4a2c10',
         },
         descripciones: DESCRIPCIONES_ITEM,
       }),
       respuestas: {
-        200: respuesta('Pedido con el ítem nuevo y los totales actualizados.', PEDIDO),
+        200: respuesta(
+          'Pedido con el ítem nuevo y los totales actualizados (o como estaba, si esa claveIdempotencia ya había llegado).',
+          PEDIDO,
+        ),
       },
       errores: ['400', '404', '409', '422'],
     }),
