@@ -108,11 +108,16 @@ const PLATO_POR_ESTADO = Object.freeze({
       </div>
     </header>
 
+    <!--
+      Cada plato: cantidad, nombre y estado. El nombre tiene asegurados 10rem; si con el estado
+      al lado no le alcanza (tarjeta angosta, como en una tablet de 1024 px con tres columnas),
+      el estado baja a una segunda línea en vez de taparlo.
+    -->
     <ul class="space-y-2">
       <li v-for="item in comanda.items" :key="item.id">
         <button
           type="button"
-          class="flex w-full items-start gap-3 rounded-lg p-3 text-left ring-1 transition active:scale-[0.99] disabled:cursor-default motion-reduce:transition-none"
+          class="flex w-full flex-wrap items-start gap-x-3 gap-y-2 rounded-lg p-3 text-left ring-1 transition active:scale-[0.99] disabled:cursor-default motion-reduce:transition-none"
           :class="PLATO_POR_ESTADO[item.estadoCocina]"
           :disabled="item.estadoCocina === 'listo' || ocupados.has(item.id)"
           :aria-label="`${formatearCantidad(item.cantidad)} ${item.producto.nombre}, ${ESTADOS_COCINA[item.estadoCocina].etiqueta}`"
@@ -121,8 +126,8 @@ const PLATO_POR_ESTADO = Object.freeze({
           <span class="cifra min-w-9 text-3xl leading-none font-bold text-highlighted">
             {{ formatearCantidad(item.cantidad) }}
           </span>
-          <span class="min-w-0 flex-1">
-            <span class="block text-xl leading-snug font-semibold text-highlighted">
+          <span class="min-w-0 grow basis-40">
+            <span class="block text-xl leading-snug font-semibold wrap-break-word text-highlighted">
               {{ item.producto.nombre }}
               <UBadge
                 v-if="esAgregadoDespues(item, comanda.pedido.items)"
@@ -150,9 +155,14 @@ const PLATO_POR_ESTADO = Object.freeze({
           <UIcon
             v-if="ocupados.has(item.id)"
             name="i-lucide-loader-circle"
-            class="size-6 shrink-0 animate-spin text-muted"
+            class="ms-auto size-6 shrink-0 animate-spin text-muted"
           />
-          <ChipEstado v-else :apariencia="ESTADOS_COCINA[item.estadoCocina]" tamano="lg" />
+          <ChipEstado
+            v-else
+            :apariencia="ESTADOS_COCINA[item.estadoCocina]"
+            tamano="lg"
+            class="ms-auto shrink-0"
+          />
         </button>
       </li>
     </ul>
