@@ -135,7 +135,7 @@ const ANCHO_DE_VENTAS = 'col-span-2 lg:col-span-4 xl:col-span-1';
         <div class="grid gap-5 xl:grid-cols-2">
           <GraficaVentas
             titulo="Ventas por hora"
-            :descripcion="pico ? `La hora pico fue a la(s) ${etiquetaDeHora(pico.hora)}.` : ''"
+            :descripcion="pico ? `La hora pico fue ${aLaHora(pico.hora)}` : ''"
             tipo="bar"
             :filas="porHora"
           />

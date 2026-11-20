@@ -131,6 +131,8 @@ describe('tablero de reportes', () => {
     const texto = pagina.text();
     expect(texto).toContain('Número de ventas');
     expect(texto).toContain('Hora pico: 1 p. m.');
+    expect(texto).toContain('La hora pico fue a la 1 p. m.');
+    expect(texto).not.toContain('p. m..');
     expect(texto).toContain(pesos('19.333,33'));
     expect(texto).toContain(`Por ${pesos('10.000')}`);
     expect(texto).toContain('62,07');

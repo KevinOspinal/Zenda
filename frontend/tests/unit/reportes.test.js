@@ -2,7 +2,7 @@
 // Pruebas de los periodos y de los datos de los reportes.
 import { describe, expect, it } from 'vitest';
 import { diasDelRango, rangoDePeriodo } from '../../app/utils/periodos.js';
-import { completarHoras, etiquetaDeHora, horaPico } from '../../app/utils/reportes.js';
+import { aLaHora, completarHoras, etiquetaDeHora, horaPico } from '../../app/utils/reportes.js';
 
 // Miércoles 28 de octubre de 2026, 9:00 p. m. en Colombia (ya es 29 en UTC).
 const MIERCOLES_NOCHE = '2026-10-29T02:00:00Z';
@@ -49,6 +49,15 @@ describe('datos de los reportes', () => {
     expect(etiquetaDeHora(0)).toBe('12 a. m.');
     expect(etiquetaDeHora(12)).toBe('12 p. m.');
     expect(etiquetaDeHora(13)).toBe('1 p. m.');
+  });
+
+  it('dice "a la 1" en singular, "a las" en plural y sin punto doble al final', () => {
+    expect(aLaHora(1)).toBe('a la 1 a. m.');
+    expect(aLaHora(13)).toBe('a la 1 p. m.');
+    expect(aLaHora(0)).toBe('a las 12 a. m.');
+    expect(aLaHora(12)).toBe('a las 12 p. m.');
+    expect(aLaHora(19)).toBe('a las 7 p. m.');
+    expect(`La hora pico fue ${aLaHora(13)}`).not.toMatch(/\.\.$/);
   });
 
   it('completa con cero las horas sin ventas', () => {
