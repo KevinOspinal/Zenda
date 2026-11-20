@@ -23,6 +23,16 @@ export function etiquetaDeHora(hora) {
 }
 
 /**
+ * La hora para usar en una frase: "a la 1 p. m." (la 1 va en singular) o "a las 7 p. m.".
+ * Termina en el punto de "a. m." o "p. m.", que también cierra la oración: no se le agrega otro.
+ * @param {number} hora 0 a 23
+ */
+export function aLaHora(hora) {
+  const articulo = hora % 12 === 1 ? 'a la' : 'a las';
+  return `${articulo} ${etiquetaDeHora(hora)}`;
+}
+
+/**
  * Completa con cero las horas sin ventas entre la primera y la última, para que la gráfica
  * no salte horas.
  * @param {{ hora: number, ventas: number, total: string }[]} porHora

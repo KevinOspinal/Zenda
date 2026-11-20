@@ -56,6 +56,13 @@ const porDia = computed(() =>
     total: aDecimal(dia.total).toNumber(),
   })),
 );
+
+// Indicadores: en celular, Ventas ocupa la primera fila y los demás van de a dos. Entre 1024
+// y 1279 px, Ventas ocupa una fila y los otros cuatro van debajo. Desde 1280 px, todos en una
+// fila, con Ventas (la cifra más larga y la principal) 1,5 veces más ancha que los demás.
+const CUADRICULA_INDICADORES =
+  'grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-[3fr_repeat(4,minmax(0,2fr))]';
+const ANCHO_DE_VENTAS = 'col-span-2 lg:col-span-4 xl:col-span-1';
 </script>
 
 <template>
@@ -63,8 +70,13 @@ const porDia = computed(() =>
     <SelectorPeriodo v-model="rango" />
 
     <div v-if="cargando && !resumen" class="space-y-4">
-      <div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <USkeleton v-for="n in 5" :key="n" class="h-28 rounded-xl" />
+      <div :class="CUADRICULA_INDICADORES">
+        <USkeleton
+          v-for="n in 5"
+          :key="n"
+          class="h-28 rounded-xl"
+          :class="n === 1 && ANCHO_DE_VENTAS"
+        />
       </div>
       <USkeleton class="h-80 rounded-xl" />
     </div>
@@ -78,12 +90,9 @@ const porDia = computed(() =>
     />
 
     <template v-else-if="resumen">
-      <div
-        class="grid grid-cols-2 gap-3 transition-opacity lg:grid-cols-5"
-        :class="cargando && 'opacity-60'"
-      >
+      <div class="transition-opacity" :class="[CUADRICULA_INDICADORES, cargando && 'opacity-60']">
         <TarjetaIndicador
-          class="col-span-2 lg:col-span-1"
+          :class="ANCHO_DE_VENTAS"
           destacada
           titulo="Ventas"
           icono="i-lucide-trending-up"
@@ -126,7 +135,7 @@ const porDia = computed(() =>
         <div class="grid gap-5 xl:grid-cols-2">
           <GraficaVentas
             titulo="Ventas por hora"
-            :descripcion="pico ? `La hora pico fue a la(s) ${etiquetaDeHora(pico.hora)}.` : ''"
+            :descripcion="pico ? `La hora pico fue ${aLaHora(pico.hora)}` : ''"
             tipo="bar"
             :filas="porHora"
           />
